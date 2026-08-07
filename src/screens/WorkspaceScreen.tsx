@@ -1,64 +1,14 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  FlatList,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import {
-  getCampaigns,
-  getInbox,
-  getOpenCases,
-  getProjectMeta,
-  getUnreadCount,
-  ListItem,
-  unwrapList,
-} from '../api/workspace';
+import { ApiSession } from '../api/client';
 import { Session } from '../services/session';
-import { LoadState } from '../components/LoadState';
 import { colors } from '../theme/theme';
+import { CampaignsScreen } from './CampaignsScreen';
+import { DashboardScreen } from './DashboardScreen';
+import { LiveChatScreen } from './LiveChatScreen';
 
-type Tab = 'Inbox' | 'Campaigns' | 'More';
-const pageCopy: Record<Tab, { title: string; subtitle: string }> = {
-  Inbox: { title: 'Inbox', subtitle: 'Live conversations and open cases' },
-  Campaigns: {
-    title: 'Campaigns',
-    subtitle: 'Plan, schedule, and monitor broadcasts',
-  },
-  More: { title: 'Workspace', subtitle: 'Your business overview and tools' },
-};
-const nameOf = (item: ListItem) =>
-  String(
-    item.name ||
-      item.contact_name ||
-      item.template_name ||
-      item.campaign_name ||
-      item.phone ||
-      'Untitled',
-  );
-const detailOf = (item: ListItem) =>
-  String(
-    item.message ||
-      item.status ||
-      item.category ||
-      item.phone ||
-      item.email ||
-      'No details available',
-  );
-const initialOf = (value: string) =>
-  value.trim().charAt(0).toUpperCase() || '1';
-const numericValue = (value: any) =>
-  value?.data?.count ??
-  value?.count ??
-  value?.data?.total ??
-  value?.total ??
-  value?.data?.unread_count ??
-  value?.unread_count ??
-  0;
+type Page = 'dashboard' | 'inbox' | 'campaigns';
 
 export function WorkspaceScreen({
   session,
@@ -69,61 +19,16 @@ export function WorkspaceScreen({
   onChooseProject: () => void;
   onSignOut: () => void;
 }) {
-  const [tab, setTab] = useState<Tab>('More');
-  const [inboxMode, setInboxMode] = useState<'chats' | 'cases'>('chats');
-  const projectId = session.selectedProjectId || session.projects[0]?.id || '';
-  const [items, setItems] = useState<ListItem[]>([]);
-  const [info, setInfo] = useState<any>(null);
-  const [unread, setUnread] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [page, setPage] = useState<Page>('dashboard');
   const [menuOpen, setMenuOpen] = useState(false);
-  const sessionHeaders = useMemo(
-    () => ({ token: session.token, username: session.username }),
-    [session.token, session.username],
-  );
+  const projectId = session.selectedProjectId || session.projects[0]?.id || '';
   const selectedProject = session.projects.find(
     project => project.id === projectId,
   );
-
-  const load = useCallback(async () => {
-    if (!projectId) return;
-    setLoading(true);
-    setError('');
-    try {
-      if (tab === 'More') {
-        const [projectInfo, unreadResult] = await Promise.all([
-          getProjectMeta(sessionHeaders, projectId),
-          getUnreadCount(sessionHeaders, projectId),
-        ]);
-        setInfo(projectInfo);
-        setUnread(Number(numericValue(unreadResult)) || 0);
-      } else {
-        const request =
-          tab === 'Inbox'
-            ? inboxMode === 'chats'
-              ? getInbox
-              : getOpenCases
-            : getCampaigns;
-        const result = await request(sessionHeaders, projectId);
-        setItems(unwrapList(result));
-        if (tab === 'Inbox') setUnread(unwrapList(result).length);
-      }
-    } catch (requestError) {
-      setItems([]);
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : 'Could not load this data.',
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [inboxMode, projectId, sessionHeaders, tab]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const apiSession = useMemo<ApiSession>(
+    () => ({ token: session.token, username: session.username }),
+    [session.token, session.username],
+  );
 
   if (!projectId)
     return (
@@ -146,11 +51,12 @@ export function WorkspaceScreen({
       </SafeAreaView>
     );
 
+  const navigate = (nextPage: Page) => {
+    setPage(nextPage);
+    setMenuOpen(false);
+  };
   return (
-    <SafeAreaView
-      style={[styles.safe, { backgroundColor: colors.canvas }]}
-      edges={['top', 'bottom']}
-    >
+    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>1chatting</Text>
@@ -158,30 +64,14 @@ export function WorkspaceScreen({
             {selectedProject?.name || 'Workspace'}
           </Text>
         </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <View style={styles.headerActions}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Choose another project"
             onPress={onChooseProject}
-            style={{
-              width: 42,
-              height: 42,
-              borderRadius: 14,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: colors.mint,
-            }}
+            style={styles.projectSwitchButton}
           >
-            <Text
-              style={{
-                fontSize: 22,
-                lineHeight: 24,
-                fontWeight: '800',
-                color: colors.emerald,
-              }}
-            >
-              ⇄
-            </Text>
+            <Text style={styles.projectSwitchIcon}>⇄</Text>
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -198,39 +88,23 @@ export function WorkspaceScreen({
           <Pressable
             accessibilityLabel="Close workspace menu"
             onPress={() => setMenuOpen(false)}
-            style={{
-              position: 'absolute',
-              top: 0,
-              right: 0,
-              bottom: 0,
-              left: 0,
-              zIndex: 40,
-            }}
+            style={styles.menuBackdrop}
           />
-          <View style={[styles.menu, { top: 120, right: 20 }]}>
+          <View style={styles.menu}>
             <Pressable
-              onPress={() => {
-                setTab('Inbox');
-                setMenuOpen(false);
-              }}
+              onPress={() => navigate('inbox')}
               style={styles.menuItem}
             >
               <Text style={styles.menuItemText}>Live chat</Text>
             </Pressable>
             <Pressable
-              onPress={() => {
-                setTab('Campaigns');
-                setMenuOpen(false);
-              }}
+              onPress={() => navigate('campaigns')}
               style={styles.menuItem}
             >
               <Text style={styles.menuItemText}>Campaigns</Text>
             </Pressable>
             <Pressable
-              onPress={() => {
-                setTab('More');
-                setMenuOpen(false);
-              }}
+              onPress={() => navigate('dashboard')}
               style={styles.menuItem}
             >
               <Text style={styles.menuItemText}>Workspace dashboard</Text>
@@ -239,288 +113,27 @@ export function WorkspaceScreen({
         </>
       )}
       <View style={styles.body}>
-        {tab === 'More' ? (
-          <Dashboard
+        {page === 'dashboard' ? (
+          <DashboardScreen
+            projectId={projectId}
             projectName={selectedProject?.name || 'Workspace'}
-            info={info}
-            unread={unread}
-            loading={loading}
-            error={error}
-            reload={load}
+            session={apiSession}
             onSignOut={onSignOut}
           />
+        ) : page === 'inbox' ? (
+          <LiveChatScreen projectId={projectId} session={apiSession} />
         ) : (
-          <Collection
-            tab={tab}
-            inboxMode={inboxMode}
-            onInboxModeChange={setInboxMode}
-            items={items}
-            loading={loading}
-            error={error}
-            reload={load}
-          />
+          <CampaignsScreen projectId={projectId} session={apiSession} />
         )}
       </View>
     </SafeAreaView>
   );
 }
 
-function Collection({
-  tab,
-  inboxMode,
-  onInboxModeChange,
-  items,
-  loading,
-  error,
-  reload,
-}: {
-  tab: Tab;
-  inboxMode: 'chats' | 'cases';
-  onInboxModeChange: (mode: 'chats' | 'cases') => void;
-  items: ListItem[];
-  loading: boolean;
-  error: string;
-  reload: () => void;
-}) {
-  const copy =
-    tab === 'Inbox' && inboxMode === 'cases'
-      ? {
-          title: 'Open cases',
-          subtitle: 'Customer issues assigned to your workspace',
-        }
-      : pageCopy[tab];
-  return (
-    <FlatList
-      data={items}
-      keyExtractor={(item, index) => String(item.id || item._id || index)}
-      refreshControl={
-        <RefreshControl
-          refreshing={loading}
-          onRefresh={reload}
-          tintColor={colors.emerald}
-        />
-      }
-      contentContainerStyle={items.length ? styles.list : styles.emptyList}
-      ListHeaderComponent={
-        <View style={styles.pageHeading}>
-          <Text style={styles.pageTitle}>{copy.title}</Text>
-          <Text style={styles.pageSubtitle}>{copy.subtitle}</Text>
-          {tab === 'Inbox' && (
-            <View style={styles.segmented}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => onInboxModeChange('chats')}
-                style={[
-                  styles.segment,
-                  inboxMode === 'chats' && styles.activeSegment,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.segmentText,
-                    inboxMode === 'chats' && styles.activeSegmentText,
-                  ]}
-                >
-                  Live chat
-                </Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => onInboxModeChange('cases')}
-                style={[
-                  styles.segment,
-                  inboxMode === 'cases' && styles.activeSegment,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.segmentText,
-                    inboxMode === 'cases' && styles.activeSegmentText,
-                  ]}
-                >
-                  Open cases
-                </Text>
-              </Pressable>
-            </View>
-          )}
-          <View style={styles.sectionRule} />
-        </View>
-      }
-      ListEmptyComponent={
-        <LoadState
-          loading={loading}
-          error={error}
-          empty={!loading && !error}
-          onRetry={reload}
-        />
-      }
-      renderItem={({ item }) => <CollectionCard tab={tab} item={item} />}
-    />
-  );
-}
-
-function CollectionCard({ tab, item }: { tab: Tab; item: ListItem }) {
-  const name = nameOf(item);
-  const detail = detailOf(item);
-  const status = String(item.status || (tab === 'Inbox' ? 'Open' : 'Active'));
-  return (
-    <Pressable accessibilityRole="button" style={styles.collectionCard}>
-      <View
-        style={[
-          styles.cardAvatar,
-          tab === 'Campaigns' && styles.campaignAvatar,
-        ]}
-      >
-        <Text style={styles.cardAvatarText}>{initialOf(name)}</Text>
-      </View>
-      <View style={styles.cardBody}>
-        <Text numberOfLines={1} style={styles.cardTitle}>
-          {name}
-        </Text>
-        <Text numberOfLines={2} style={styles.cardDetail}>
-          {detail}
-        </Text>
-        <Text style={styles.cardMeta}>
-          {tab === 'Inbox' ? 'Conversation' : status}
-        </Text>
-      </View>
-      <View style={styles.cardArrow}>
-        <Text style={styles.cardArrowText}>›</Text>
-      </View>
-    </Pressable>
-  );
-}
-
-function Dashboard({
-  projectName,
-  info,
-  unread,
-  loading,
-  error,
-  reload,
-  onSignOut,
-}: {
-  projectName: string;
-  info: any;
-  unread: number;
-  loading: boolean;
-  error: string;
-  reload: () => void;
-  onSignOut: () => void;
-}) {
-  const value = info?.data || info || {};
-  const balance = String(value.wallet_balance || value.balance || '0');
-  const actions = [
-    { title: 'Projects', note: 'Switch workspace' },
-    { title: 'Wallet', note: 'Balance & top-up' },
-    { title: 'Profile', note: 'Account details' },
-    { title: 'Automation', note: 'Replies & agents' },
-    { title: 'Team', note: 'People & access' },
-    { title: 'Support', note: 'Help center' },
-  ];
-  return (
-    <ScrollView
-      contentContainerStyle={styles.dashboard}
-      refreshControl={
-        <RefreshControl
-          refreshing={loading}
-          onRefresh={reload}
-          tintColor={colors.emerald}
-        />
-      }
-    >
-      <Text style={styles.pageTitle}>Workspace</Text>
-      <Text style={styles.pageSubtitle}>{projectName}</Text>
-      <LoadState
-        loading={loading}
-        error={error}
-        empty={false}
-        onRetry={reload}
-      />
-      {!loading && !error && (
-        <>
-          <View style={styles.overview}>
-            <Text style={styles.overviewLabel}>AVAILABLE WALLET BALANCE</Text>
-            <Text style={styles.balance}>Rs. {balance}</Text>
-            <Text style={styles.overviewHint}>
-              Use wallet credit for messages and campaigns
-            </Text>
-          </View>
-          <View style={styles.metrics}>
-            <Metric
-              value={String(unread)}
-              label="Unread chats"
-              tone="emerald"
-            />
-            <Metric
-              value={String(value.project_count || value.projects || '1')}
-              label="Projects"
-              tone="blue"
-            />
-          </View>
-          <Text style={styles.sectionTitle}>Manage workspace</Text>
-          <View style={styles.actionGrid}>
-            {actions.map(action => (
-              <Pressable
-                accessibilityRole="button"
-                key={action.title}
-                style={styles.actionCard}
-              >
-                <Text style={styles.actionTitle}>{action.title}</Text>
-                <Text style={styles.actionNote}>{action.note}</Text>
-                <Text style={styles.actionArrow}>›</Text>
-              </Pressable>
-            ))}
-          </View>
-          <View style={styles.projectCard}>
-            <Text style={styles.projectCardLabel}>
-              CURRENT WHATSAPP ACCOUNT
-            </Text>
-            <Text style={styles.projectCardTitle}>
-              {String(value.waba_name || value.project_name || projectName)}
-            </Text>
-            <Text style={styles.projectCardDetail}>
-              {String(
-                value.waba_id ||
-                  'Configure business profile and messaging settings',
-              )}
-            </Text>
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            onPress={onSignOut}
-            style={styles.signOut}
-          >
-            <Text style={styles.signOutText}>Sign out</Text>
-          </Pressable>
-        </>
-      )}
-    </ScrollView>
-  );
-}
-
-function Metric({
-  value,
-  label,
-  tone,
-}: {
-  value: string;
-  label: string;
-  tone: 'emerald' | 'blue';
-}) {
-  return (
-    <View style={[styles.metric, tone === 'blue' && styles.metricBlue]}>
-      <Text style={styles.metricValue}>{value}</Text>
-      <Text style={styles.metricLabel}>{label}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#F6F8F7' },
+  safe: { flex: 1, backgroundColor: colors.canvas },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 12,
     paddingBottom: 16,
     backgroundColor: '#FFF',
     flexDirection: 'row',
@@ -533,6 +146,21 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontWeight: '800',
     marginTop: 2,
+  },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  projectSwitchButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.mint,
+  },
+  projectSwitchIcon: {
+    fontSize: 22,
+    lineHeight: 24,
+    fontWeight: '800',
+    color: colors.emerald,
   },
   menuButton: {
     width: 42,
@@ -549,10 +177,19 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     marginTop: -7,
   },
+  body: { flex: 1 },
+  menuBackdrop: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 40,
+  },
   menu: {
     position: 'absolute',
-    top: 67,
-    right: 16,
+    top: 98,
+    right: 20,
     zIndex: 50,
     elevation: 12,
     width: 200,
@@ -566,170 +203,12 @@ const styles = StyleSheet.create({
   },
   menuItem: { minHeight: 46, paddingHorizontal: 15, justifyContent: 'center' },
   menuItemText: { fontSize: 14, fontWeight: '700', color: colors.ink },
-  body: { flex: 1 },
-  pageHeading: { paddingTop: 21, paddingBottom: 5 },
-  pageTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: -0.7,
-    color: colors.ink,
-  },
-  pageSubtitle: { fontSize: 13, color: colors.muted, marginTop: 5 },
-  segmented: {
-    height: 40,
-    marginTop: 17,
-    padding: 3,
-    borderRadius: 12,
-    backgroundColor: '#EAF0ED',
-    flexDirection: 'row',
-  },
-  segment: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 9,
-  },
-  activeSegment: { backgroundColor: '#FFF' },
-  segmentText: { fontSize: 12, fontWeight: '700', color: colors.muted },
-  activeSegmentText: { color: colors.emerald },
-  sectionRule: { height: 1, backgroundColor: colors.border, marginTop: 17 },
-  list: { paddingHorizontal: 20, paddingBottom: 18 },
-  emptyList: { flexGrow: 1, paddingHorizontal: 20 },
-  collectionCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 13,
-    marginTop: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  cardAvatar: {
-    width: 43,
-    height: 43,
-    borderRadius: 14,
-    backgroundColor: '#DFF5E8',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  campaignAvatar: { backgroundColor: '#FFF1D6' },
-  cardAvatarText: { color: colors.ink, fontSize: 16, fontWeight: '800' },
-  cardBody: { flex: 1, marginLeft: 12 },
-  cardTitle: { color: colors.ink, fontSize: 15, fontWeight: '800' },
-  cardDetail: {
-    color: colors.muted,
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 3,
-  },
-  cardMeta: {
-    color: colors.emerald,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    marginTop: 6,
-  },
-  cardArrow: { width: 24, alignItems: 'flex-end' },
-  cardArrowText: { color: '#9BA9A2', fontSize: 28, lineHeight: 28 },
-  dashboard: { padding: 20, paddingBottom: 28 },
-  overview: {
-    backgroundColor: colors.ink,
-    borderRadius: 21,
-    padding: 20,
-    marginTop: 20,
-  },
-  overviewLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1,
-    color: '#A5C5B8',
-  },
-  balance: { fontSize: 31, fontWeight: '800', color: '#FFF', marginTop: 7 },
-  overviewHint: { fontSize: 12, color: '#C8DDD5', marginTop: 6 },
-  metrics: { flexDirection: 'row', marginTop: 12 },
-  metric: {
-    flex: 1,
-    backgroundColor: '#E2F5EA',
-    borderRadius: 17,
-    padding: 15,
-    marginRight: 6,
-  },
-  metricBlue: { backgroundColor: '#E9EDFF', marginRight: 0, marginLeft: 6 },
-  metricValue: { fontSize: 23, fontWeight: '800', color: colors.ink },
-  metricLabel: { fontSize: 11, color: colors.muted, marginTop: 3 },
-  sectionTitle: {
-    fontSize: 16,
-    color: colors.ink,
-    fontWeight: '800',
-    marginTop: 24,
-    marginBottom: 4,
-  },
-  actionGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  actionCard: {
-    width: '48.5%',
-    minHeight: 102,
-    backgroundColor: '#FFF',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 17,
-    padding: 14,
-    marginTop: 10,
-  },
-  actionTitle: { fontSize: 14, fontWeight: '800', color: colors.ink },
-  actionNote: {
-    fontSize: 11,
-    color: colors.muted,
-    lineHeight: 15,
-    marginTop: 5,
-    width: '80%',
-  },
-  actionArrow: {
-    position: 'absolute',
-    right: 13,
-    bottom: 10,
-    fontSize: 21,
-    color: colors.emerald,
-  },
-  projectCard: {
-    backgroundColor: '#FFF',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 18,
-    padding: 17,
-    marginTop: 23,
-  },
-  projectCardLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1,
-    color: colors.muted,
-  },
-  projectCardTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: colors.ink,
-    marginTop: 8,
-  },
-  projectCardDetail: {
-    fontSize: 12,
-    color: colors.muted,
-    lineHeight: 18,
-    marginTop: 5,
-  },
-  signOut: { alignSelf: 'center', padding: 18, marginTop: 6 },
-  signOutText: { color: colors.danger, fontWeight: '800', fontSize: 13 },
   emptyScreen: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 28,
-    backgroundColor: '#F6F8F7',
+    backgroundColor: colors.canvas,
   },
   emptyIcon: {
     width: 60,
