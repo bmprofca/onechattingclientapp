@@ -1,19 +1,11 @@
-import {Platform} from 'react-native';
-import {encryptPayload} from '../crypto/encryptPayload';
+import { encryptPayload } from '../crypto/encryptPayload';
 import Toast from 'react-native-toast-message';
-import {REACT_APP_API_BASE_URL} from '@env';
+import { REACT_APP_API_BASE_URL } from '@env';
 
-const normalizeBaseUrl = (baseUrl: string) => {
-  const emulatorBaseUrl = Platform.OS === 'android'
-    ? baseUrl.replace(/^(https?:\/\/)(localhost|127\.0\.0\.1)(?=[:/]|$)/, (_, protocol) => `${protocol}10.0.2.2`)
-    : baseUrl;
-  return emulatorBaseUrl.replace(/\/$/, '');
-};
+export const API_BASE_URL = (REACT_APP_API_BASE_URL || 'https://server.onechatting.com').replace(/\/$/, '');
+export type ApiSession = { token: string; username: string };
 
-export const API_BASE_URL = normalizeBaseUrl(REACT_APP_API_BASE_URL || 'https://server.onechatting.com');
-export type ApiSession = {token: string; username: string};
-
-export class ApiError extends Error { constructor(message: string, public status?: number) {super(message);} }
+export class ApiError extends Error { constructor(message: string, public status?: number) { super(message); } }
 
 export async function post<T>(path: string, payload: unknown, session?: ApiSession): Promise<T> {
   const controller = new AbortController();
@@ -21,11 +13,11 @@ export async function post<T>(path: string, payload: unknown, session?: ApiSessi
   const url = `${API_BASE_URL}${path}`;
   try {
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
-      Toast.show({type: 'info', text1: 'API request', text2: url, visibilityTime: 4000});
+      Toast.show({ type: 'info', text1: 'API request', text2: url, visibilityTime: 4000 });
     }
     const response = await fetch(url, {
       method: 'POST', signal: controller.signal,
-      headers: {'Content-Type': 'application/json', ...(session ? {token: session.token, username: session.username} : {})},
+      headers: { 'Content-Type': 'application/json', ...(session ? { token: session.token, username: session.username } : {}) },
       body: JSON.stringify(encryptPayload(payload)),
     });
     const result = await response.json().catch(() => ({}));
@@ -43,7 +35,7 @@ export async function post<T>(path: string, payload: unknown, session?: ApiSessi
     } catch (e) {
       loggedError = String(error);
     }
-    console.error('API request failed', {path, error: loggedError});
+    console.error('API request failed', { path, error: loggedError });
     const isAbort = error instanceof Error && error.name === 'AbortError';
     const generic = isAbort ? 'The request timed out. Please retry.' : 'Unable to reach the server. Check your connection.';
     if (typeof __DEV__ !== 'undefined' && __DEV__ && error instanceof Error && error.message) {

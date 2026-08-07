@@ -2,7 +2,7 @@ import * as Keychain from 'react-native-keychain';
 import {Profile, Project} from '../api/auth';
 
 const SERVICE = 'com.onechatting.session';
-export type Session = {token: string; username: string; profile?: Profile; projects: Project[]};
+export type Session = {token: string; username: string; profile?: Profile; balance?: number; projectCount?: number; projects: Project[]; selectedProjectId?: string};
 
 export async function loadSession(): Promise<Session | null> {
   const saved = await Keychain.getGenericPassword({service: SERVICE});
