@@ -69,7 +69,7 @@ export function WorkspaceScreen({ session, onChooseProject, onSignOut }: { sessi
       </View>
 
     </View>
-    {menuOpen && <View style={styles.menu}><Pressable onPress={() => { setTab('Inbox'); setMenuOpen(false); }} style={styles.menuItem}><Text style={styles.menuItemText}>Live chat</Text></Pressable><Pressable onPress={() => { setTab('Campaigns'); setMenuOpen(false); }} style={styles.menuItem}><Text style={styles.menuItemText}>Campaigns</Text></Pressable><Pressable onPress={() => { setTab('More'); setMenuOpen(false); }} style={styles.menuItem}><Text style={styles.menuItemText}>Workspace dashboard</Text></Pressable></View>}
+    {menuOpen && <><Pressable accessibilityLabel="Close workspace menu" onPress={() => setMenuOpen(false)} style={{position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 40}} /><View style={[styles.menu, {top: 120, right: 20}]}><Pressable onPress={() => { setTab('Inbox'); setMenuOpen(false); }} style={styles.menuItem}><Text style={styles.menuItemText}>Live chat</Text></Pressable><Pressable onPress={() => { setTab('Campaigns'); setMenuOpen(false); }} style={styles.menuItem}><Text style={styles.menuItemText}>Campaigns</Text></Pressable><Pressable onPress={() => { setTab('More'); setMenuOpen(false); }} style={styles.menuItem}><Text style={styles.menuItemText}>Workspace dashboard</Text></Pressable></View></>}
     <View style={styles.body}>
       {tab === 'More' ? <Dashboard projectName={selectedProject?.name || 'Workspace'} info={info} unread={unread} loading={loading} error={error} reload={load} onSignOut={onSignOut} /> : <Collection tab={tab} inboxMode={inboxMode} onInboxModeChange={setInboxMode} items={items} loading={loading} error={error} reload={load} />}
     </View>
