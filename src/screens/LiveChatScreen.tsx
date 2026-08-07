@@ -49,11 +49,6 @@ export function LiveChatScreen({
   useEffect(() => {
     load();
   }, [load]);
-  const title = mode === 'cases' ? 'Open cases' : 'Inbox';
-  const subtitle =
-    mode === 'cases'
-      ? 'Customer issues assigned to your workspace'
-      : 'Live conversations and open cases';
   return (
     <FlatList
       data={items}
@@ -68,8 +63,6 @@ export function LiveChatScreen({
       }
       ListHeaderComponent={
         <View style={styles.heading}>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.subtitle}>{subtitle}</Text>
           <View style={styles.segmented}>
             <Pressable
               accessibilityRole="button"
@@ -147,14 +140,7 @@ function ChatCard({ item }: { item: ListItem }) {
   );
 }
 const styles = StyleSheet.create({
-  heading: { paddingTop: 21, paddingBottom: 5 },
-  title: {
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: -0.7,
-    color: colors.ink,
-  },
-  subtitle: { fontSize: 13, color: colors.muted, marginTop: 5 },
+  heading: { paddingTop: 12, paddingBottom: 5 },
   segmented: {
     height: 40,
     marginTop: 17,

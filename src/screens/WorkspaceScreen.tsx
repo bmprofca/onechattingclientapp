@@ -9,6 +9,11 @@ import { DashboardScreen } from './DashboardScreen';
 import { LiveChatScreen } from './LiveChatScreen';
 
 type Page = 'dashboard' | 'inbox' | 'campaigns';
+const pageTitles: Record<Page, string> = {
+  dashboard: 'Workspace',
+  inbox: 'Live chat',
+  campaigns: 'Campaigns',
+};
 
 export function WorkspaceScreen({
   session,
@@ -22,9 +27,6 @@ export function WorkspaceScreen({
   const [page, setPage] = useState<Page>('dashboard');
   const [menuOpen, setMenuOpen] = useState(false);
   const projectId = session.selectedProjectId || session.projects[0]?.id || '';
-  const selectedProject = session.projects.find(
-    project => project.id === projectId,
-  );
   const apiSession = useMemo<ApiSession>(
     () => ({ token: session.token, username: session.username }),
     [session.token, session.username],
@@ -60,9 +62,7 @@ export function WorkspaceScreen({
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>1chatting</Text>
-          <Text style={styles.headerName}>
-            {selectedProject?.name || 'Workspace'}
-          </Text>
+          <Text style={styles.headerName}>{pageTitles[page]}</Text>
         </View>
         <View style={styles.headerActions}>
           <Pressable
@@ -116,7 +116,6 @@ export function WorkspaceScreen({
         {page === 'dashboard' ? (
           <DashboardScreen
             projectId={projectId}
-            projectName={selectedProject?.name || 'Workspace'}
             session={apiSession}
             onSignOut={onSignOut}
           />

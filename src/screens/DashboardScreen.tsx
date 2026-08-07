@@ -23,12 +23,10 @@ const numericValue = (value: any) =>
 
 export function DashboardScreen({
   projectId,
-  projectName,
   session,
   onSignOut,
 }: {
   projectId: string;
-  projectName: string;
   session: ApiSession;
   onSignOut: () => void;
 }) {
@@ -80,8 +78,6 @@ export function DashboardScreen({
         />
       }
     >
-      <Text style={styles.title}>Workspace</Text>
-      <Text style={styles.subtitle}>{projectName}</Text>
       <LoadState loading={loading} error={error} empty={false} onRetry={load} />
       {!loading && !error && (
         <>
@@ -119,7 +115,9 @@ export function DashboardScreen({
               CURRENT WHATSAPP ACCOUNT
             </Text>
             <Text style={styles.projectCardTitle}>
-              {String(value.waba_name || value.project_name || projectName)}
+              {String(
+                value.waba_name || value.project_name || 'WhatsApp account',
+              )}
             </Text>
             <Text style={styles.projectCardDetail}>
               {String(
@@ -158,13 +156,6 @@ function Metric({
 }
 const styles = StyleSheet.create({
   page: { padding: 20, paddingBottom: 28 },
-  title: {
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: -0.7,
-    color: colors.ink,
-  },
-  subtitle: { fontSize: 13, color: colors.muted, marginTop: 5 },
   overview: {
     backgroundColor: colors.ink,
     borderRadius: 21,

@@ -55,10 +55,6 @@ export function CampaignsScreen({
       }
       ListHeaderComponent={
         <View style={styles.heading}>
-          <Text style={styles.title}>Campaigns</Text>
-          <Text style={styles.subtitle}>
-            Plan, schedule, and monitor broadcasts
-          </Text>
           <View style={styles.rule} />
         </View>
       }
@@ -101,14 +97,7 @@ function CampaignCard({ item }: { item: ListItem }) {
   );
 }
 const styles = StyleSheet.create({
-  heading: { paddingTop: 21, paddingBottom: 5 },
-  title: {
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: -0.7,
-    color: colors.ink,
-  },
-  subtitle: { fontSize: 13, color: colors.muted, marginTop: 5 },
+  heading: { paddingTop: 12, paddingBottom: 5 },
   rule: { height: 1, backgroundColor: colors.border, marginTop: 17 },
   list: { paddingHorizontal: 20, paddingBottom: 18 },
   emptyList: { flexGrow: 1, paddingHorizontal: 20 },
