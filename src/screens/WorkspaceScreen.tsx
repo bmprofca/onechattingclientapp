@@ -7,6 +7,7 @@ import { colors } from '../theme/theme';
 import { CampaignsScreen } from './CampaignsScreen';
 import { DashboardScreen } from './DashboardScreen';
 import { LiveChatScreen } from './LiveChatScreen';
+import { ChatRoomScreen } from './ChatRoomScreen';
 
 type Page = 'dashboard' | 'inbox' | 'campaigns';
 const pageTitles: Record<Page, string> = {
@@ -26,6 +27,7 @@ export function WorkspaceScreen({
 }) {
   const [page, setPage] = useState<Page>('dashboard');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [chatTarget, setChatTarget] = useState<{ number: string; name: string } | null>(null);
   const projectId = session.selectedProjectId || session.projects[0]?.id || '';
   const apiSession = useMemo<ApiSession>(
     () => ({ token: session.token, username: session.username }),
@@ -56,7 +58,22 @@ export function WorkspaceScreen({
   const navigate = (nextPage: Page) => {
     setPage(nextPage);
     setMenuOpen(false);
+    setChatTarget(null); // Reset chat target when navigating
   };
+  if (chatTarget) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <ChatRoomScreen
+        projectId={projectId}
+        session={apiSession}
+        contactNumber={chatTarget.number}
+        contactName={chatTarget.name}
+        onBack={() => setChatTarget(null)}
+      />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <View style={styles.header}>
@@ -65,22 +82,28 @@ export function WorkspaceScreen({
           <Text style={styles.headerName}>{pageTitles[page]}</Text>
         </View>
         <View style={styles.headerActions}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Choose another project"
-            onPress={onChooseProject}
-            style={styles.projectSwitchButton}
-          >
-            <Text style={styles.projectSwitchIcon}>⇄</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Open workspace menu"
-            onPress={() => setMenuOpen(open => !open)}
-            style={styles.menuButton}
-          >
-            <Text style={styles.menuDots}>•••</Text>
-          </Pressable>
+          <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Choose another project"
+              onPress={onChooseProject}
+              style={styles.projectSwitchButton}
+            >
+              <Text style={styles.projectSwitchIcon}>⇄</Text>
+            </Pressable>
+          </View>
+          <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open workspace menu"
+              onPress={() => setMenuOpen(open => !open)}
+              style={styles.menuButton}
+            >
+              <Text style={styles.menuDots}>•••</Text>
+            </Pressable>
+          </View>
+
         </View>
       </View>
       {menuOpen && (
@@ -120,7 +143,11 @@ export function WorkspaceScreen({
             onSignOut={onSignOut}
           />
         ) : page === 'inbox' ? (
-          <LiveChatScreen projectId={projectId} session={apiSession} />
+          <LiveChatScreen 
+            projectId={projectId} 
+            session={apiSession} 
+            onOpenChat={(contactNumber, contactName) => setChatTarget({ number: contactNumber, name: contactName })}
+          />
         ) : (
           <CampaignsScreen projectId={projectId} session={apiSession} />
         )}
@@ -134,6 +161,7 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 20,
     paddingBottom: 16,
+    paddingTop: 16,
     backgroundColor: '#FFF',
     flexDirection: 'row',
     alignItems: 'center',

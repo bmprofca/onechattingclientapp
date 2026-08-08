@@ -15,9 +15,11 @@ import { colors } from '../theme/theme';
 export function LiveChatScreen({
   projectId,
   session,
+  onOpenChat,
 }: {
   projectId: string;
   session: ApiSession;
+  onOpenChat: (contactNumber: string, contactName: string) => void;
 }) {
   const [mode, setMode] = useState<'chats' | 'cases'>('chats');
   const [items, setItems] = useState<ListItem[]>([]);
@@ -104,36 +106,63 @@ export function LiveChatScreen({
           onRetry={load}
         />
       }
-      renderItem={({ item }) => <ChatCard item={item} />}
+      renderItem={({ item }) => (
+        <ChatCard 
+          item={item} 
+          onPress={(contactNumber, contactName) => onOpenChat(contactNumber, contactName)} 
+        />
+      )}
     />
   );
 }
-function ChatCard({ item }: { item: ListItem }) {
+function ChatCard({ item, onPress }: { item: ListItem, onPress: (contactNumber: string, contactName: string) => void }) {
+  const contact = (item.contact as Record<string, any>) || {};
+  const lastMessage = (item.last_message as Record<string, any>) || {};
+  
+  const contactNumber = String(contact.number || '');
   const name = String(
-    item.name || item.contact_name || item.phone || 'Untitled',
+    contact.name || contact.number || item.name || item.contact_name || item.phone || 'Untitled',
   );
   const detail = String(
-    item.message ||
+    lastMessage.message ||
+      item.message ||
       item.status ||
       item.phone ||
       item.email ||
       'No details available',
   );
+  
+  const unreadCount = Number(item.unread_count || 0);
+
   return (
-    <Pressable accessibilityRole="button" style={styles.card}>
+    <Pressable accessibilityRole="button" onPress={() => onPress(contactNumber, name)} style={styles.card}>
       <View style={styles.avatar}>
         <Text style={styles.avatarText}>
           {name.trim().charAt(0).toUpperCase() || '1'}
         </Text>
       </View>
       <View style={styles.cardBody}>
-        <Text numberOfLines={1} style={styles.cardTitle}>
-          {name}
-        </Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <Text numberOfLines={1} style={[styles.cardTitle, { flex: 1 }]}>
+            {name}
+          </Text>
+          {lastMessage.create_date && (
+            <Text style={styles.timeText}>
+              {new Date(lastMessage.create_date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+            </Text>
+          )}
+        </View>
         <Text numberOfLines={2} style={styles.cardDetail}>
           {detail}
         </Text>
-        <Text style={styles.cardMeta}>Conversation</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={styles.cardMeta}>Conversation</Text>
+          {unreadCount > 0 && (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadText}>{unreadCount}</Text>
+            </View>
+          )}
+        </View>
       </View>
       <Text style={styles.arrow}>›</Text>
     </Pressable>
@@ -195,6 +224,26 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     textTransform: 'uppercase',
     marginTop: 6,
+  },
+  timeText: {
+    fontSize: 12,
+    color: colors.muted,
+    marginLeft: 8,
+  },
+  unreadBadge: {
+    backgroundColor: colors.emerald,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+    marginTop: 6,
+  },
+  unreadText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '800',
   },
   arrow: { color: '#9BA9A2', fontSize: 28, lineHeight: 28 },
 });
