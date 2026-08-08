@@ -7,6 +7,7 @@ import {
 import Toast from 'react-native-toast-message';
 
 import {AuthScreen} from './src/screens/AuthScreen';
+import {SplashScreen} from './src/components/SplashScreen';
 import {WorkspaceScreen} from './src/screens/WorkspaceScreen';
 import {ProjectPickerScreen} from './src/screens/ProjectPickerScreen';
 
@@ -102,7 +103,7 @@ export default function App() {
         style={{flex: 1, backgroundColor: statusBarColor}}
         edges={['top', 'bottom', 'left', 'right']}
       >
-        {session === undefined ? null : !session ? (
+        {session === undefined ? <SplashScreen /> : !session ? (
           <AuthScreen
             onAuthenticated={async authenticated => {
               await saveSession(authenticated);

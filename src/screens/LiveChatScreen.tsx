@@ -107,7 +107,7 @@ export function LiveChatScreen({
       }
       ListEmptyComponent={
         <LoadState
-          loading={loading}
+          loading={false}
           error={error}
           empty={!loading && !error}
           onRetry={load}

@@ -79,7 +79,7 @@ export function DashboardScreen({
         />
       }
     >
-      <LoadState loading={loading} error={error} empty={false} onRetry={load} />
+      <LoadState loading={false} error={error} empty={false} onRetry={load} />
       {!loading && !error && (
         <>
           <View style={[styles.overview, { backgroundColor: theme.isDark ? '#1E293B' : '#011118ff' }]}>

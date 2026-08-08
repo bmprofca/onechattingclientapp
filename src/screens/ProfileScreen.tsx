@@ -81,7 +81,7 @@ export function ProfileScreen({
         />
       }
     >
-      <LoadState loading={loading && !profileData} error={error} empty={false} onRetry={loadProfile} />
+      <LoadState loading={false} error={error} empty={false} onRetry={loadProfile} />
 
       {/* Profile Header Hero */}
       <View style={[styles.heroCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
