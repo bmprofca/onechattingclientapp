@@ -158,9 +158,6 @@ export function ChatRoomScreen({
 
         <View style={styles.headerRightActions}>
           <Pressable style={styles.headerIconBtn}>
-            <Text style={styles.headerIcon}>📞</Text>
-          </Pressable>
-          <Pressable style={styles.headerIconBtn}>
             <Text style={styles.headerIcon}>⋮</Text>
           </Pressable>
         </View>
@@ -235,7 +232,7 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     fontSize: 24,
-    color: '#FFFFFF',
+    color: '#00000',
     fontWeight: '600',
   },
   avatar: {
@@ -277,8 +274,9 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   headerIcon: {
-    fontSize: 18,
-    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: 'semibold',
+    color: '#000000',
   },
   chatBackground: {
     flex: 1,
