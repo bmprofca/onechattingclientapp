@@ -30,10 +30,12 @@ const TABS: { key: Page; label: string; icon: typeof Home }[] = [
 export function WorkspaceScreen({
   session,
   onChooseProject,
+  onOpenProjects,
   onSignOut,
 }: {
   session: Session;
   onChooseProject: () => void;
+  onOpenProjects: () => void;
   onSignOut: () => void;
 }) {
   const theme = useTheme();
@@ -143,9 +145,11 @@ export function WorkspaceScreen({
       <View style={styles.body}>
         {page === 'dashboard' ? (
           <DashboardScreen
-            projectId={projectId}
             session={apiSession}
+            projectId={projectId}
+            onOpenInbox={() => setPage('inbox')}
             onOpenProfile={() => setPage('profile')}
+            onOpenProjectsHub={onOpenProjects}
           />
         ) : page === 'inbox' ? (
           <LiveChatScreen

@@ -25,10 +25,14 @@ export function DashboardScreen({
   projectId,
   session,
   onOpenProfile,
+  onOpenProjectsHub,
+  onOpenInbox,
 }: {
   projectId: string;
   session: ApiSession;
   onOpenProfile?: () => void;
+  onOpenProjectsHub?: () => void;
+  onOpenInbox?: () => void;
 }) {
   const theme = useTheme();
   const [info, setInfo] = useState<any>(null);
@@ -61,7 +65,7 @@ export function DashboardScreen({
   const value = info?.data || info || {};
   const balance = String(value.wallet_balance || value.balance || '0');
   const actions = [
-    { title: 'Projects', note: 'Switch workspace' },
+    { title: 'Projects', note: 'Switch workspace', onPress: onOpenProjectsHub },
     { title: 'Wallet', note: 'Balance & top-up' },
     { title: 'Profile', note: 'Account details', onPress: onOpenProfile },
     { title: 'Automation', note: 'Replies & agents' },

@@ -1,7 +1,7 @@
 import React, {useState} from 'react';
 import {ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View} from 'react-native';
 import Toast from 'react-native-toast-message';
-import {Eye, EyeOff, Lock, Mail, User} from 'lucide-react-native';
+import {Briefcase, Eye, EyeOff, Globe, Lock, Mail, Phone, User} from 'lucide-react-native';
 import {login, register, requestPasswordReset} from '../api/auth';
 import {saveSession, Session} from '../services/session';
 import {useTheme} from '../theme/theme';
@@ -15,6 +15,9 @@ export function AuthScreen({onAuthenticated}: {onAuthenticated: (session: Sessio
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [firmName, setFirmName] = useState('');
+  const [mobile, setMobile] = useState('');
+  const [countryCode, setCountryCode] = useState('+91');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -34,6 +37,18 @@ export function AuthScreen({onAuthenticated}: {onAuthenticated: (session: Sessio
       Toast.show({type: 'error', text1: 'Name required', text2: 'Enter your name to create an account.'});
       return;
     }
+    if (mode === 'signup' && !firmName.trim()) {
+      Toast.show({type: 'error', text1: 'Company name required', text2: 'Enter your company or business name.'});
+      return;
+    }
+    if (mode === 'signup' && !mobile.trim()) {
+      Toast.show({type: 'error', text1: 'Mobile required', text2: 'Enter your mobile number.'});
+      return;
+    }
+    if (mode === 'signup' && !countryCode.trim()) {
+      Toast.show({type: 'error', text1: 'Country code required', text2: 'Enter your country dial code (e.g. +91).'});
+      return;
+    }
     if (mode === 'signup' && password !== confirmPassword) {
       Toast.show({type: 'error', text1: 'Passwords do not match'});
       return;
@@ -48,9 +63,19 @@ export function AuthScreen({onAuthenticated}: {onAuthenticated: (session: Sessio
         Toast.show({type: 'success', text1: 'Signed in successfully'});
         onAuthenticated(session);
       } else if (mode === 'signup') {
-        await register(name.trim(), email.trim(), password);
-        Toast.show({type: 'success', text1: 'Account created', text2: 'You can now sign in.'});
-        switchMode('login');
+        const result = await register({
+          name: name.trim(),
+          email: email.trim(),
+          password,
+          confirm_password: confirmPassword,
+          firm_name: firmName.trim(),
+          mobile: mobile.trim(),
+          country_code: countryCode.trim(),
+        });
+        const session: Session = {...result, projects: result.projects || []};
+        await saveSession(session);
+        Toast.show({type: 'success', text1: 'Account created', text2: 'Welcome to 1chatting!'});
+        onAuthenticated(session);
       } else {
         await requestPasswordReset(email.trim());
         Toast.show({type: 'success', text1: 'Reset link sent', text2: 'Check your email for password-reset instructions.'});
@@ -143,6 +168,49 @@ export function AuthScreen({onAuthenticated}: {onAuthenticated: (session: Sessio
                 />
               </View>
             </View>
+
+            {mode === 'signup' && (
+              <View style={styles.field}>
+                <Text style={[styles.label, {color: theme.muted}]}>COMPANY / BUSINESS NAME</Text>
+                <View style={[styles.inputRow, fieldStyle]}>
+                  <Briefcase size={17} color={theme.muted} strokeWidth={2.25} />
+                  <TextInput
+                    value={firmName}
+                    onChangeText={setFirmName}
+                    autoCapitalize="words"
+                    placeholder="Your company name"
+                    placeholderTextColor={theme.muted}
+                    style={[styles.input, {color: theme.ink}]}
+                  />
+                </View>
+              </View>
+            )}
+
+            {mode === 'signup' && (
+              <View style={styles.field}>
+                <Text style={[styles.label, {color: theme.muted}]}>MOBILE NUMBER</Text>
+                <View style={[styles.inputRow, fieldStyle]}>
+                  <Globe size={17} color={theme.muted} strokeWidth={2.25} />
+                  <TextInput
+                    value={countryCode}
+                    onChangeText={setCountryCode}
+                    keyboardType="phone-pad"
+                    placeholder="+91"
+                    placeholderTextColor={theme.muted}
+                    style={[styles.countryCodeInput, {color: theme.ink, borderRightColor: theme.border}]}
+                  />
+                  <Phone size={17} color={theme.muted} strokeWidth={2.25} />
+                  <TextInput
+                    value={mobile}
+                    onChangeText={setMobile}
+                    keyboardType="phone-pad"
+                    placeholder="Mobile number"
+                    placeholderTextColor={theme.muted}
+                    style={[styles.input, {color: theme.ink}]}
+                  />
+                </View>
+              </View>
+            )}
 
             {mode !== 'forgot' && (
               <View style={styles.field}>
@@ -237,6 +305,7 @@ const styles = StyleSheet.create({
   label: {fontSize: 10, fontWeight: '800', letterSpacing: 1.1, marginBottom: 7},
   inputRow: {flexDirection: 'row', alignItems: 'center', height: 52, borderWidth: 1, borderRadius: 13, paddingHorizontal: 14, gap: 10},
   input: {flex: 1, fontSize: 15, height: '100%'},
+  countryCodeInput: {width: 52, fontSize: 15, height: '100%', borderRightWidth: 1, marginRight: 4, textAlign: 'center'},
   button: {height: 54, marginTop: 22, borderRadius: 14, justifyContent: 'center', alignItems: 'center', shadowOpacity: .35, shadowRadius: 9, elevation: 4},
   buttonPressed: {opacity: 0.9, transform: [{scale: 0.99}]},
   buttonText: {color: '#FFF', fontSize: 15, fontWeight: '800'},

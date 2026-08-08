@@ -114,3 +114,27 @@ export const sendAudioMessage = (
     { project_id: projectId, number, audio_link: audioLink, is_voice: isVoice, ...replyFields(options) },
     session,
   );
+
+export async function createProject(
+  session: ApiSession,
+  companyName: string,
+  projectName: string,
+  packageId = 'PROJECT_1M'
+) {
+  return post<any>('/project/create-project', {
+    company_name: companyName,
+    project_name: projectName,
+    package_id: packageId,
+  }, session);
+}
+
+export async function editProject(
+  session: ApiSession,
+  companyName: string,
+  projectName: string,
+) {
+  return post<any>('/project/edit-project', {
+    company_name: companyName,
+    project_name: projectName,
+  }, session);
+}

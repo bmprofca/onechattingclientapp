@@ -22,8 +22,24 @@ export async function getAccountProfile(session: ApiSession): Promise<{username:
   return {username: source.username || session.username, profile: source.profile, balance: source.balance, projects: normalizeProjects(source.projects), projectCount: source.projects?.project_count};
 }
 
-export async function register(name: string, email: string, password: string): Promise<void> {
-  await post('/account/register', { name, email, password });
+export async function register(fields: {
+  name: string;
+  email: string;
+  password: string;
+  confirm_password: string;
+  firm_name: string;
+  mobile: string;
+  country_code: string;
+}): Promise<LoginResponse> {
+  const response = await post<any>('/account/register', fields);
+  const source = response.data || response;
+  if (!source.token || !source.username) throw new Error(response.message || 'Registration succeeded but session was incomplete.');
+  return {
+    token: source.token,
+    username: source.username,
+    profile: source.profile || response.profile,
+    projects: normalizeProjects(source.project?.projects || source.projects || response.projects),
+  };
 }
 
 export async function requestPasswordReset(email: string): Promise<void> {

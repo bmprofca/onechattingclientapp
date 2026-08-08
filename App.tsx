@@ -10,6 +10,7 @@ import {AuthScreen} from './src/screens/AuthScreen';
 import {SplashScreen} from './src/components/SplashScreen';
 import {WorkspaceScreen} from './src/screens/WorkspaceScreen';
 import {ProjectPickerScreen} from './src/screens/ProjectPickerScreen';
+import {ProjectsScreen} from './src/screens/ProjectsScreen';
 
 import {getAccountProfile} from './src/api/auth';
 import {
@@ -25,6 +26,7 @@ export default function App() {
   const [session, setSession] = useState<Session | null | undefined>(
     undefined,
   );
+  const [showProjectsHub, setShowProjectsHub] = useState(false);
 
   useEffect(() => {
     const restoreSession = async () => {
@@ -48,6 +50,10 @@ export default function App() {
           selectedProjectId: stored.selectedProjectId,
         };
 
+        if (!refreshed.selectedProjectId && refreshed.projects && refreshed.projects.length === 1) {
+          refreshed.selectedProjectId = refreshed.projects[0].id;
+        }
+
         await saveSession(refreshed);
         setSession(refreshed);
       } catch {
@@ -67,6 +73,16 @@ export default function App() {
       selectedProjectId: projectId,
     };
 
+    await saveSession(updated);
+    setSession(updated);
+  };
+
+  const handleProjectCreated = async (newProject: { id: string; name: string }) => {
+    if (!session) return;
+    const updated = {
+      ...session,
+      projects: [...(session.projects || []), newProject],
+    };
     await saveSession(updated);
     setSession(updated);
   };
@@ -106,19 +122,35 @@ export default function App() {
         {session === undefined ? <SplashScreen /> : !session ? (
           <AuthScreen
             onAuthenticated={async authenticated => {
-              await saveSession(authenticated);
-              setSession(authenticated);
+              let sessionToSave = authenticated;
+              if (authenticated.projects && authenticated.projects.length === 1) {
+                sessionToSave = { ...authenticated, selectedProjectId: authenticated.projects[0].id };
+              }
+              await saveSession(sessionToSave);
+              setSession(sessionToSave);
             }}
           />
-        ) : !session.selectedProjectId ? (
+        ) : !session.selectedProjectId && session.projects && session.projects.length > 1 ? (
           <ProjectPickerScreen
             projects={session.projects}
             onSelect={selectProject}
+          />
+        ) : !session.selectedProjectId || showProjectsHub ? (
+          <ProjectsScreen
+            session={session}
+            projects={session.projects || []}
+            onSelect={(id) => {
+              selectProject(id);
+              setShowProjectsHub(false);
+            }}
+            onProjectCreated={handleProjectCreated}
+            onClose={session.selectedProjectId ? () => setShowProjectsHub(false) : undefined}
           />
         ) : (
           <WorkspaceScreen
             session={session}
             onChooseProject={chooseAnotherProject}
+            onOpenProjects={() => setShowProjectsHub(true)}
             onSignOut={async () => {
               await clearSession();
               setSession(null);
