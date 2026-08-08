@@ -119,7 +119,7 @@ export function WorkspaceScreen({
               onPress={() => navigate('dashboard')}
               style={[styles.menuItem, page === 'dashboard' && { backgroundColor: theme.cardHover }]}
             >
-              <Text style={[styles.menuItemText, { color: theme.ink }]}> dashboard</Text>
+              <Text style={[styles.menuItemText, { color: theme.ink }]}> Home</Text>
             </Pressable>
             <Pressable
               onPress={() => navigate('inbox')}

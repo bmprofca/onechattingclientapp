@@ -82,16 +82,24 @@ export default function App() {
     setSession(updated);
   };
 
+  // The status bar should match whichever screen is actually showing.
+  // WorkspaceScreen has its own header bar (theme.header); every other
+  // screen (Auth, ProjectPicker) sits directly on theme.canvas. Using a
+  // single hardcoded color here was creating a visible seam at the top
+  // of AuthScreen since its background never matched the status bar.
+  const statusBarColor =
+    session && session.selectedProjectId ? theme.header : theme.canvas;
+
   return (
     <SafeAreaProvider>
       <StatusBar
         translucent={false}
-        backgroundColor={theme.header}
+        backgroundColor={statusBarColor}
         barStyle={theme.isDark ? 'light-content' : 'dark-content'}
       />
 
       <SafeAreaView
-        style={{flex: 1, backgroundColor: theme.canvas}}
+        style={{flex: 1, backgroundColor: statusBarColor}}
         edges={['top', 'bottom', 'left', 'right']}
       >
         {session === undefined ? null : !session ? (
