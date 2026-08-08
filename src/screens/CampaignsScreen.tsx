@@ -10,7 +10,7 @@ import {
 import { ApiSession } from '../api/client';
 import { getCampaigns, ListItem, unwrapList } from '../api/workspace';
 import { LoadState } from '../components/LoadState';
-import { colors } from '../theme/theme';
+import { useTheme } from '../theme/theme';
 
 export function CampaignsScreen({
   projectId,
@@ -19,6 +19,7 @@ export function CampaignsScreen({
   projectId: string;
   session: ApiSession;
 }) {
+  const theme = useTheme();
   const [items, setItems] = useState<ListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -50,12 +51,12 @@ export function CampaignsScreen({
         <RefreshControl
           refreshing={loading}
           onRefresh={load}
-          tintColor={colors.emerald}
+          tintColor={theme.emerald}
         />
       }
       ListHeaderComponent={
         <View style={styles.heading}>
-          <View style={styles.rule} />
+          <View style={[styles.rule, { backgroundColor: theme.border }]} />
         </View>
       }
       ListEmptyComponent={
@@ -71,70 +72,72 @@ export function CampaignsScreen({
   );
 }
 function CampaignCard({ item }: { item: ListItem }) {
+  const theme = useTheme();
   const name = String(item.name || item.campaign_name || 'Untitled');
   const detail = String(
     item.message || item.status || item.category || 'No details available',
   );
   const status = String(item.status || 'Active');
   return (
-    <Pressable accessibilityRole="button" style={styles.card}>
-      <View style={styles.avatar}>
-        <Text style={styles.avatarText}>
+    <Pressable
+      accessibilityRole="button"
+      style={[
+        styles.card,
+        { backgroundColor: theme.surface, borderColor: theme.border },
+      ]}
+    >
+      <View style={[styles.avatar, { backgroundColor: theme.mint }]}>
+        <Text style={[styles.avatarText, { color: theme.mintText }]}>
           {name.trim().charAt(0).toUpperCase() || '1'}
         </Text>
       </View>
       <View style={styles.cardBody}>
-        <Text numberOfLines={1} style={styles.cardTitle}>
+        <Text numberOfLines={1} style={[styles.cardTitle, { color: theme.ink }]}>
           {name}
         </Text>
-        <Text numberOfLines={2} style={styles.cardDetail}>
+        <Text numberOfLines={2} style={[styles.cardDetail, { color: theme.muted }]}>
           {detail}
         </Text>
-        <Text style={styles.cardMeta}>{status}</Text>
+        <Text style={[styles.cardMeta, { color: theme.emerald }]}>{status}</Text>
       </View>
-      <Text style={styles.arrow}>›</Text>
+      <Text style={[styles.arrow, { color: theme.muted }]}>›</Text>
     </Pressable>
   );
 }
 const styles = StyleSheet.create({
   heading: { paddingTop: 12, paddingBottom: 5 },
-  rule: { height: 1, backgroundColor: colors.border, marginTop: 17 },
+  rule: { height: 1, marginTop: 17 },
   list: { paddingHorizontal: 20, paddingBottom: 18 },
   emptyList: { flexGrow: 1, paddingHorizontal: 20 },
   card: {
-    backgroundColor: '#FFF',
     borderRadius: 17,
     borderWidth: 1,
-    borderColor: colors.border,
     padding: 13,
     marginTop: 10,
     flexDirection: 'row',
     alignItems: 'center',
   },
   avatar: {
-    width: 43,
-    height: 43,
+    width: 44,
+    height: 44,
     borderRadius: 14,
-    backgroundColor: '#FFF1D6',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { color: colors.ink, fontSize: 16, fontWeight: '800' },
+  avatarText: { fontSize: 17, fontWeight: '800' },
   cardBody: { flex: 1, marginLeft: 12 },
-  cardTitle: { color: colors.ink, fontSize: 15, fontWeight: '800' },
+  cardTitle: { fontSize: 15, fontWeight: '800' },
   cardDetail: {
-    color: colors.muted,
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 13,
+    lineHeight: 18,
     marginTop: 3,
   },
   cardMeta: {
-    color: colors.emerald,
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
     marginTop: 6,
   },
-  arrow: { color: '#9BA9A2', fontSize: 28, lineHeight: 28 },
+  arrow: { fontSize: 24, lineHeight: 26, marginLeft: 4 },
 });

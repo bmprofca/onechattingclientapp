@@ -1,3 +1,63 @@
-import {StyleSheet} from 'react-native';
-export const colors = {ink: '#18342C', muted: '#72837C', emerald: '#087A52', mint: '#DFF5E8', canvas: '#F7FAF9', surface: '#FFFFFF', border: '#E2EBE7', danger: '#C54745'};
-export const ui = StyleSheet.create({screen: {flex: 1, backgroundColor: colors.canvas}, page: {padding: 20, paddingBottom: 110}, title: {fontSize: 28, fontWeight: '800', color: colors.ink, letterSpacing: -.8}, subtitle: {fontSize: 13, color: colors.muted, marginTop: 5}, card: {backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 18, padding: 16, marginTop: 12}, button: {height: 52, backgroundColor: colors.emerald, borderRadius: 14, justifyContent: 'center', alignItems: 'center'}, buttonText: {color: '#FFF', fontSize: 15, fontWeight: '800'}, empty: {padding: 30, alignItems: 'center'}, emptyText: {color: colors.muted, textAlign: 'center', lineHeight: 20}, label: {fontSize: 10, fontWeight: '800', letterSpacing: 1, color: colors.muted}});
+import { useColorScheme } from 'react-native';
+
+export const lightColors = {
+  canvas: '#F8FAF9',
+  surface: '#FFFFFF',
+  header: '#FFFFFF',
+  border: '#E2EBE7',
+  ink: '#0F172A',
+  muted: '#64748B',
+  emerald: '#059669',
+  emeraldDark: '#047857',
+  mint: '#E6F4ED',
+  mintText: '#047857',
+  danger: '#EF4444',
+  dangerBg: '#FEE2E2',
+  dangerBorder: '#FCA5A5',
+  chatBg: '#EFEAE2',
+  bubbleIn: '#FFFFFF',
+  bubbleInText: '#0F172A',
+  bubbleOut: '#E7FFDB',
+  bubbleOutText: '#0F172A',
+  inputBg: '#FFFFFF',
+  inputContainerBg: '#F0F2F5',
+  cardHover: '#F1F5F9',
+  shadow: '#000000',
+  isDark: false,
+};
+
+export const darkColors = {
+  canvas: '#0F172A',
+  surface: '#1E293B',
+  header: '#1E293B',
+  border: '#334155',
+  ink: '#F8FAFC',
+  muted: '#94A3B8',
+  emerald: '#10B981',
+  emeraldDark: '#059669',
+  mint: '#064E3B',
+  mintText: '#A7F3D0',
+  danger: '#F87171',
+  dangerBg: '#451A1A',
+  dangerBorder: '#7F1D1D',
+  chatBg: '#0B141A',
+  bubbleIn: '#202C33',
+  bubbleInText: '#E9EDEF',
+  bubbleOut: '#005C4B',
+  bubbleOutText: '#E9EDEF',
+  inputBg: '#2A3942',
+  inputContainerBg: '#202C33',
+  cardHover: '#334155',
+  shadow: '#000000',
+  isDark: true,
+};
+
+export type ThemeColors = typeof lightColors;
+
+export function useTheme(): ThemeColors {
+  const scheme = useColorScheme();
+  return scheme === 'dark' ? darkColors : lightColors;
+}
+
+// Backward compatibility default colors
+export const colors = lightColors;

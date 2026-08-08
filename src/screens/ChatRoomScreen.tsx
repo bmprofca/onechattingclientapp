@@ -12,7 +12,7 @@ import {
 import { ApiSession } from '../api/client';
 import { getChatHistory, markAsRead, sendMessage, unwrapList } from '../api/workspace';
 import { LoadState } from '../components/LoadState';
-import { colors } from '../theme/theme';
+import { useTheme } from '../theme/theme';
 
 export function ChatRoomScreen({
   projectId,
@@ -27,6 +27,7 @@ export function ChatRoomScreen({
   contactName: string;
   onBack: () => void;
 }) {
+  const theme = useTheme();
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -82,7 +83,6 @@ export function ChatRoomScreen({
 
   useEffect(() => {
     loadHistory();
-    // Mark as read when opening chat
     markAsRead(session, projectId, contactNumber).catch(() => { });
   }, []);
 
@@ -114,16 +114,30 @@ export function ChatRoomScreen({
 
     return (
       <View style={[styles.messageRow, isOut ? styles.messageRowOut : styles.messageRowIn]}>
-        <View style={[styles.messageBubble, isOut ? styles.messageBubbleOut : styles.messageBubbleIn]}>
-          <Text style={[styles.messageText, isOut ? styles.messageTextOut : styles.messageTextIn]}>
+        <View style={[
+          styles.messageBubble,
+          isOut
+            ? { backgroundColor: theme.bubbleOut, borderTopRightRadius: 2 }
+            : { backgroundColor: theme.bubbleIn, borderTopLeftRadius: 2 },
+        ]}>
+          <Text style={[
+            styles.messageText,
+            { color: isOut ? theme.bubbleOutText : theme.bubbleInText },
+          ]}>
             {item.message || '(Unsupported message type)'}
           </Text>
           <View style={styles.messageFooter}>
-            <Text style={[styles.messageTime, isOut ? styles.messageTimeOut : styles.messageTimeIn]}>
+            <Text style={[
+              styles.messageTime,
+              { color: isOut ? theme.bubbleOutText + 'A0' : theme.muted },
+            ]}>
               {new Date(item.create_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </Text>
             {isOut && (
-              <Text style={[styles.messageStatusTicks, isRead ? styles.tickRead : isDelivered ? styles.tickDelivered : styles.tickPending]}>
+              <Text style={[
+                styles.messageStatusTicks,
+                isRead ? styles.tickRead : isDelivered ? { color: theme.muted } : { color: theme.muted },
+              ]}>
                 {isRead ? ' ✓✓' : isDelivered ? ' ✓✓' : ' ✓'}
               </Text>
             )}
@@ -137,33 +151,33 @@ export function ChatRoomScreen({
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: theme.chatBg }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      {/* WhatsApp Style Top Header */}
-      <View style={styles.header}>
-        <Pressable onPress={onBack} style={styles.backButton} hitSlop={12}>
-          <Text style={styles.backButtonText}>←</Text>
+      {/* Sleek Top Header */}
+      <View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
+        <Pressable onPress={onBack} style={styles.backButton} hitSlop={8}>
+          <Text style={[styles.backButtonText, { color: theme.ink }]}>‹</Text>
         </Pressable>
 
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{initialLetter}</Text>
+        <View style={[styles.avatar, { backgroundColor: theme.mint }]}>
+          <Text style={[styles.avatarText, { color: theme.mintText }]}>{initialLetter}</Text>
         </View>
 
         <View style={styles.headerTitleContainer}>
-          <Text numberOfLines={1} style={styles.headerTitle}>{contactName}</Text>
-          <Text numberOfLines={1} style={styles.headerSubtitle}>{contactNumber}</Text>
+          <Text numberOfLines={1} style={[styles.headerTitle, { color: theme.ink }]}>{contactName}</Text>
+          <Text numberOfLines={1} style={[styles.headerSubtitle, { color: theme.muted }]}>{contactNumber}</Text>
         </View>
 
         <View style={styles.headerRightActions}>
-          <Pressable style={styles.headerIconBtn}>
-            <Text style={styles.headerIcon}>⋮</Text>
+          <Pressable style={styles.headerIconBtn} hitSlop={8}>
+            <Text style={[styles.headerIcon, { color: theme.ink }]}>⋮</Text>
           </Pressable>
         </View>
       </View>
 
-      {/* Message List area with WhatsApp background */}
-      <View style={styles.chatBackground}>
+      {/* Message List area */}
+      <View style={[styles.chatBackground, { backgroundColor: theme.chatBg }]}>
         <FlatList
           data={messages}
           keyExtractor={item => String(item.id || item.message_id)}
@@ -185,20 +199,24 @@ export function ChatRoomScreen({
         />
       </View>
 
-      {/* WhatsApp Style Input Bar */}
-      <View style={styles.inputContainer}>
-        <View style={styles.inputPill}>
+      {/* Input Bar */}
+      <View style={[styles.inputContainer, { backgroundColor: theme.inputContainerBg }]}>
+        <View style={[styles.inputPill, { backgroundColor: theme.inputBg }]}>
           <TextInput
-            style={styles.textInput}
+            style={[styles.textInput, { color: theme.ink }]}
             value={inputText}
             onChangeText={setInputText}
             placeholder="Message"
-            placeholderTextColor="#8696A0"
+            placeholderTextColor={theme.muted}
             multiline
           />
         </View>
         <Pressable
-          style={[styles.sendButton, (!inputText.trim() || sending) && styles.sendButtonDisabled]}
+          style={[
+            styles.sendButton,
+            { backgroundColor: theme.emerald },
+            (!inputText.trim() || sending) && { backgroundColor: theme.muted },
+          ]}
           onPress={handleSend}
           disabled={!inputText.trim() || sending}
         >
@@ -212,51 +230,56 @@ export function ChatRoomScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#E5DDD5', // WhatsApp Chat Wall Paper color
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 10,
-    backgroundColor: '#ffffffd8',
+    borderBottomWidth: 1,
   },
   backButton: {
-    paddingRight: 8,
-    paddingLeft: 4,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 2,
   },
   backButtonText: {
-    fontSize: 24,
-    color: '#000000',
-    fontWeight: '600',
+    fontSize: 28,
+    fontWeight: '700',
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+    lineHeight: 40,
   },
   avatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#128C7E',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
   },
   avatarText: {
-    color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '800',
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+    lineHeight: 22,
   },
   headerTitleContainer: {
     flex: 1,
+    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#000000',
   },
   headerSubtitle: {
     fontSize: 12,
-    color: '#282626ff',
     marginTop: 1,
   },
   headerRightActions: {
@@ -264,17 +287,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerIconBtn: {
-    padding: 6,
-    marginLeft: 6,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerIcon: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#000000',
+    fontSize: 20,
+    fontWeight: '800',
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+    lineHeight: 36,
   },
   chatBackground: {
     flex: 1,
-    backgroundColor: '#EFEAE2', // Classic WhatsApp chat background
   },
   listContent: {
     paddingHorizontal: 12,
@@ -309,23 +337,9 @@ const styles = StyleSheet.create({
     shadowRadius: 1.5,
     elevation: 1,
   },
-  messageBubbleIn: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 2,
-  },
-  messageBubbleOut: {
-    backgroundColor: '#E7FFDB', // WhatsApp Light Green bubble
-    borderTopRightRadius: 2,
-  },
   messageText: {
     fontSize: 15,
     lineHeight: 20,
-  },
-  messageTextIn: {
-    color: '#111B21',
-  },
-  messageTextOut: {
-    color: '#111B21',
   },
   messageFooter: {
     flexDirection: 'row',
@@ -336,36 +350,22 @@ const styles = StyleSheet.create({
   messageTime: {
     fontSize: 11,
   },
-  messageTimeIn: {
-    color: '#667781',
-  },
-  messageTimeOut: {
-    color: '#667781',
-  },
   messageStatusTicks: {
     fontSize: 12,
     marginLeft: 3,
     fontWeight: '700',
   },
   tickRead: {
-    color: '#34B7F1', // WhatsApp Blue tick
-  },
-  tickDelivered: {
-    color: '#667781', // Gray tick
-  },
-  tickPending: {
-    color: '#8696A0',
+    color: '#34B7F1',
   },
   inputContainer: {
     flexDirection: 'row',
     paddingHorizontal: 8,
     paddingVertical: 8,
-    backgroundColor: '#F0F2F5',
     alignItems: 'center',
   },
   inputPill: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
     borderRadius: 24,
     paddingHorizontal: 16,
     paddingVertical: Platform.OS === 'ios' ? 8 : 4,
@@ -375,7 +375,6 @@ const styles = StyleSheet.create({
   },
   textInput: {
     fontSize: 15,
-    color: '#111B21',
     padding: 0,
   },
   sendButton: {
@@ -383,12 +382,8 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#075E54', // WhatsApp Teal send button
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  sendButtonDisabled: {
-    backgroundColor: '#8696A0',
   },
   sendButtonIcon: {
     color: '#FFFFFF',

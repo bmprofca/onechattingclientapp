@@ -10,7 +10,7 @@ import {
 import { ApiSession } from '../api/client';
 import { getInbox, getOpenCases, ListItem, unwrapList } from '../api/workspace';
 import { LoadState } from '../components/LoadState';
-import { colors } from '../theme/theme';
+import { useTheme } from '../theme/theme';
 
 export function LiveChatScreen({
   projectId,
@@ -21,6 +21,7 @@ export function LiveChatScreen({
   session: ApiSession;
   onOpenChat: (contactNumber: string, contactName: string) => void;
 }) {
+  const theme = useTheme();
   const [mode, setMode] = useState<'chats' | 'cases'>('chats');
   const [items, setItems] = useState<ListItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -60,21 +61,24 @@ export function LiveChatScreen({
         <RefreshControl
           refreshing={loading}
           onRefresh={load}
-          tintColor={colors.emerald}
+          tintColor={theme.emerald}
         />
       }
       ListHeaderComponent={
         <View style={styles.heading}>
-          <View style={styles.segmented}>
+          <View style={[styles.segmented, { backgroundColor: theme.cardHover }]}>
             <Pressable
               accessibilityRole="button"
               onPress={() => setMode('chats')}
-              style={[styles.segment, mode === 'chats' && styles.activeSegment]}
+              style={[
+                styles.segment,
+                mode === 'chats' && { backgroundColor: theme.surface },
+              ]}
             >
               <Text
                 style={[
                   styles.segmentText,
-                  mode === 'chats' && styles.activeSegmentText,
+                  { color: mode === 'chats' ? theme.emerald : theme.muted },
                 ]}
               >
                 Live chat
@@ -83,19 +87,22 @@ export function LiveChatScreen({
             <Pressable
               accessibilityRole="button"
               onPress={() => setMode('cases')}
-              style={[styles.segment, mode === 'cases' && styles.activeSegment]}
+              style={[
+                styles.segment,
+                mode === 'cases' && { backgroundColor: theme.surface },
+              ]}
             >
               <Text
                 style={[
                   styles.segmentText,
-                  mode === 'cases' && styles.activeSegmentText,
+                  { color: mode === 'cases' ? theme.emerald : theme.muted },
                 ]}
               >
                 Open cases
               </Text>
             </Pressable>
           </View>
-          <View style={styles.rule} />
+          <View style={[styles.rule, { backgroundColor: theme.border }]} />
         </View>
       }
       ListEmptyComponent={
@@ -115,7 +122,9 @@ export function LiveChatScreen({
     />
   );
 }
+
 function ChatCard({ item, onPress }: { item: ListItem, onPress: (contactNumber: string, contactName: string) => void }) {
+  const theme = useTheme();
   const contact = (item.contact as Record<string, any>) || {};
   const lastMessage = (item.last_message as Record<string, any>) || {};
   
@@ -135,39 +144,47 @@ function ChatCard({ item, onPress }: { item: ListItem, onPress: (contactNumber: 
   const unreadCount = Number(item.unread_count || 0);
 
   return (
-    <Pressable accessibilityRole="button" onPress={() => onPress(contactNumber, name)} style={styles.card}>
-      <View style={styles.avatar}>
-        <Text style={styles.avatarText}>
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => onPress(contactNumber, name)}
+      style={[
+        styles.card,
+        { backgroundColor: theme.surface, borderColor: theme.border },
+      ]}
+    >
+      <View style={[styles.avatar, { backgroundColor: theme.mint }]}>
+        <Text style={[styles.avatarText, { color: theme.mintText }]}>
           {name.trim().charAt(0).toUpperCase() || '1'}
         </Text>
       </View>
       <View style={styles.cardBody}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <Text numberOfLines={1} style={[styles.cardTitle, { flex: 1 }]}>
+          <Text numberOfLines={1} style={[styles.cardTitle, { color: theme.ink, flex: 1 }]}>
             {name}
           </Text>
           {lastMessage.create_date && (
-            <Text style={styles.timeText}>
+            <Text style={[styles.timeText, { color: theme.muted }]}>
               {new Date(lastMessage.create_date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
             </Text>
           )}
         </View>
-        <Text numberOfLines={2} style={styles.cardDetail}>
+        <Text numberOfLines={2} style={[styles.cardDetail, { color: theme.muted }]}>
           {detail}
         </Text>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={styles.cardMeta}>Conversation</Text>
+          <Text style={[styles.cardMeta, { color: theme.emerald }]}>Conversation</Text>
           {unreadCount > 0 && (
-            <View style={styles.unreadBadge}>
+            <View style={[styles.unreadBadge, { backgroundColor: theme.emerald }]}>
               <Text style={styles.unreadText}>{unreadCount}</Text>
             </View>
           )}
         </View>
       </View>
-      <Text style={styles.arrow}>›</Text>
+      <Text style={[styles.arrow, { color: theme.muted }]}>›</Text>
     </Pressable>
   );
 }
+
 const styles = StyleSheet.create({
   heading: { paddingTop: 12, paddingBottom: 5 },
   segmented: {
@@ -175,7 +192,6 @@ const styles = StyleSheet.create({
     marginTop: 17,
     padding: 3,
     borderRadius: 12,
-    backgroundColor: '#EAF0ED',
     flexDirection: 'row',
   },
   segment: {
@@ -184,41 +200,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 9,
   },
-  activeSegment: { backgroundColor: '#FFF' },
-  segmentText: { fontSize: 12, fontWeight: '700', color: colors.muted },
-  activeSegmentText: { color: colors.emerald },
-  rule: { height: 1, backgroundColor: colors.border, marginTop: 17 },
+  segmentText: { fontSize: 13, fontWeight: '700' },
+  rule: { height: 1, marginTop: 17 },
   list: { paddingHorizontal: 20, paddingBottom: 18 },
   emptyList: { flexGrow: 1, paddingHorizontal: 20 },
   card: {
-    backgroundColor: '#FFF',
     borderRadius: 17,
     borderWidth: 1,
-    borderColor: colors.border,
     padding: 13,
     marginTop: 10,
     flexDirection: 'row',
     alignItems: 'center',
   },
   avatar: {
-    width: 43,
-    height: 43,
+    width: 44,
+    height: 44,
     borderRadius: 14,
-    backgroundColor: '#DFF5E8',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { color: colors.ink, fontSize: 16, fontWeight: '800' },
+  avatarText: { fontSize: 17, fontWeight: '800' },
   cardBody: { flex: 1, marginLeft: 12 },
-  cardTitle: { color: colors.ink, fontSize: 15, fontWeight: '800' },
+  cardTitle: { fontSize: 15, fontWeight: '800' },
   cardDetail: {
-    color: colors.muted,
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 13,
+    lineHeight: 18,
     marginTop: 3,
   },
   cardMeta: {
-    color: colors.emerald,
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.5,
@@ -227,11 +236,9 @@ const styles = StyleSheet.create({
   },
   timeText: {
     fontSize: 12,
-    color: colors.muted,
     marginLeft: 8,
   },
   unreadBadge: {
-    backgroundColor: colors.emerald,
     borderRadius: 10,
     minWidth: 20,
     height: 20,
@@ -245,5 +252,5 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
   },
-  arrow: { color: '#9BA9A2', fontSize: 28, lineHeight: 28 },
+  arrow: { fontSize: 24, lineHeight: 26, marginLeft: 4 },
 });

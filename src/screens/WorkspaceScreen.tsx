@@ -2,17 +2,19 @@ import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ApiSession } from '../api/client';
 import { Session } from '../services/session';
-import { colors } from '../theme/theme';
+import { useTheme } from '../theme/theme';
 import { CampaignsScreen } from './CampaignsScreen';
 import { DashboardScreen } from './DashboardScreen';
 import { LiveChatScreen } from './LiveChatScreen';
 import { ChatRoomScreen } from './ChatRoomScreen';
+import { ProfileScreen } from './ProfileScreen';
 
-type Page = 'dashboard' | 'inbox' | 'campaigns';
+type Page = 'dashboard' | 'inbox' | 'campaigns' | 'profile';
 const pageTitles: Record<Page, string> = {
   dashboard: 'Workspace',
   inbox: 'Live chat',
   campaigns: 'Campaigns',
+  profile: 'My Profile',
 };
 
 export function WorkspaceScreen({
@@ -24,6 +26,7 @@ export function WorkspaceScreen({
   onChooseProject: () => void;
   onSignOut: () => void;
 }) {
+  const theme = useTheme();
   const [page, setPage] = useState<Page>('dashboard');
   const [menuOpen, setMenuOpen] = useState(false);
   const [chatTarget, setChatTarget] = useState<{ number: string; name: string } | null>(null);
@@ -35,19 +38,19 @@ export function WorkspaceScreen({
 
   if (!projectId)
     return (
-      <View style={styles.emptyScreen}>
-        <View style={styles.emptyIcon}>
-          <Text style={styles.emptyIconText}>1</Text>
+      <View style={[styles.emptyScreen, { backgroundColor: theme.canvas }]}>
+        <View style={[styles.emptyIcon, { backgroundColor: theme.mint }]}>
+          <Text style={[styles.emptyIconText, { color: theme.emerald }]}>1</Text>
         </View>
-        <Text style={styles.emptyTitle}>No workspace yet</Text>
-        <Text style={styles.emptyCopy}>
+        <Text style={[styles.emptyTitle, { color: theme.ink }]}>No workspace yet</Text>
+        <Text style={[styles.emptyCopy, { color: theme.muted }]}>
           Your account does not have an available project. Contact your
           administrator or sign in with a different account.
         </Text>
         <Pressable
           accessibilityRole="button"
           onPress={onSignOut}
-          style={styles.primaryButton}
+          style={[styles.primaryButton, { backgroundColor: theme.emerald }]}
         >
           <Text style={styles.primaryButtonText}>Sign out</Text>
         </Pressable>
@@ -57,8 +60,9 @@ export function WorkspaceScreen({
   const navigate = (nextPage: Page) => {
     setPage(nextPage);
     setMenuOpen(false);
-    setChatTarget(null); // Reset chat target when navigating
+    setChatTarget(null);
   };
+
   if (chatTarget) {
     return (
       <ChatRoomScreen
@@ -72,37 +76,34 @@ export function WorkspaceScreen({
   }
 
   return (
-    <View style={styles.safe}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>1chatting</Text>
-          <Text style={styles.headerName}>{pageTitles[page]}</Text>
+    <View style={[styles.safe, { backgroundColor: theme.canvas }]}>
+      <View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
+        <View style={styles.headerTitleGroup}>
+          <Text style={[styles.greeting, { color: theme.muted }]}>1chatting</Text>
+          <Text style={[styles.headerName, { color: theme.ink }]}>{pageTitles[page]}</Text>
         </View>
+
         <View style={styles.headerActions}>
-          <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Choose another project"
+            onPress={onChooseProject}
+            style={[styles.actionBtn, { backgroundColor: theme.mint }]}
+          >
+            <Text style={[styles.actionBtnIcon, { color: theme.mintText }]}>⇄</Text>
+          </Pressable>
 
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Choose another project"
-              onPress={onChooseProject}
-              style={styles.projectSwitchButton}
-            >
-              <Text style={styles.projectSwitchIcon}>⇄</Text>
-            </Pressable>
-          </View>
-          <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Open workspace menu"
-              onPress={() => setMenuOpen(open => !open)}
-              style={styles.menuButton}
-            >
-              <Text style={styles.menuDots}>•••</Text>
-            </Pressable>
-          </View>
-
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open workspace menu"
+            onPress={() => setMenuOpen(open => !open)}
+            style={[styles.actionBtn, { backgroundColor: theme.mint }]}
+          >
+            <Text style={[styles.menuDotsIcon, { color: theme.mintText }]}>⋮</Text>
+          </Pressable>
         </View>
       </View>
+
       {menuOpen && (
         <>
           <Pressable
@@ -110,34 +111,41 @@ export function WorkspaceScreen({
             onPress={() => setMenuOpen(false)}
             style={styles.menuBackdrop}
           />
-          <View style={styles.menu}>
+          <View style={[styles.menu, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <Pressable
               onPress={() => navigate('inbox')}
-              style={styles.menuItem}
+              style={[styles.menuItem, page === 'inbox' && { backgroundColor: theme.cardHover }]}
             >
-              <Text style={styles.menuItemText}>Live chat</Text>
+              <Text style={[styles.menuItemText, { color: theme.ink }]}>Live chat</Text>
             </Pressable>
             <Pressable
               onPress={() => navigate('campaigns')}
-              style={styles.menuItem}
+              style={[styles.menuItem, page === 'campaigns' && { backgroundColor: theme.cardHover }]}
             >
-              <Text style={styles.menuItemText}>Campaigns</Text>
+              <Text style={[styles.menuItemText, { color: theme.ink }]}>Campaigns</Text>
             </Pressable>
             <Pressable
               onPress={() => navigate('dashboard')}
-              style={styles.menuItem}
+              style={[styles.menuItem, page === 'dashboard' && { backgroundColor: theme.cardHover }]}
             >
-              <Text style={styles.menuItemText}>Workspace dashboard</Text>
+              <Text style={[styles.menuItemText, { color: theme.ink }]}>Workspace dashboard</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => navigate('profile')}
+              style={[styles.menuItem, page === 'profile' && { backgroundColor: theme.cardHover }]}
+            >
+              <Text style={[styles.menuItemText, { color: theme.ink }]}>My Profile</Text>
             </Pressable>
           </View>
         </>
       )}
+
       <View style={styles.body}>
         {page === 'dashboard' ? (
           <DashboardScreen
             projectId={projectId}
             session={apiSession}
-            onSignOut={onSignOut}
+            onOpenProfile={() => setPage('profile')}
           />
         ) : page === 'inbox' ? (
           <LiveChatScreen 
@@ -145,8 +153,14 @@ export function WorkspaceScreen({
             session={apiSession} 
             onOpenChat={(contactNumber, contactName) => setChatTarget({ number: contactNumber, name: contactName })}
           />
-        ) : (
+        ) : page === 'campaigns' ? (
           <CampaignsScreen projectId={projectId} session={apiSession} />
+        ) : (
+          <ProfileScreen
+            session={session}
+            apiSession={apiSession}
+            onSignOut={onSignOut}
+          />
         )}
       </View>
     </View>
@@ -154,52 +168,46 @@ export function WorkspaceScreen({
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.canvas },
+  safe: { flex: 1 },
   header: {
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    paddingTop: 16,
-    backgroundColor: '#FFF',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    borderBottomWidth: 1,
   },
-  greeting: { fontSize: 12, color: colors.muted },
+  headerTitleGroup: {
+    justifyContent: 'center',
+  },
+  greeting: { fontSize: 11, fontWeight: '600', letterSpacing: 0.5 },
   headerName: {
-    fontSize: 18,
-    color: colors.ink,
+    fontSize: 20,
     fontWeight: '800',
-    marginTop: 2,
+    marginTop: 1,
+    letterSpacing: -0.3,
   },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  projectSwitchButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.mint,
   },
-  projectSwitchIcon: {
-    fontSize: 22,
-    lineHeight: 24,
+  actionBtnIcon: {
+    fontSize: 20,
     fontWeight: '800',
-    color: colors.emerald,
+    textAlign: 'center',
   },
-  menuButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.mint,
-  },
-  menuDots: {
-    fontSize: 16,
-    letterSpacing: 1,
-    color: colors.emerald,
+  menuDotsIcon: {
+    fontSize: 20,
     fontWeight: '900',
-    marginTop: -7,
+    textAlign: 'center',
   },
   body: { flex: 1 },
   menuBackdrop: {
@@ -212,58 +220,60 @@ const styles = StyleSheet.create({
   },
   menu: {
     position: 'absolute',
-    top: 98,
-    right: 20,
+    top: 64,
+    right: 16,
     zIndex: 50,
     elevation: 12,
-    width: 200,
-    backgroundColor: '#FFF',
-    borderRadius: 14,
+    width: 210,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.border,
+    paddingVertical: 6,
     shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 4 },
   },
-  menuItem: { minHeight: 46, paddingHorizontal: 15, justifyContent: 'center' },
-  menuItemText: { fontSize: 14, fontWeight: '700', color: colors.ink },
+  menuItem: {
+    minHeight: 44,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+    borderRadius: 10,
+    marginHorizontal: 4,
+    marginVertical: 2,
+  },
+  menuItemText: { fontSize: 14, fontWeight: '700' },
   emptyScreen: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 28,
-    backgroundColor: colors.canvas,
   },
   emptyIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 20,
+    width: 64,
+    height: 64,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.mint,
   },
-  emptyIconText: { fontSize: 30, fontWeight: '900', color: colors.emerald },
+  emptyIconText: { fontSize: 32, fontWeight: '900' },
   emptyTitle: {
-    fontSize: 23,
+    fontSize: 22,
     fontWeight: '800',
-    color: colors.ink,
     marginTop: 20,
   },
   emptyCopy: {
     fontSize: 14,
-    color: colors.muted,
     lineHeight: 21,
     textAlign: 'center',
     marginTop: 8,
   },
   primaryButton: {
-    height: 50,
+    height: 48,
     minWidth: 145,
     marginTop: 24,
     borderRadius: 14,
-    backgroundColor: colors.emerald,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  primaryButtonText: { color: '#FFF', fontWeight: '800' },
+  primaryButtonText: { color: '#FFF', fontWeight: '800', fontSize: 15 },
 });

@@ -17,8 +17,10 @@ import {
   loadSession,
   saveSession,
 } from './src/services/session';
+import {useTheme} from './src/theme/theme';
 
 export default function App() {
+  const theme = useTheme();
   const [session, setSession] = useState<Session | null | undefined>(
     undefined,
   );
@@ -84,12 +86,12 @@ export default function App() {
     <SafeAreaProvider>
       <StatusBar
         translucent={false}
-        backgroundColor="#FFFFFF"
-        barStyle="dark-content"
+        backgroundColor={theme.header}
+        barStyle={theme.isDark ? 'light-content' : 'dark-content'}
       />
 
       <SafeAreaView
-        style={{flex: 1, backgroundColor: '#FFFFFF'}}
+        style={{flex: 1, backgroundColor: theme.canvas}}
         edges={['top', 'bottom', 'left', 'right']}
       >
         {session === undefined ? null : !session ? (
