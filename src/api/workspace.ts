@@ -10,6 +10,13 @@ export const unwrapList = (response: any): ListItem[] => {
     [];
   return Array.isArray(value) ? value : [];
 };
+
+// campaign-details returns a single object under `data`, not an array —
+// unwrapList would coerce that to [] since Array.isArray(data) is false.
+export const unwrapItem = (response: any): Record<string, any> => {
+  return response?.data || response?.item || {};
+};
+
 export const getInbox = (session: ApiSession, projectId: string) =>
   post<any>(
     '/message/chat-list',
@@ -28,17 +35,29 @@ export const getCampaigns = (session: ApiSession, projectId: string) =>
     { project_id: projectId, page: 1, limit: 30 },
     session,
   );
+export const getCampaignDetails = (
+  session: ApiSession,
+  projectId: string,
+  campaignId: string,
+) =>
+  post<any>(
+    '/campaign/campaign-details',
+    { project_id: projectId, campaign_id: campaignId },
+    session,
+  );
+export const getCampaignMessages = (
+  session: ApiSession,
+  projectId: string,
+  campaignId: string,
+  page = 1,
+  limit = 50,
+) =>
+  post<any>(
+    '/campaign/campaign-messages',
+    { project_id: projectId, campaign_id: campaignId, page, limit },
+    session,
+  );
 export const getProjectMeta = (session: ApiSession, projectId: string) =>
   post<any>('/project/meta-details', { project_id: projectId }, session);
 export const getUnreadCount = (session: ApiSession, projectId: string) =>
   post<any>('/message/total-unread-count', { project_id: projectId }, session);
-export const getChatHistory = (session: ApiSession, projectId: string, contactNumber: string, lastId?: number) =>
-  post<any>('/message/chat-history', { project_id: projectId, number: contactNumber, last_id: lastId || 0 }, session);
-export const markAsRead = (session: ApiSession, projectId: string, contactNumber: string) =>
-  post<any>('/message/mark-as-read', { project_id: projectId, number: contactNumber }, session);
-export const sendMessage = (session: ApiSession, projectId: string, contactNumber: string, message: string) =>
-  post<any>('/message/send-text-message', { project_id: projectId, number: contactNumber, message_type: 'text', message }, session);
-export const getContactDetails = (session: ApiSession, projectId: string, contactNumber: string) =>
-  post<any>('/contact/contact-details', { project_id: projectId, number: contactNumber }, session);
-export const getOpenCaseCount = (session: ApiSession, projectId: string, contactNumber: string) =>
-  post<any>('/message/open-case-count', { project_id: projectId, number: contactNumber }, session);

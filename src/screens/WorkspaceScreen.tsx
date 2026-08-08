@@ -1,22 +1,31 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
-import { ArrowLeftRight, MoreVertical } from 'lucide-react-native';
+import { ArrowLeftRight, Home, MessageCircle, Megaphone, User } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { Session } from '../services/session';
 import { useTheme } from '../theme/theme';
 import { CampaignsScreen } from './CampaignsScreen';
+import { CampaignDetailsScreen } from './CampaignDetailsScreen';
 import { DashboardScreen } from './DashboardScreen';
 import { LiveChatScreen } from './LiveChatScreen';
 import { ChatRoomScreen } from './ChatRoomScreen';
 import { ProfileScreen } from './ProfileScreen';
 
 type Page = 'dashboard' | 'inbox' | 'campaigns' | 'profile';
+
 const pageTitles: Record<Page, string> = {
   dashboard: 'Workspace',
   inbox: 'Live chat',
   campaigns: 'Campaigns',
   profile: 'My Profile',
 };
+
+const TABS: { key: Page; label: string; icon: typeof Home }[] = [
+  { key: 'dashboard', label: 'Home', icon: Home },
+  { key: 'inbox', label: 'Chats', icon: MessageCircle },
+  { key: 'campaigns', label: 'Campaigns', icon: Megaphone },
+  { key: 'profile', label: 'Profile', icon: User },
+];
 
 export function WorkspaceScreen({
   session,
@@ -29,8 +38,8 @@ export function WorkspaceScreen({
 }) {
   const theme = useTheme();
   const [page, setPage] = useState<Page>('dashboard');
-  const [menuOpen, setMenuOpen] = useState(false);
   const [chatTarget, setChatTarget] = useState<{ number: string; name: string } | null>(null);
+  const [campaignTarget, setCampaignTarget] = useState<{ id: string; name: string } | null>(null);
   const projectId = session.selectedProjectId || session.projects[0]?.id || '';
   const apiSession = useMemo<ApiSession>(
     () => ({ token: session.token, username: session.username }),
@@ -39,15 +48,15 @@ export function WorkspaceScreen({
 
   // Hardware back button (Android) has no stack to pop by default since
   // "pages" here are just local state, not real navigation screens.
-  // Without this, pressing back from e.g. Campaigns or an open chat
-  // exits the whole app instead of stepping back one level.
+  // Without this, pressing back from an open chat, an open campaign, or a
+  // non-home tab exits the whole app instead of stepping back one level.
   const handleBackPress = useCallback(() => {
     if (chatTarget) {
       setChatTarget(null);
       return true; // handled — stay in app
     }
-    if (menuOpen) {
-      setMenuOpen(false);
+    if (campaignTarget) {
+      setCampaignTarget(null);
       return true;
     }
     if (page !== 'dashboard') {
@@ -55,7 +64,7 @@ export function WorkspaceScreen({
       return true;
     }
     return false; // nothing left to undo — let the system handle it (exit/bubble up)
-  }, [chatTarget, menuOpen, page]);
+  }, [chatTarget, campaignTarget, page]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
@@ -83,12 +92,8 @@ export function WorkspaceScreen({
       </View>
     );
 
-  const navigate = (nextPage: Page) => {
-    setPage(nextPage);
-    setMenuOpen(false);
-    setChatTarget(null);
-  };
-
+  // Chat room is rendered on its own, completely replacing the tab-bar
+  // layout — full screen, like opening a chat thread in WhatsApp.
   if (chatTarget) {
     return (
       <ChatRoomScreen
@@ -97,6 +102,19 @@ export function WorkspaceScreen({
         contactNumber={chatTarget.number}
         contactName={chatTarget.name}
         onBack={() => setChatTarget(null)}
+      />
+    );
+  }
+
+  // Campaign details is the same pattern — full screen, no tab bar.
+  if (campaignTarget) {
+    return (
+      <CampaignDetailsScreen
+        projectId={projectId}
+        session={apiSession}
+        campaignId={campaignTarget.id}
+        campaignName={campaignTarget.name}
+        onBack={() => setCampaignTarget(null)}
       />
     );
   }
@@ -119,54 +137,8 @@ export function WorkspaceScreen({
           >
             <ArrowLeftRight size={20} color={theme.mintText} strokeWidth={2.5} />
           </Pressable>
-
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Open workspace menu"
-            onPress={() => setMenuOpen(open => !open)}
-            style={styles.actionBtn}
-            hitSlop={8}
-          >
-            <MoreVertical size={20} color={theme.mintText} strokeWidth={2.5} />
-          </Pressable>
         </View>
       </View>
-
-      {menuOpen && (
-        <>
-          <Pressable
-            accessibilityLabel="Close workspace menu"
-            onPress={() => setMenuOpen(false)}
-            style={styles.menuBackdrop}
-          />
-          <View style={[styles.menu, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <Pressable
-              onPress={() => navigate('dashboard')}
-              style={[styles.menuItem, page === 'dashboard' && { backgroundColor: theme.cardHover }]}
-            >
-              <Text style={[styles.menuItemText, { color: theme.ink }]}> Home</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => navigate('inbox')}
-              style={[styles.menuItem, page === 'inbox' && { backgroundColor: theme.cardHover }]}
-            >
-              <Text style={[styles.menuItemText, { color: theme.ink }]}>Live chat</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => navigate('campaigns')}
-              style={[styles.menuItem, page === 'campaigns' && { backgroundColor: theme.cardHover }]}
-            >
-              <Text style={[styles.menuItemText, { color: theme.ink }]}>Campaigns</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => navigate('profile')}
-              style={[styles.menuItem, page === 'profile' && { backgroundColor: theme.cardHover }]}
-            >
-              <Text style={[styles.menuItemText, { color: theme.ink }]}>My Profile</Text>
-            </Pressable>
-          </View>
-        </>
-      )}
 
       <View style={styles.body}>
         {page === 'dashboard' ? (
@@ -176,13 +148,17 @@ export function WorkspaceScreen({
             onOpenProfile={() => setPage('profile')}
           />
         ) : page === 'inbox' ? (
-          <LiveChatScreen 
-            projectId={projectId} 
-            session={apiSession} 
+          <LiveChatScreen
+            projectId={projectId}
+            session={apiSession}
             onOpenChat={(contactNumber, contactName) => setChatTarget({ number: contactNumber, name: contactName })}
           />
         ) : page === 'campaigns' ? (
-          <CampaignsScreen projectId={projectId} session={apiSession} />
+          <CampaignsScreen
+            projectId={projectId}
+            session={apiSession}
+            onOpenCampaign={(campaignId, name) => setCampaignTarget({ id: campaignId, name })}
+          />
         ) : (
           <ProfileScreen
             session={session}
@@ -190,6 +166,40 @@ export function WorkspaceScreen({
             onSignOut={onSignOut}
           />
         )}
+      </View>
+
+      <View style={[styles.tabBar, { backgroundColor: theme.surface, borderTopColor: theme.border }]}>
+        {TABS.map(tab => {
+          const Icon = tab.icon;
+          const active = page === tab.key;
+          return (
+            <Pressable
+              key={tab.key}
+              accessibilityRole="button"
+              accessibilityLabel={tab.label}
+              onPress={() => setPage(tab.key)}
+              style={styles.tabItem}
+              hitSlop={4}
+            >
+              <View style={[styles.tabPill, active && { backgroundColor: theme.mint }]}>
+                <Icon
+                  size={22}
+                  color={active ? theme.emerald : theme.muted}
+                  strokeWidth={active ? 2.5 : 2}
+                />
+                <Text
+                  style={[
+                    styles.tabLabel,
+                    { color: active ? theme.emerald : theme.muted },
+                    active && styles.tabLabelActive,
+                  ]}
+                >
+                  {tab.label}
+                </Text>
+              </View>
+            </Pressable>
+          );
+        })}
       </View>
     </View>
   );
@@ -228,38 +238,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   body: { flex: 1 },
-  menuBackdrop: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    zIndex: 40,
+  tabBar: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    paddingTop: 6,
+    paddingBottom: 8,
+    paddingHorizontal: 8,
   },
-  menu: {
-    position: 'absolute',
-    top: 64,
-    right: 16,
-    zIndex: 50,
-    elevation: 12,
-    width: 210,
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingVertical: 6,
-    shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  menuItem: {
-    minHeight: 44,
-    paddingHorizontal: 16,
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 10,
-    marginHorizontal: 4,
-    marginVertical: 2,
   },
-  menuItemText: { fontSize: 14, fontWeight: '700' },
+  tabPill: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+    minWidth: 64,
+  },
+  tabLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  tabLabelActive: {
+    fontWeight: '800',
+  },
   emptyScreen: {
     flex: 1,
     alignItems: 'center',

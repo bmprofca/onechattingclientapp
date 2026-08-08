@@ -15,9 +15,11 @@ import { useTheme } from '../theme/theme';
 export function CampaignsScreen({
   projectId,
   session,
+  onOpenCampaign,
 }: {
   projectId: string;
   session: ApiSession;
+  onOpenCampaign: (campaignId: string, name: string) => void;
 }) {
   const theme = useTheme();
   const [items, setItems] = useState<ListItem[]>([]);
@@ -45,7 +47,9 @@ export function CampaignsScreen({
   return (
     <FlatList
       data={items}
-      keyExtractor={(item, index) => String(item.id || item._id || index)}
+      keyExtractor={(item, index) =>
+        String(item.campaign_id || item.id || item._id || index)
+      }
       contentContainerStyle={items.length ? styles.list : styles.emptyList}
       refreshControl={
         <RefreshControl
@@ -67,13 +71,22 @@ export function CampaignsScreen({
           onRetry={load}
         />
       }
-      renderItem={({ item }) => <CampaignCard item={item} />}
+      renderItem={({ item }) => (
+        <CampaignCard item={item} onPress={onOpenCampaign} />
+      )}
     />
   );
 }
-function CampaignCard({ item }: { item: ListItem }) {
+function CampaignCard({
+  item,
+  onPress,
+}: {
+  item: ListItem;
+  onPress: (campaignId: string, name: string) => void;
+}) {
   const theme = useTheme();
   const name = String(item.name || item.campaign_name || 'Untitled');
+  const campaignId = String(item.campaign_id || item.id || item._id || '');
   const detail = String(
     item.message || item.status || item.category || 'No details available',
   );
@@ -81,6 +94,7 @@ function CampaignCard({ item }: { item: ListItem }) {
   return (
     <Pressable
       accessibilityRole="button"
+      onPress={() => onPress(campaignId, name)}
       style={[
         styles.card,
         { backgroundColor: theme.surface, borderColor: theme.border },
