@@ -37,7 +37,7 @@ export const getChatHistory = (session: ApiSession, projectId: string, contactNu
 export const markAsRead = (session: ApiSession, projectId: string, contactNumber: string) =>
   post<any>('/message/mark-as-read', { project_id: projectId, number: contactNumber }, session);
 export const sendMessage = (session: ApiSession, projectId: string, contactNumber: string, message: string) =>
-  post<any>('/message/send', { project_id: projectId, number: contactNumber, message_type: 'text', message }, session);
+  post<any>('/message/send-text-message', { project_id: projectId, number: contactNumber, message_type: 'text', message }, session);
 export const getContactDetails = (session: ApiSession, projectId: string, contactNumber: string) =>
   post<any>('/contact/contact-details', { project_id: projectId, number: contactNumber }, session);
 export const getOpenCaseCount = (session: ApiSession, projectId: string, contactNumber: string) =>
