@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ArrowLeftRight, MoreVertical } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { Session } from '../services/session';
 import { useTheme } from '../theme/theme';
@@ -88,18 +89,20 @@ export function WorkspaceScreen({
             accessibilityRole="button"
             accessibilityLabel="Choose another project"
             onPress={onChooseProject}
-            style={[styles.actionBtn, { backgroundColor: theme.mint }]}
+            style={styles.actionBtn}
+            hitSlop={8}
           >
-            <Text style={[styles.actionBtnIcon, { color: theme.mintText }]}>⇄</Text>
+            <ArrowLeftRight size={20} color={theme.mintText} strokeWidth={2.5} />
           </Pressable>
 
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Open workspace menu"
             onPress={() => setMenuOpen(open => !open)}
-            style={[styles.actionBtn, { backgroundColor: theme.mint }]}
+            style={styles.actionBtn}
+            hitSlop={8}
           >
-            <Text style={[styles.menuDotsIcon, { color: theme.mintText }]}>⋮</Text>
+            <MoreVertical size={20} color={theme.mintText} strokeWidth={2.5} />
           </Pressable>
         </View>
       </View>
@@ -113,6 +116,12 @@ export function WorkspaceScreen({
           />
           <View style={[styles.menu, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <Pressable
+              onPress={() => navigate('dashboard')}
+              style={[styles.menuItem, page === 'dashboard' && { backgroundColor: theme.cardHover }]}
+            >
+              <Text style={[styles.menuItemText, { color: theme.ink }]}> dashboard</Text>
+            </Pressable>
+            <Pressable
               onPress={() => navigate('inbox')}
               style={[styles.menuItem, page === 'inbox' && { backgroundColor: theme.cardHover }]}
             >
@@ -123,12 +132,6 @@ export function WorkspaceScreen({
               style={[styles.menuItem, page === 'campaigns' && { backgroundColor: theme.cardHover }]}
             >
               <Text style={[styles.menuItemText, { color: theme.ink }]}>Campaigns</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => navigate('dashboard')}
-              style={[styles.menuItem, page === 'dashboard' && { backgroundColor: theme.cardHover }]}
-            >
-              <Text style={[styles.menuItemText, { color: theme.ink }]}>Workspace dashboard</Text>
             </Pressable>
             <Pressable
               onPress={() => navigate('profile')}
@@ -190,7 +193,7 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 2,
   },
   actionBtn: {
     width: 40,
@@ -198,16 +201,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  actionBtnIcon: {
-    fontSize: 20,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  menuDotsIcon: {
-    fontSize: 20,
-    fontWeight: '900',
-    textAlign: 'center',
   },
   body: { flex: 1 },
   menuBackdrop: {

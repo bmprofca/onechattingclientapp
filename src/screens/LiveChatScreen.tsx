@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
   heading: { paddingTop: 12, paddingBottom: 5 },
   segmented: {
     height: 40,
-    marginTop: 17,
+    marginTop: 2,
     padding: 3,
     borderRadius: 12,
     flexDirection: 'row',
