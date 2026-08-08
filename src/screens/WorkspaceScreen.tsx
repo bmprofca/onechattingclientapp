@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ArrowLeftRight, MoreVertical } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { Session } from '../services/session';
@@ -36,6 +36,31 @@ export function WorkspaceScreen({
     () => ({ token: session.token, username: session.username }),
     [session.token, session.username],
   );
+
+  // Hardware back button (Android) has no stack to pop by default since
+  // "pages" here are just local state, not real navigation screens.
+  // Without this, pressing back from e.g. Campaigns or an open chat
+  // exits the whole app instead of stepping back one level.
+  const handleBackPress = useCallback(() => {
+    if (chatTarget) {
+      setChatTarget(null);
+      return true; // handled — stay in app
+    }
+    if (menuOpen) {
+      setMenuOpen(false);
+      return true;
+    }
+    if (page !== 'dashboard') {
+      setPage('dashboard');
+      return true;
+    }
+    return false; // nothing left to undo — let the system handle it (exit/bubble up)
+  }, [chatTarget, menuOpen, page]);
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
+    return () => subscription.remove();
+  }, [handleBackPress]);
 
   if (!projectId)
     return (
