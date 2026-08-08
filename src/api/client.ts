@@ -20,8 +20,28 @@ export async function post<T>(path: string, payload: unknown, session?: ApiSessi
       headers: { 'Content-Type': 'application/json', ...(session ? { token: session.token, username: session.username } : {}) },
       body: JSON.stringify(encryptPayload(payload)),
     });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok || result.error === true || typeof result.error === 'string') throw new ApiError(result.message || 'Request failed. Please try again.', response.status);
+
+    // --- ADDED: read raw text first so we can see exactly what the server sent ---
+    const rawText = await response.text();
+    console.log(`[post ${path}] status:`, response.status);
+    console.log(`[post ${path}] raw response:`, rawText);
+
+    let result: any = {};
+    try {
+      result = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      console.log(`[post ${path}] response was not valid JSON`);
+    }
+    // --- END ADDED ---
+
+    if (!response.ok || result.error === true || typeof result.error === 'string') {
+      throw new ApiError(
+        result.message ||
+          (typeof result.error === 'string' ? result.error : null) ||
+          `Request failed with status ${response.status}`, // more specific than the old generic fallback
+        response.status,
+      );
+    }
     return result as T;
   } catch (error) {
     if (error instanceof ApiError) throw error;

@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import Toast from 'react-native-toast-message';
 import {
+  ActivityIndicator,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -9,10 +12,37 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import {
+  launchImageLibrary,
+  ImagePickerResponse,
+} from 'react-native-image-picker';
+import {
+  pick,
+  types as DocumentPickerTypes,
+  isErrorWithCode,
+  errorCodes,
+} from '@react-native-documents/picker';
 import { ApiSession } from '../api/client';
-import { getChatHistory, markAsRead, sendMessage, unwrapList } from '../api/workspace';
+import {
+  getChatHistory,
+  markAsRead,
+  sendMessage,
+  sendImageMessage,
+  sendVideoMessage,
+  sendDocumentMessage,
+  sendAudioMessage,
+  unwrapList,
+} from '../api/workspace';
+import { uploadFile, PickedFile } from '../api/upload';
 import { LoadState } from '../components/LoadState';
 import { useTheme } from '../theme/theme';
+
+type AttachmentKind = 'photo' | 'video' | 'document' | 'audio';
+
+type PendingAttachment = {
+  kind: AttachmentKind;
+  file: PickedFile;
+};
 
 export function ChatRoomScreen({
   projectId,
@@ -35,6 +65,10 @@ export function ChatRoomScreen({
   const [sending, setSending] = useState(false);
   const [lastId, setLastId] = useState<number | undefined>();
   const [hasMore, setHasMore] = useState(true);
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const [uploadingKind, setUploadingKind] = useState<AttachmentKind | null>(null);
+  // NEW: holds a picked-but-not-yet-sent attachment, shown as a preview above the input bar
+  const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null);
 
   const loadHistory = useCallback(
     async (loadMore = false) => {
@@ -86,22 +120,173 @@ export function ChatRoomScreen({
     markAsRead(session, projectId, contactNumber).catch(() => { });
   }, []);
 
-  const handleSend = async () => {
-    if (!inputText.trim() || sending) return;
+  const refreshAfterSend = async () => {
+    setLastId(undefined);
+    setHasMore(true);
+    setMessages([]);
+    await loadHistory(false);
+  };
 
-    const textToSend = inputText.trim();
-    setInputText('');
-    setSending(true);
+  // Picks a file and stores it as a pending preview — does NOT upload or send yet.
+  const handlePickAttachment = async (kind: AttachmentKind) => {
+    setAttachMenuOpen(false);
 
     try {
-      await sendMessage(session, projectId, contactNumber, textToSend);
-      setLastId(undefined);
-      setHasMore(true);
-      setMessages([]);
-      await loadHistory(false);
+      let picked: PickedFile | null = null;
+
+      if (kind === 'photo' || kind === 'video') {
+        const result: ImagePickerResponse = await launchImageLibrary({
+          mediaType: kind === 'photo' ? 'photo' : 'video',
+          selectionLimit: 1,
+        });
+
+        if (result.didCancel) return;
+        if (result.errorMessage) throw new Error(result.errorMessage);
+
+        const asset = result.assets?.[0];
+        if (!asset?.uri) return;
+
+        picked = {
+          uri: asset.uri,
+          name: asset.fileName || `${kind}-${Date.now()}`,
+          type: asset.type || (kind === 'photo' ? 'image/jpeg' : 'video/mp4'),
+        };
+      } else {
+        const docTypes =
+          kind === 'audio' ? [DocumentPickerTypes.audio] : [DocumentPickerTypes.allFiles];
+
+        const [result] = await pick({ type: docTypes });
+
+        picked = {
+          uri: result.uri,
+          name: result.name || `${kind}-${Date.now()}`,
+          type: result.type || 'application/octet-stream',
+        };
+      }
+
+      if (!picked) return;
+
+      setPendingAttachment({ kind, file: picked });
     } catch (err) {
-      console.warn('Failed to send message', err);
-      setInputText(textToSend);
+      if (isErrorWithCode(err) && err.code === errorCodes.OPERATION_CANCELED) return;
+      console.warn(`Failed to pick ${kind}`, err);
+
+      const message =
+        err instanceof Error
+          ? err.message
+          : typeof err === 'string'
+            ? err
+            : JSON.stringify(err);
+
+      Toast.show({
+        type: 'error',
+        text1: `Could not select ${kind}`,
+        text2: message,
+        visibilityTime: 6000,
+      });
+    }
+  };
+
+  const cancelPendingAttachment = () => {
+    setPendingAttachment(null);
+  };
+
+  // Uploads + sends whatever is currently pending. `caption` (if provided) is sent
+  // as part of the SAME request for photo/video/document — the backend's
+  // send-image/video/document routes accept a `message` field used as the caption.
+  // Audio has no caption support on the backend, so it's ignored here and handled
+  // separately as a follow-up text message in handleSend.
+  const sendPendingAttachment = async (attachment: PendingAttachment, caption: string) => {
+    const { kind, file } = attachment;
+    setUploadingKind(kind);
+
+    try {
+      const uploaded = await uploadFile(file);
+
+      switch (kind) {
+        case 'photo':
+          await sendImageMessage(session, projectId, contactNumber, uploaded.url, caption);
+          break;
+        case 'video':
+          await sendVideoMessage(session, projectId, contactNumber, uploaded.url, caption);
+          break;
+        case 'document':
+          await sendDocumentMessage(
+            session,
+            projectId,
+            contactNumber,
+            uploaded.url,
+            uploaded.meta?.originalName || file.name,
+            caption,
+          );
+          break;
+        case 'audio':
+          await sendAudioMessage(session, projectId, contactNumber, uploaded.url, false);
+          break;
+      }
+
+      setPendingAttachment(null);
+    } catch (err) {
+      console.warn(`Failed to send ${kind}`, err);
+
+      const message =
+        err instanceof Error
+          ? err.message
+          : typeof err === 'string'
+            ? err
+            : JSON.stringify(err);
+
+      Toast.show({
+        type: 'error',
+        text1: `Could not send ${kind}`,
+        text2: message,
+        visibilityTime: 6000,
+      });
+      // Keep the pending attachment so the user can retry instead of re-picking it.
+    } finally {
+      setUploadingKind(null);
+    }
+  };
+
+  // Single send button now handles: attachment (if pending) first, then text.
+  // For photo/video/document, typed text is sent as the caption on the SAME
+  // request as the attachment (not a separate message). For audio (no caption
+  // support server-side) and for text-only sends, it goes as its own message.
+  const handleSend = async () => {
+    if (sending || uploadingKind) return;
+
+    const attachment = pendingAttachment;
+    const hasAttachment = !!attachment;
+    const textToSend = inputText.trim();
+
+    if (!hasAttachment && !textToSend) return;
+
+    const captionRidesWithAttachment = hasAttachment && attachment!.kind !== 'audio';
+
+    setSending(true);
+    try {
+      if (hasAttachment) {
+        const caption = captionRidesWithAttachment ? textToSend : '';
+        await sendPendingAttachment(attachment as PendingAttachment, caption);
+        if (captionRidesWithAttachment && textToSend) {
+          setInputText('');
+        }
+      }
+
+      // Only send a standalone text message when there's no attachment at all,
+      // or the attachment was audio (which can't carry a caption).
+      const shouldSendStandaloneText = textToSend && (!hasAttachment || !captionRidesWithAttachment);
+      if (shouldSendStandaloneText) {
+        setInputText('');
+        try {
+          await sendMessage(session, projectId, contactNumber, textToSend);
+        } catch (err) {
+          console.warn('Failed to send message', err);
+          setInputText(textToSend);
+        }
+      }
+
+      await refreshAfterSend();
     } finally {
       setSending(false);
     }
@@ -111,6 +296,7 @@ export function ChatRoomScreen({
     const isOut = item.type === 'out';
     const isRead = item.status === 'read';
     const isDelivered = item.status === 'delivered';
+    const messageType = item.message_type || 'text';
 
     return (
       <View style={[styles.messageRow, isOut ? styles.messageRowOut : styles.messageRowIn]}>
@@ -120,12 +306,7 @@ export function ChatRoomScreen({
             ? { backgroundColor: theme.bubbleOut, borderTopRightRadius: 2 }
             : { backgroundColor: theme.bubbleIn, borderTopLeftRadius: 2 },
         ]}>
-          <Text style={[
-            styles.messageText,
-            { color: isOut ? theme.bubbleOutText : theme.bubbleInText },
-          ]}>
-            {item.message || '(Unsupported message type)'}
-          </Text>
+          {renderMessageBody(item, messageType, isOut)}
           <View style={styles.messageFooter}>
             <Text style={[
               styles.messageTime,
@@ -145,14 +326,73 @@ export function ChatRoomScreen({
         </View>
       </View>
     );
+
+    function renderMessageBody(msg: any, type: string, out: boolean) {
+      const textColor = out ? theme.bubbleOutText : theme.bubbleInText;
+      const caption = msg.message ? (
+        <Text style={[styles.messageText, { color: textColor, marginTop: 6 }]}>{msg.message}</Text>
+      ) : null;
+
+      if (type === 'image' && msg.media_url) {
+        return (
+          <>
+            <Image source={{ uri: msg.media_url }} style={styles.mediaImage} resizeMode="cover" />
+            {caption}
+          </>
+        );
+      }
+
+      if (type === 'video' && msg.media_url) {
+        return (
+          <>
+            <View style={styles.mediaPlaceholder}>
+              <Text style={styles.mediaPlaceholderIcon}>▶</Text>
+              <Text style={[styles.mediaPlaceholderLabel, { color: textColor }]}>Video</Text>
+            </View>
+            {caption}
+          </>
+        );
+      }
+
+      if (type === 'document') {
+        return (
+          <View style={styles.documentCard}>
+            <Text style={styles.documentIcon}>📄</Text>
+            <Text style={[styles.documentName, { color: textColor }]} numberOfLines={2}>
+              {msg.media_name || 'Document'}
+            </Text>
+          </View>
+        );
+      }
+
+      if (type === 'audio') {
+        return (
+          <View style={styles.audioRow}>
+            <Text style={styles.audioIcon}>{msg.is_voice ? '🎤' : '🎵'}</Text>
+            <Text style={[styles.messageText, { color: textColor }]}>
+              {msg.is_voice ? 'Voice message' : 'Audio'}
+            </Text>
+          </View>
+        );
+      }
+
+      return (
+        <Text style={[styles.messageText, { color: textColor }]}>
+          {msg.message || '(Unsupported message type)'}
+        </Text>
+      );
+    }
   };
 
   const initialLetter = (contactName || contactNumber || 'C').trim().charAt(0).toUpperCase();
+  const isUploading = uploadingKind !== null;
+  const canSend = !sending && !isUploading && (!!pendingAttachment || !!inputText.trim());
 
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: theme.chatBg }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
       {/* Sleek Top Header */}
       <View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
@@ -199,14 +439,87 @@ export function ChatRoomScreen({
         />
       </View>
 
+      {/* Attachment menu */}
+      {attachMenuOpen && (
+        <View style={[styles.attachMenu, { backgroundColor: theme.header, borderColor: theme.border }]}>
+          <AttachmentOption
+            label="Photo"
+            icon="🖼️"
+            onPress={() => handlePickAttachment('photo')}
+            theme={theme}
+          />
+          <AttachmentOption
+            label="Video"
+            icon="🎬"
+            onPress={() => handlePickAttachment('video')}
+            theme={theme}
+          />
+          <AttachmentOption
+            label="Document"
+            icon="📄"
+            onPress={() => handlePickAttachment('document')}
+            theme={theme}
+          />
+          <AttachmentOption
+            label="Audio"
+            icon="🎵"
+            onPress={() => handlePickAttachment('audio')}
+            theme={theme}
+          />
+        </View>
+      )}
+
+      {/* NEW: Pending attachment preview, shown above the input bar until sent or cancelled */}
+      {pendingAttachment && (
+        <View style={[styles.previewBar, { backgroundColor: theme.inputContainerBg, borderColor: theme.border }]}>
+          {pendingAttachment.kind === 'photo' ? (
+            <Image source={{ uri: pendingAttachment.file.uri }} style={styles.previewThumb} resizeMode="cover" />
+          ) : (
+            <View style={[styles.previewIconBox, { backgroundColor: theme.inputBg }]}>
+              <Text style={styles.previewIconText}>
+                {pendingAttachment.kind === 'video' ? '🎬' : pendingAttachment.kind === 'audio' ? '🎵' : '📄'}
+              </Text>
+            </View>
+          )}
+
+          <View style={styles.previewInfo}>
+            <Text style={[styles.previewName, { color: theme.ink }]} numberOfLines={1}>
+              {pendingAttachment.file.name}
+            </Text>
+            <Text style={[styles.previewKind, { color: theme.muted }]}>
+              {isUploading
+                ? 'Sending…'
+                : pendingAttachment.kind.charAt(0).toUpperCase() + pendingAttachment.kind.slice(1)}
+            </Text>
+          </View>
+
+          {isUploading ? (
+            <ActivityIndicator size="small" color={theme.muted} style={styles.previewCancel} />
+          ) : (
+            <Pressable onPress={cancelPendingAttachment} hitSlop={8} style={styles.previewCancel}>
+              <Text style={[styles.previewCancelText, { color: theme.ink }]}>✕</Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+
       {/* Input Bar */}
       <View style={[styles.inputContainer, { backgroundColor: theme.inputContainerBg }]}>
+        <Pressable
+          style={styles.attachButton}
+          hitSlop={8}
+          disabled={isUploading}
+          onPress={() => setAttachMenuOpen(open => !open)}
+        >
+          <Text style={[styles.attachButtonIcon, { color: theme.ink }]}>{attachMenuOpen ? '✕' : '＋'}</Text>
+        </Pressable>
+
         <View style={[styles.inputPill, { backgroundColor: theme.inputBg }]}>
           <TextInput
             style={[styles.textInput, { color: theme.ink }]}
             value={inputText}
             onChangeText={setInputText}
-            placeholder="Message"
+            placeholder={pendingAttachment ? 'Add a caption…' : 'Message'}
             placeholderTextColor={theme.muted}
             multiline
           />
@@ -215,15 +528,38 @@ export function ChatRoomScreen({
           style={[
             styles.sendButton,
             { backgroundColor: theme.emerald },
-            (!inputText.trim() || sending) && { backgroundColor: theme.muted },
+            !canSend && { backgroundColor: theme.muted },
           ]}
           onPress={handleSend}
-          disabled={!inputText.trim() || sending}
+          disabled={!canSend}
         >
-          <Text style={styles.sendButtonIcon}>➤</Text>
+          {sending || isUploading ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <Text style={styles.sendButtonIcon}>➤</Text>
+          )}
         </Pressable>
       </View>
     </KeyboardAvoidingView>
+  );
+}
+
+function AttachmentOption({
+  label,
+  icon,
+  onPress,
+  theme,
+}: {
+  label: string;
+  icon: string;
+  onPress: () => void;
+  theme: any;
+}) {
+  return (
+    <Pressable style={styles.attachMenuItem} onPress={onPress}>
+      <Text style={styles.attachMenuIcon}>{icon}</Text>
+      <Text style={[styles.attachMenuLabel, { color: theme.ink }]}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -358,11 +694,127 @@ const styles = StyleSheet.create({
   tickRead: {
     color: '#34B7F1',
   },
+  mediaImage: {
+    width: 220,
+    height: 220,
+    borderRadius: 8,
+  },
+  mediaPlaceholder: {
+    width: 220,
+    height: 140,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mediaPlaceholderIcon: {
+    fontSize: 28,
+    color: '#FFFFFF',
+  },
+  mediaPlaceholderLabel: {
+    fontSize: 12,
+    marginTop: 4,
+  },
+  documentCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 160,
+  },
+  documentIcon: {
+    fontSize: 22,
+    marginRight: 8,
+  },
+  documentName: {
+    fontSize: 14,
+    flexShrink: 1,
+  },
+  audioRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  audioIcon: {
+    fontSize: 18,
+    marginRight: 8,
+  },
   inputContainer: {
     flexDirection: 'row',
     paddingHorizontal: 8,
     paddingVertical: 8,
     alignItems: 'center',
+  },
+  attachButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 4,
+  },
+  attachButtonIcon: {
+    fontSize: 24,
+    fontWeight: '600',
+  },
+  attachMenu: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingVertical: 14,
+    borderTopWidth: 1,
+  },
+  attachMenuItem: {
+    alignItems: 'center',
+    width: 72,
+  },
+  attachMenuIcon: {
+    fontSize: 26,
+  },
+  attachMenuLabel: {
+    fontSize: 12,
+    marginTop: 4,
+  },
+  previewBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+  },
+  previewThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 6,
+  },
+  previewIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewIconText: {
+    fontSize: 20,
+  },
+  previewInfo: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  previewName: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  previewKind: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  previewCancel: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  previewCancelText: {
+    fontSize: 18,
+    fontWeight: '700',
   },
   inputPill: {
     flex: 1,
