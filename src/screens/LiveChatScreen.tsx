@@ -202,8 +202,8 @@ const styles = StyleSheet.create({
   },
   segmentText: { fontSize: 13, fontWeight: '700' },
   rule: { height: 1, marginTop: 17 },
-  list: { paddingHorizontal: 20, paddingBottom: 18 },
-  emptyList: { flexGrow: 1, paddingHorizontal: 20 },
+  list: { paddingHorizontal: 10, paddingBottom: 18 },
+  emptyList: { flexGrow: 1, paddingHorizontal: 0 },
   card: {
     borderRadius: 17,
     borderWidth: 1,

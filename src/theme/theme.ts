@@ -27,14 +27,14 @@ export const lightColors = {
 };
 
 export const darkColors = {
-  canvas: '#0F172A',
-  surface: '#1E293B',
-  header: '#1E293B',
+  canvas: '#060c18ff',
+  surface: '#101723ff',
+  header: '#030912ff',
   border: '#334155',
   ink: '#F8FAFC',
   muted: '#94A3B8',
-  emerald: '#10B981',
-  emeraldDark: '#059669',
+  emerald: '#01b670ff',
+  emeraldDark: '#026848ff',
   mint: '#064E3B',
   mintText: '#A7F3D0',
   danger: '#F87171',
