@@ -1,6 +1,5 @@
 import React, {useState} from 'react';
 import {KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View} from 'react-native';
-import {SafeAreaView} from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import {login, register, requestPasswordReset} from '../api/auth';
 import {saveSession, Session} from '../services/session';
@@ -65,7 +64,7 @@ export function AuthScreen({onAuthenticated}: {onAuthenticated: (session: Sessio
       ? {eyebrow: 'CREATE ACCOUNT', title: 'Start something\nmeaningful.', copy: 'Create your secure 1chatting workspace.', action: 'Create account'}
       : {eyebrow: 'RESET PASSWORD', title: 'Get back into\nyour workspace.', copy: 'We will email you a secure reset link.', action: 'Send reset link'};
 
-  return <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+  return <View style={styles.safe}>
     <KeyboardAvoidingView style={styles.keyboardArea} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" showsVerticalScrollIndicator={false}>
         <View style={styles.heroGlow} />
@@ -85,7 +84,7 @@ export function AuthScreen({onAuthenticated}: {onAuthenticated: (session: Sessio
         <Text style={styles.terms}>Protected with secure, encrypted access.</Text>
       </ScrollView>
     </KeyboardAvoidingView>
-  </SafeAreaView>;
+  </View>;
 }
 
 const styles = StyleSheet.create({

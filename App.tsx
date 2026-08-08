@@ -90,7 +90,7 @@ export default function App() {
 
       <SafeAreaView
         style={{flex: 1, backgroundColor: '#FFFFFF'}}
-        edges={['bottom', 'left', 'right']}
+        edges={['top', 'bottom', 'left', 'right']}
       >
         {session === undefined ? null : !session ? (
           <AuthScreen

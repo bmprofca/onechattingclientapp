@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { ApiSession } from '../api/client';
 import { Session } from '../services/session';
 import { colors } from '../theme/theme';
@@ -36,7 +35,7 @@ export function WorkspaceScreen({
 
   if (!projectId)
     return (
-      <SafeAreaView style={styles.emptyScreen}>
+      <View style={styles.emptyScreen}>
         <View style={styles.emptyIcon}>
           <Text style={styles.emptyIconText}>1</Text>
         </View>
@@ -52,7 +51,7 @@ export function WorkspaceScreen({
         >
           <Text style={styles.primaryButtonText}>Sign out</Text>
         </Pressable>
-      </SafeAreaView>
+      </View>
     );
 
   const navigate = (nextPage: Page) => {
@@ -62,7 +61,6 @@ export function WorkspaceScreen({
   };
   if (chatTarget) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <ChatRoomScreen
         projectId={projectId}
         session={apiSession}
@@ -70,12 +68,11 @@ export function WorkspaceScreen({
         contactName={chatTarget.name}
         onBack={() => setChatTarget(null)}
       />
-      </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+    <View style={styles.safe}>
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>1chatting</Text>
@@ -152,7 +149,7 @@ export function WorkspaceScreen({
           <CampaignsScreen projectId={projectId} session={apiSession} />
         )}
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 

@@ -9,7 +9,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { ApiSession } from '../api/client';
 import { getChatHistory, markAsRead, sendMessage, unwrapList } from '../api/workspace';
 import { LoadState } from '../components/LoadState';
@@ -211,10 +210,6 @@ export function ChatRoomScreen({
 }
 
 const styles = StyleSheet.create({
-  safeContainer: {
-    flex: 1,
-    backgroundColor: '#075E54', // WhatsApp Teal status bar & header
-  },
   container: {
     flex: 1,
     backgroundColor: '#E5DDD5', // WhatsApp Chat Wall Paper color
@@ -232,7 +227,7 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     fontSize: 24,
-    color: '#00000',
+    color: '#000000',
     fontWeight: '600',
   },
   avatar: {
@@ -258,7 +253,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#000000',
-
   },
   headerSubtitle: {
     fontSize: 12,
@@ -275,7 +269,7 @@ const styles = StyleSheet.create({
   },
   headerIcon: {
     fontSize: 24,
-    fontWeight: 'semibold',
+    fontWeight: '600',
     color: '#000000',
   },
   chatBackground: {
