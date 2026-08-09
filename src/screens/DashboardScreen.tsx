@@ -90,7 +90,7 @@ export function DashboardScreen({
       <LoadState loading={false} error={error} empty={false} onRetry={load} />
       {!loading && !error && (
         <>
-          <View style={[styles.overview, { backgroundColor: theme.isDark ? '#007f46f3' : '#011118ff' }]}>
+          <View style={[styles.overview, { backgroundColor: theme.isDark ? '#0437c3f3' : '#4300fcff' }]}>
             <Text style={styles.overviewLabel}>AVAILABLE WALLET BALANCE</Text>
             <Text style={styles.balance}>₹{balance}</Text>
             <Text style={styles.overviewHint}>
@@ -204,10 +204,10 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 1,
-    color: '#d5dddaff',
+    color: '#ffffffff',
   },
   balance: { fontSize: 31, fontWeight: '800', color: '#FFF', marginTop: 7 },
-  overviewHint: { fontSize: 12, color: '#C8DDD5', marginTop: 6 },
+  overviewHint: { fontSize: 12, color: '#d9dedcff', marginTop: 6 },
   metrics: { flexDirection: 'row', marginTop: 12 },
   metric: {
     flex: 1,

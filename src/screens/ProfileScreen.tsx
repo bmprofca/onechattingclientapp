@@ -95,7 +95,7 @@ export function ProfileScreen({
 
       {/* Balance & Account Overview */}
       <View style={styles.statsRow}>
-        <View style={[styles.statCard, { backgroundColor: theme.isDark ? '#1E293B' : '#0F172A' }]}>
+        <View style={[styles.statCard, { backgroundColor: theme.isDark ? '#1200d3ff' : '#3104b8ff' }]}>
           <Text style={styles.statLabel}>WALLET BALANCE</Text>
           <Text style={styles.statValue}>₹{balance}</Text>
         </View>
@@ -127,9 +127,9 @@ export function ProfileScreen({
       <Pressable
         accessibilityRole="button"
         onPress={onSignOut}
-        style={[styles.logoutButton, { backgroundColor: theme.dangerBg, borderColor: theme.dangerBorder }]}
+        style={[styles.logoutButton, { backgroundColor: theme.isDark ? theme.danger : theme.dangerBg, borderColor: theme.isDark ? theme.danger : theme.dangerBorder }]}
       >
-        <Text style={[styles.logoutButtonText, { color: theme.danger }]}>Log Out</Text>
+        <Text style={[styles.logoutButtonText, { color: '#FFFFFF' }]}>Log Out</Text>
       </Pressable>
     </ScrollView>
   );
@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 10,
     fontWeight: '800',
-    color: 'rgba(255, 255, 255, 0.75)',
+    color: '#ffffff',
     letterSpacing: 0.8,
     marginBottom: 6,
   },
