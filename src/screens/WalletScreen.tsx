@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, BackHandler, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { Wallet, IndianRupee, ArrowLeft } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
@@ -18,6 +18,14 @@ export function WalletScreen({
   const theme = useTheme();
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      onBack();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [onBack]);
 
   const handleTopup = async () => {
     if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {

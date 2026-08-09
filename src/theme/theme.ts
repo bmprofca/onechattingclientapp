@@ -34,7 +34,7 @@ export const darkColors = {
   border: '#334155',
   ink: '#F8FAFC',
   muted: '#94A3B8',
-  emerald: '#01b670ff',
+  emerald: '#019b56ff',
   emeraldDark: '#026848ff',
   mint: '#064E3B',
   mintText: '#ffffffff',

@@ -100,7 +100,7 @@ export function WorkspaceScreen({
       return true;
     }
     return false; // nothing left to undo — let the system handle it (exit/bubble up)
-  }, [chatTarget, campaignTarget, page]);
+  }, [chatTarget, campaignTarget, walletTarget, wabaTarget, supportTarget, page]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', handleBackPress);

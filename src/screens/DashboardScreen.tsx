@@ -116,9 +116,9 @@ export function DashboardScreen({
               borderWidth: 1,
             }
           ]}>
-            <Text style={[styles.overviewLabel, { color: theme.header }]}>AVAILABLE WALLET BALANCE</Text>
-            <Text style={[styles.balance, { color: theme.header }]}>₹{balance}</Text>
-            <Text style={[styles.overviewHint, { color: theme.header }]}>
+            <Text style={[styles.overviewLabel, { color: '#FFF' }]}>AVAILABLE WALLET BALANCE</Text>
+            <Text style={[styles.balance, { color: '#FFFFFF' }]}>₹{balance}</Text>
+            <Text style={[styles.overviewHint, { color: '#ffffff' }]}>
               Use wallet credit for messages and campaigns
             </Text>
           </View>
