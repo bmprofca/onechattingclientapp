@@ -184,7 +184,7 @@ export function WorkspaceScreen({
             style={styles.actionBtn}
             hitSlop={8}
           >
-            <Wallet size={20} color={theme.muted} strokeWidth={2.5} />
+            <Wallet size={20} color={theme.ink} strokeWidth={2.5} />
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -193,7 +193,7 @@ export function WorkspaceScreen({
             style={styles.actionBtn}
             hitSlop={8}
           >
-            <ArrowLeftRight size={20} color={theme.muted} strokeWidth={2.5} />
+            <ArrowLeftRight size={20} color={theme.ink} strokeWidth={2.5} />
           </Pressable>
         </View>
       </View>
@@ -249,13 +249,13 @@ export function WorkspaceScreen({
               <View style={[styles.tabPill, active && { backgroundColor: theme.mint }]}>
                 <Icon
                   size={22}
-                  color={active ? theme.emerald : theme.muted}
+                  color={active ? theme.emerald : theme.ink}
                   strokeWidth={active ? 2.5 : 2}
                 />
                 <Text
                   style={[
                     styles.tabLabel,
-                    { color: active ? theme.emerald : theme.muted },
+                    { color: active ? theme.emerald : theme.ink },
                     active && styles.tabLabelActive,
                   ]}
                 >

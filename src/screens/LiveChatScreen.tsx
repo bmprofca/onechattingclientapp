@@ -1,12 +1,17 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
+import { Search, MessageSquarePlus, X } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { getInbox, getOpenCases, ListItem, unwrapList } from '../api/workspace';
 import { LoadState } from '../components/LoadState';
@@ -26,6 +31,19 @@ export function LiveChatScreen({
   const [items, setItems] = useState<ListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [newChatNumber, setNewChatNumber] = useState('');
+  const [newChatName, setNewChatName] = useState('');
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -35,6 +53,7 @@ export function LiveChatScreen({
           await (mode === 'chats' ? getInbox : getOpenCases)(
             session,
             projectId,
+            debouncedSearchQuery
           ),
         ),
       );
@@ -48,24 +67,44 @@ export function LiveChatScreen({
     } finally {
       setLoading(false);
     }
-  }, [mode, projectId, session]);
+  }, [mode, projectId, session, debouncedSearchQuery]);
   useEffect(() => {
     load();
   }, [load]);
+
+  const handleDirectChat = () => {
+    if (!newChatNumber.trim()) return;
+    onOpenChat(newChatNumber.trim(), newChatName.trim() || newChatNumber.trim());
+    setIsModalVisible(false);
+    setNewChatNumber('');
+    setNewChatName('');
+  };
   return (
-    <FlatList
-      data={items}
-      keyExtractor={(item, index) => String(item.id || item._id || index)}
-      contentContainerStyle={items.length ? styles.list : styles.emptyList}
-      refreshControl={
-        <RefreshControl
-          refreshing={loading}
-          onRefresh={load}
-          tintColor={theme.emerald}
-        />
-      }
-      ListHeaderComponent={
-        <View style={styles.heading}>
+    <View style={{ flex: 1, backgroundColor: theme.canvas }}>
+      <FlatList
+        data={items}
+        keyExtractor={(item, index) => String(item.id || item._id || index)}
+        contentContainerStyle={items.length ? styles.list : styles.emptyList}
+        refreshControl={
+          <RefreshControl
+            refreshing={loading}
+            onRefresh={load}
+            tintColor={theme.emerald}
+          />
+        }
+        ListHeaderComponent={
+          <View style={styles.heading}>
+            <View style={[styles.searchContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Search size={18} color={theme.muted} />
+              <TextInput
+                style={[styles.searchInput, { color: theme.ink }]}
+                placeholder="Search chats by name or number..."
+                placeholderTextColor={theme.muted}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                returnKeyType="search"
+              />
+            </View>
           <View style={[styles.segmented, { backgroundColor: theme.cardHover }]}>
             <Pressable
               accessibilityRole="button"
@@ -120,6 +159,74 @@ export function LiveChatScreen({
         />
       )}
     />
+
+      {/* FAB */}
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => setIsModalVisible(true)}
+        style={({ pressed }) => [
+          styles.fab,
+          { backgroundColor: theme.emerald },
+          pressed && { opacity: 0.9, transform: [{ scale: 0.97 }] }
+        ]}
+      >
+        <MessageSquarePlus size={24} color="#FFF" />
+      </Pressable>
+
+      {/* Direct Chat Modal */}
+      <Modal
+        visible={isModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsModalVisible(false)}
+      >
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: theme.ink }]}>New Chat</Text>
+              <Pressable onPress={() => setIsModalVisible(false)} hitSlop={8}>
+                <X size={24} color={theme.muted} />
+              </Pressable>
+            </View>
+            
+            <Text style={[styles.modalSubtitle, { color: theme.muted }]}>
+              Enter a phone number with country code to start a new direct chat.
+            </Text>
+
+            <View style={[styles.inputWrapper, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
+              <TextInput
+                style={[styles.modalInput, { color: theme.ink }]}
+                placeholder="Phone Number (e.g. 919876543210)"
+                placeholderTextColor={theme.muted}
+                keyboardType="phone-pad"
+                value={newChatNumber}
+                onChangeText={setNewChatNumber}
+              />
+            </View>
+
+            <View style={[styles.inputWrapper, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
+              <TextInput
+                style={[styles.modalInput, { color: theme.ink }]}
+                placeholder="Contact Name (Optional)"
+                placeholderTextColor={theme.muted}
+                value={newChatName}
+                onChangeText={setNewChatName}
+              />
+            </View>
+
+            <Pressable
+              style={[styles.modalButton, { backgroundColor: theme.emerald }]}
+              onPress={handleDirectChat}
+            >
+              <Text style={styles.modalButtonText}>Start Conversation</Text>
+            </Pressable>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </View>
   );
 }
 
@@ -187,6 +294,21 @@ function ChatCard({ item, onPress }: { item: ListItem, onPress: (contactNumber: 
 
 const styles = StyleSheet.create({
   heading: { paddingTop: 12, paddingBottom: 5 },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+  },
+  searchInput: {
+    flex: 1,
+    height: '100%',
+    marginLeft: 8,
+    fontSize: 15,
+  },
   segmented: {
     height: 40,
     marginTop: 2,
@@ -253,4 +375,72 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   arrow: { fontSize: 24, lineHeight: 26, marginLeft: 4 },
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    borderRadius: 20,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 5,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  inputWrapper: {
+    height: 50,
+    borderWidth: 1,
+    borderRadius: 12,
+    marginBottom: 12,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+  },
+  modalInput: {
+    fontSize: 15,
+  },
+  modalButton: {
+    height: 50,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  modalButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '800',
+  },
 });

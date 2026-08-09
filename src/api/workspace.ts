@@ -10,16 +10,16 @@ export const unwrapList = (response: any): ListItem[] => {
     [];
   return Array.isArray(value) ? value : [];
 };
-export const getInbox = (session: ApiSession, projectId: string) =>
+export const getInbox = (session: ApiSession, projectId: string, search?: string) =>
   post<any>(
     '/message/chat-list',
-    { project_id: projectId, page: 1, limit: 30 },
+    { project_id: projectId, page: 1, limit: 30, search: search || '' },
     session,
   );
-export const getOpenCases = (session: ApiSession, projectId: string) =>
+export const getOpenCases = (session: ApiSession, projectId: string, search?: string) =>
   post<any>(
     '/message/open-case-list',
-    { project_id: projectId, page: 1, limit: 30 },
+    { project_id: projectId, page: 1, limit: 30, search: search || '' },
     session,
   );
 export const getCampaigns = (session: ApiSession, projectId: string) =>

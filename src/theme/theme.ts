@@ -10,7 +10,7 @@ export const lightColors = {
   emerald: '#00aa71ff',
   emeraldDark: '#047857',
   mint: '#E6F4ED',
-  mintText: '#047857',
+  mintText: '#01a174ff',
   danger: '#EF4444',
   dangerBg: '#fe0000ff',
   dangerBorder: '#FCA5A5',
