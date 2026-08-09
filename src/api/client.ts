@@ -64,3 +64,51 @@ export async function post<T>(path: string, payload: unknown, session?: ApiSessi
     throw new ApiError(generic);
   } finally { clearTimeout(timer); }
 }
+
+export async function get<T>(path: string, _?: unknown, session?: ApiSession): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20000);
+  const url = `${API_BASE_URL}${path}`;
+  try {
+    const response = await fetch(url, {
+      method: 'GET', signal: controller.signal,
+      headers: { 'Content-Type': 'application/json', ...(session ? { token: session.token, username: session.username } : {}) },
+    });
+
+    const rawText = await response.text();
+    console.log(`[get ${path}] status:`, response.status);
+    console.log(`[get ${path}] raw response:`, rawText);
+
+    let result: any = {};
+    try {
+      result = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      console.log(`[get ${path}] response was not valid JSON`);
+    }
+
+    if (!response.ok || result.error === true || typeof result.error === 'string') {
+      throw new ApiError(
+        result.message ||
+          (typeof result.error === 'string' ? result.error : null) ||
+          `Request failed with status ${response.status}`,
+        response.status,
+      );
+    }
+    return result as T;
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    let loggedError: any = error;
+    try {
+      if (error && typeof error === 'object' && !(error instanceof Error)) loggedError = JSON.stringify(error);
+    } catch (e) {
+      loggedError = String(error);
+    }
+    console.error('API request failed', { path, error: loggedError });
+    const isAbort = error instanceof Error && error.name === 'AbortError';
+    const generic = isAbort ? 'The request timed out. Please retry.' : 'Unable to reach the server. Check your connection.';
+    if (typeof __DEV__ !== 'undefined' && __DEV__ && error instanceof Error && error.message) {
+      throw new ApiError(`${generic} (${error.message})`);
+    }
+    throw new ApiError(generic);
+  } finally { clearTimeout(timer); }
+}

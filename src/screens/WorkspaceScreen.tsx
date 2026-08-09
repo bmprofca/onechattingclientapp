@@ -12,6 +12,7 @@ import { ChatRoomScreen } from './ChatRoomScreen';
 import { ProfileScreen } from './ProfileScreen';
 import { WalletScreen } from './WalletScreen';
 import { WabaOnboardingScreen } from './WabaOnboardingScreen';
+import { SupportScreen } from './SupportScreen';
 
 type Page = 'dashboard' | 'inbox' | 'campaigns' | 'profile';
 
@@ -46,6 +47,7 @@ export function WorkspaceScreen({
   const [campaignTarget, setCampaignTarget] = useState<{ id: string; name: string } | null>(null);
   const [walletTarget, setWalletTarget] = useState(false);
   const [wabaTarget, setWabaTarget] = useState(false);
+  const [supportTarget, setSupportTarget] = useState(false);
   const projectId = session.selectedProjectId || session.projects[0]?.id || '';
   const apiSession = useMemo<ApiSession>(
     () => ({ token: session.token, username: session.username }),
@@ -71,6 +73,10 @@ export function WorkspaceScreen({
     }
     if (wabaTarget) {
       setWabaTarget(false);
+      return true;
+    }
+    if (supportTarget) {
+      setSupportTarget(false);
       return true;
     }
     if (page !== 'dashboard') {
@@ -137,7 +143,7 @@ export function WorkspaceScreen({
     return (
       <WalletScreen
         session={apiSession}
-        balance={session.balance || '0'}
+        balance={String(session.balance || '0')}
         onBack={() => setWalletTarget(false)}
       />
     );
@@ -149,6 +155,15 @@ export function WorkspaceScreen({
         session={apiSession}
         projectId={projectId}
         onBack={() => setWabaTarget(false)}
+      />
+    );
+  }
+
+  if (supportTarget) {
+    return (
+      <SupportScreen
+        session={apiSession}
+        onBack={() => setSupportTarget(false)}
       />
     );
   }
@@ -193,6 +208,7 @@ export function WorkspaceScreen({
             onOpenProjectsHub={onOpenProjects}
             onOpenWallet={() => setWalletTarget(true)}
             onOpenWaba={() => setWabaTarget(true)}
+            onOpenSupport={() => setSupportTarget(true)}
           />
         ) : page === 'inbox' ? (
           <LiveChatScreen

@@ -29,6 +29,7 @@ export function DashboardScreen({
   onOpenInbox,
   onOpenWallet,
   onOpenWaba,
+  onOpenSupport,
 }: {
   projectId: string;
   session: ApiSession;
@@ -37,6 +38,7 @@ export function DashboardScreen({
   onOpenInbox?: () => void;
   onOpenWallet?: () => void;
   onOpenWaba?: () => void;
+  onOpenSupport?: () => void;
 }) {
   const theme = useTheme();
   const [info, setInfo] = useState<any>(null);
@@ -72,9 +74,7 @@ export function DashboardScreen({
     { title: 'Projects', note: 'Switch workspace', onPress: onOpenProjectsHub },
     { title: 'Wallet', note: 'Balance & top-up', onPress: onOpenWallet },
     { title: 'Profile', note: 'Account details', onPress: onOpenProfile },
-    { title: 'Automation', note: 'Replies & agents' },
-    { title: 'Team', note: 'People & access' },
-    { title: 'Support', note: 'Help center' },
+    { title: 'Support', note: 'Help center', onPress: onOpenSupport },
   ];
   return (
     <ScrollView
@@ -90,7 +90,7 @@ export function DashboardScreen({
       <LoadState loading={false} error={error} empty={false} onRetry={load} />
       {!loading && !error && (
         <>
-          <View style={[styles.overview, { backgroundColor: theme.isDark ? '#1E293B' : '#011118ff' }]}>
+          <View style={[styles.overview, { backgroundColor: theme.isDark ? '#007f46f3' : '#011118ff' }]}>
             <Text style={styles.overviewLabel}>AVAILABLE WALLET BALANCE</Text>
             <Text style={styles.balance}>₹{balance}</Text>
             <Text style={styles.overviewHint}>
