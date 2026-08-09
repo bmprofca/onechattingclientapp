@@ -174,3 +174,15 @@ export async function getWabaInformation(session: ApiSession, projectId: string)
     project_id: projectId,
   }, session);
 }
+export const getPlans = (session: ApiSession) =>
+  post<any>('/plan', {}, session);
+
+export type PlanPackage = {
+  amount: string;
+  package_id: string;
+};
+
+export type PlanPackages = {
+  monthly: PlanPackage;
+  yearly: PlanPackage;
+};

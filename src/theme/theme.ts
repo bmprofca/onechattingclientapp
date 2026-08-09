@@ -1,7 +1,7 @@
 import { useColorScheme } from 'react-native';
 
 export const lightColors = {
-  canvas: '#F8FAF9',
+  canvas: '#ffffffff',
   surface: '#FFFFFF',
   header: '#FFFFFF',
   border: '#E2EBE7',
@@ -28,7 +28,7 @@ export const lightColors = {
 };
 
 export const darkColors = {
-  canvas: '#060c18ff',
+  canvas: '#0e1013ff',
   surface: '#101723ff',
   header: '#030912ff',
   border: '#334155',
