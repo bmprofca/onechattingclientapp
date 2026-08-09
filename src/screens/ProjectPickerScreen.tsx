@@ -20,9 +20,19 @@ export function ProjectPickerScreen({
         contentContainerStyle={styles.page}
         ListHeaderComponent={
           <>
+          <View style={{
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 5,
+          }}>
             <View style={[styles.logo, { backgroundColor: theme.mint }]}>
               <Text style={[styles.logoText, { color: theme.mintText }]}>1</Text>
             </View>
+            <Text style={[styles.logoText, { color: theme.mintText }]}>Chatting</Text>
+
+          </View>
+            
             <Text style={[styles.eyebrow, { color: theme.mintText }]}>SELECT WORKSPACE</Text>
             <Text style={[styles.title, { color: theme.ink }]}>Choose a project</Text>
             <Text style={[styles.copy, { color: theme.muted }]}>

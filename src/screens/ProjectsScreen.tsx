@@ -15,12 +15,14 @@ export function ProjectsScreen({
   onSelect,
   onProjectCreated,
   onClose,
+  onRechargeWallet,
 }: {
   session: ApiSession;
   projects: Project[];
   onSelect: (projectId: string) => void;
   onProjectCreated: (newProject: Project) => void;
   onClose?: () => void;
+  onRechargeWallet?: () => void;
 }) {
   const theme = useTheme();
   const [mode, setMode] = useState<Mode>('list');
@@ -43,7 +45,7 @@ export function ProjectsScreen({
       }
       return false;
     };
-    
+
     const subscription = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
     return () => subscription.remove();
   }, [mode, onClose]);
@@ -57,6 +59,7 @@ export function ProjectsScreen({
           setMode('list');
           onProjectCreated(proj);
         }}
+        onRechargeWallet={onRechargeWallet}
       />
     );
   }
@@ -94,7 +97,7 @@ export function ProjectsScreen({
         ListHeaderComponent={
           <>
             <Text style={[styles.eyebrow, { color: theme.mintText }]}>YOUR WORKSPACES</Text>
-            
+
             <View style={styles.titleRow}>
               <Text style={[styles.title, { color: theme.ink }]}>Projects</Text>
               <Pressable
@@ -106,7 +109,7 @@ export function ProjectsScreen({
                 <Text style={styles.createBtnText}>New</Text>
               </Pressable>
             </View>
-            
+
             {projects.length > 0 ? (
               <Text style={[styles.copy, { color: theme.muted }]}>
                 Select a project to open its workspace, or tap the gear icon to manage settings.
@@ -152,7 +155,7 @@ export function ProjectsScreen({
                 {item.owned ? 'Owned by you' : item.ownerName || 'Shared workspace'}
               </Text>
             </View>
-            
+
             <Pressable
               hitSlop={12}
               style={styles.manageBtn}
@@ -163,7 +166,7 @@ export function ProjectsScreen({
             >
               <Settings size={20} color={theme.muted} />
             </Pressable>
-            
+
           </Pressable>
         )}
       />
@@ -216,7 +219,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   copy: { fontSize: 14, lineHeight: 21, marginTop: 8, marginBottom: 18 },
-  
+
   card: {
     minHeight: 76,
     borderWidth: 1,
@@ -234,11 +237,11 @@ const styles = StyleSheet.create({
   cardText: { flex: 1, marginLeft: 12, marginRight: 8 },
   name: { fontSize: 15, fontWeight: '800' },
   meta: { fontSize: 12, marginTop: 4 },
-  
+
   manageBtn: {
     padding: 8,
   },
-  
+
   emptyContainer: {
     flex: 1,
     alignItems: 'center',

@@ -10,7 +10,6 @@ import {AuthScreen} from './src/screens/AuthScreen';
 import {SplashScreen} from './src/components/SplashScreen';
 import {WorkspaceScreen} from './src/screens/WorkspaceScreen';
 import {ProjectPickerScreen} from './src/screens/ProjectPickerScreen';
-import {ProjectsScreen} from './src/screens/ProjectsScreen';
 
 import {getAccountProfile} from './src/api/auth';
 import {
@@ -26,7 +25,6 @@ export default function App() {
   const [session, setSession] = useState<Session | null | undefined>(
     undefined,
   );
-  const [showProjectsHub, setShowProjectsHub] = useState(false);
 
   useEffect(() => {
     const restoreSession = async () => {
@@ -77,6 +75,15 @@ export default function App() {
     setSession(updated);
   };
 
+  // Clears the selected project (e.g. "switch workspace") without touching
+  // the projects list itself.
+  const deselectProject = async () => {
+    if (!session) return;
+    const updated = { ...session, selectedProjectId: undefined };
+    await saveSession(updated);
+    setSession(updated);
+  };
+
   const handleProjectCreated = async (newProject: { id: string; name: string }) => {
     if (!session) return;
     const updated = {
@@ -87,23 +94,10 @@ export default function App() {
     setSession(updated);
   };
 
-  const chooseAnotherProject = async () => {
-    if (!session) return;
-
-    const updated = {
-      ...session,
-      selectedProjectId: undefined,
-    };
-
-    await saveSession(updated);
-    setSession(updated);
-  };
-
-  // The status bar should match whichever screen is actually showing.
-  // WorkspaceScreen has its own header bar (theme.header); every other
-  // screen (Auth, ProjectPicker) sits directly on theme.canvas. Using a
-  // single hardcoded color here was creating a visible seam at the top
-  // of AuthScreen since its background never matched the status bar.
+  // WorkspaceScreen now owns both the "has a project" experience and the
+  // limited "no project yet" experience (Home / Wallet / Projects tabs),
+  // so the only other top-level case left is picking between several
+  // existing projects when none is currently selected.
   const statusBarColor =
     session && session.selectedProjectId ? theme.header : theme.canvas;
 
@@ -135,22 +129,12 @@ export default function App() {
             projects={session.projects}
             onSelect={selectProject}
           />
-        ) : !session.selectedProjectId || showProjectsHub ? (
-          <ProjectsScreen
-            session={session}
-            projects={session.projects || []}
-            onSelect={(id) => {
-              selectProject(id);
-              setShowProjectsHub(false);
-            }}
-            onProjectCreated={handleProjectCreated}
-            onClose={session.selectedProjectId ? () => setShowProjectsHub(false) : undefined}
-          />
         ) : (
           <WorkspaceScreen
             session={session}
-            onChooseProject={chooseAnotherProject}
-            onOpenProjects={() => setShowProjectsHub(true)}
+            onSelectProject={selectProject}
+            onDeselectProject={deselectProject}
+            onProjectCreated={handleProjectCreated}
             onSignOut={async () => {
               await clearSession();
               setSession(null);
