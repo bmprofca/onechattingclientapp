@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import { ApiSession } from '../api/client';
-import { getProjectMeta, getUnreadCount } from '../api/workspace';
+import { getProjectMeta, getProjectDashboard, getUnreadCount } from '../api/workspace';
 import { LoadState } from '../components/LoadState';
 import { useTheme } from '../theme/theme';
 
@@ -24,6 +24,8 @@ const numericValue = (value: any) =>
 export function DashboardScreen({
   projectId,
   session,
+  balance,
+  projectCount,
   onOpenProfile,
   onOpenProjectsHub,
   onOpenInbox,
@@ -33,6 +35,8 @@ export function DashboardScreen({
 }: {
   projectId: string;
   session: ApiSession;
+  balance: string;
+  projectCount: number;
   onOpenProfile?: () => void;
   onOpenProjectsHub?: () => void;
   onOpenInbox?: () => void;
@@ -42,6 +46,7 @@ export function DashboardScreen({
 }) {
   const theme = useTheme();
   const [info, setInfo] = useState<any>(null);
+  const [dashboardData, setDashboardData] = useState<any>(null);
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -49,11 +54,13 @@ export function DashboardScreen({
     setLoading(true);
     setError('');
     try {
-      const [projectInfo, unreadResult] = await Promise.all([
+      const [projectInfo, dashData, unreadResult] = await Promise.all([
         getProjectMeta(session, projectId),
+        getProjectDashboard(session, projectId),
         getUnreadCount(session, projectId),
       ]);
       setInfo(projectInfo);
+      setDashboardData(dashData?.data || dashData);
       setUnread(Number(numericValue(unreadResult)) || 0);
     } catch (requestError) {
       setError(
@@ -69,7 +76,18 @@ export function DashboardScreen({
     load();
   }, [load]);
   const value = info?.data || info || {};
-  const balance = String(value.wallet_balance || value.balance || '0');
+  
+  const metricsData = [
+    { label: 'Unread chats', value: String(unread), tone: 'emerald' as const },
+    { label: 'Projects', value: String(projectCount), tone: 'blue' as const },
+    { label: 'Contacts', value: String(dashboardData?.contact?.total || '0'), tone: 'emerald' as const },
+    { label: 'Campaigns', value: String(dashboardData?.campaign?.total || '0'), tone: 'blue' as const },
+    { label: 'Chats', value: String(dashboardData?.chat?.total || '0'), tone: 'emerald' as const },
+    { label: 'Templates', value: String(dashboardData?.template?.total || '0'), tone: 'blue' as const },
+    { label: 'Sent Today', value: String(dashboardData?.message?.today_sent || '0'), tone: 'emerald' as const },
+    { label: 'Total Msgs', value: String(dashboardData?.message?.total || '0'), tone: 'blue' as const },
+  ];
+
   const actions = [
     { title: 'Projects', note: 'Switch workspace', onPress: onOpenProjectsHub },
     { title: 'Wallet', note: 'Balance & top-up', onPress: onOpenWallet },
@@ -98,18 +116,19 @@ export function DashboardScreen({
             </Text>
           </View>
           <View style={styles.metrics}>
-            <Metric
-              value={String(unread)}
-              label="Unread chats"
-              tone="emerald"
-              theme={theme}
-            />
-            <Metric
-              value={String(value.project_count || value.projects || '1')}
-              label="Projects"
-              tone="blue"
-              theme={theme}
-            />
+            {metricsData.map((metric, index) => (
+              <Metric
+                key={metric.label}
+                value={metric.value}
+                label={metric.label}
+                tone={metric.tone}
+                theme={theme}
+                style={[
+                  styles.metricCard,
+                  index % 2 === 0 ? { marginRight: '3%' } : {}
+                ]}
+              />
+            ))}
           </View>
           <Text style={[styles.sectionTitle, { color: theme.ink }]}>Manage workspace</Text>
           <View style={styles.actionGrid}>
@@ -176,17 +195,19 @@ function Metric({
   label,
   tone,
   theme,
+  style,
 }: {
   value: string;
   label: string;
   tone: 'emerald' | 'blue';
   theme: any;
+  style?: any;
 }) {
   return (
     <View style={[
       styles.metric,
       { backgroundColor: tone === 'emerald' ? theme.mint : (theme.isDark ? '#1E293B' : '#E9EDFF') },
-      tone === 'blue' && styles.metricBlue,
+      style,
     ]}>
       <Text style={[styles.metricValue, { color: tone === 'emerald' ? (theme.isDark ? theme.mintText : theme.ink) : theme.ink }]}>{value}</Text>
       <Text style={[styles.metricLabel, { color: theme.muted }]}>{label}</Text>
@@ -208,14 +229,19 @@ const styles = StyleSheet.create({
   },
   balance: { fontSize: 31, fontWeight: '800', color: '#FFF', marginTop: 7 },
   overviewHint: { fontSize: 12, color: '#d9dedcff', marginTop: 6 },
-  metrics: { flexDirection: 'row', marginTop: 12 },
+  metrics: { 
+    flexDirection: 'row', 
+    marginTop: 12,
+    flexWrap: 'wrap',
+  },
   metric: {
-    flex: 1,
     borderRadius: 17,
     padding: 15,
-    marginRight: 6,
   },
-  metricBlue: { marginRight: 0, marginLeft: 6 },
+  metricCard: {
+    width: '48.5%',
+    marginBottom: 10,
+  },
   metricValue: { fontSize: 23, fontWeight: '800' },
   metricLabel: { fontSize: 11, marginTop: 3 },
   sectionTitle: {

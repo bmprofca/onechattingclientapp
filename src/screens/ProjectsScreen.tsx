@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Settings, Plus } from 'lucide-react-native';
+import React, { useEffect, useState } from 'react';
+import { BackHandler, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Settings, Plus, ArrowLeft } from 'lucide-react-native';
 import { Project } from '../api/auth';
 import { ApiSession } from '../api/client';
 import { useTheme } from '../theme/theme';
@@ -25,6 +25,28 @@ export function ProjectsScreen({
   const theme = useTheme();
   const [mode, setMode] = useState<Mode>('list');
   const [manageProjectId, setManageProjectId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleBackPress = () => {
+      if (mode === 'create') {
+        setMode('list');
+        return true;
+      }
+      if (mode === 'manage') {
+        setMode('list');
+        setManageProjectId(null);
+        return true;
+      }
+      if (onClose) {
+        onClose();
+        return true;
+      }
+      return false;
+    };
+    
+    const subscription = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
+    return () => subscription.remove();
+  }, [mode, onClose]);
 
   if (mode === 'create') {
     return (
@@ -56,10 +78,12 @@ export function ProjectsScreen({
     <View style={[styles.safe, { backgroundColor: theme.canvas }]}>
       {/* Header if onClose is provided (e.g., when launched from Dashboard) */}
       {onClose && projects.length > 0 && (
-        <View style={[styles.header, { borderBottomColor: theme.border }]}>
-          <Pressable onPress={onClose} style={styles.backButton}>
-            <Text style={[styles.backButtonText, { color: theme.ink }]}>✕</Text>
+        <View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
+          <Pressable onPress={onClose} style={styles.backButton} hitSlop={8}>
+            <ArrowLeft size={24} color={theme.ink} />
           </Pressable>
+          <Text style={[styles.headerTitle, { color: theme.ink }]}>Workspaces</Text>
+          <View style={styles.headerRight} />
         </View>
       )}
 
@@ -69,9 +93,6 @@ export function ProjectsScreen({
         contentContainerStyle={styles.page}
         ListHeaderComponent={
           <>
-            <View style={[styles.logo, { backgroundColor: theme.mint }]}>
-              <Text style={[styles.logoText, { color: theme.mintText }]}>1</Text>
-            </View>
             <Text style={[styles.eyebrow, { color: theme.mintText }]}>YOUR WORKSPACES</Text>
             
             <View style={styles.titleRow}>
@@ -153,25 +174,27 @@ export function ProjectsScreen({
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   header: {
-    height: 50,
-    justifyContent: 'center',
-    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
   },
   backButton: {
     width: 40,
     height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: -8,
   },
-  backButtonText: {
-    fontSize: 20,
-    fontWeight: '800',
-  },
+  headerTitle: { fontSize: 18, fontWeight: '700' },
+  headerRight: { width: 40 },
   page: { padding: 22, paddingBottom: 32, flexGrow: 1 },
   logo: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   logoText: { fontSize: 25, fontWeight: '900' },
-  eyebrow: { fontSize: 10, fontWeight: '800', letterSpacing: 1.6, marginTop: 37 },
+  eyebrow: { fontSize: 10, fontWeight: '800', letterSpacing: 1.6 },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',

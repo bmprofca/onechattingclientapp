@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, BackHandler, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Toast from 'react-native-toast-message';
-import { Briefcase, FolderPlus, Package, CheckCircle2, Circle } from 'lucide-react-native';
+import { Briefcase, FolderPlus, Package, CheckCircle2, Circle, ArrowLeft } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { createProject } from '../api/workspace';
 import { useTheme } from '../theme/theme';
@@ -20,6 +20,14 @@ export function CreateProjectScreen({
   const [projectName, setProjectName] = useState('');
   const [packageId, setPackageId] = useState('PROJECT_1M');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      onBack();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [onBack]);
 
   const handleCreate = async () => {
     if (!companyName.trim()) {
@@ -62,7 +70,7 @@ export function CreateProjectScreen({
       {/* Sleek Header */}
       <View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} style={styles.backButton} hitSlop={8}>
-          <Text style={[styles.backButtonText, { color: theme.ink }]}>‹</Text>
+          <ArrowLeft size={24} color={theme.ink} />
         </Pressable>
         <Text style={[styles.headerTitle, { color: theme.ink }]}>New Project</Text>
         <View style={styles.headerRight} />
@@ -182,7 +190,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 10,
+    paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
   },
@@ -192,18 +200,10 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  backButtonText: {
-    fontSize: 28,
-    fontWeight: '700',
-    textAlign: 'center',
-    textAlignVertical: 'center',
-    includeFontPadding: false,
-    lineHeight: 40,
-    marginTop: -4, // optical adjustment for chevron
+    marginLeft: -8,
   },
   headerTitle: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '700',
   },
   headerRight: {

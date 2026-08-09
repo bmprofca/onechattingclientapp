@@ -172,8 +172,8 @@ export function WorkspaceScreen({
     <View style={[styles.safe, { backgroundColor: theme.canvas }]}>
       <View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
         <View style={styles.headerTitleGroup}>
-          <Text style={[styles.greeting, { color: theme.muted }]}>1chatting</Text>
-          <Text style={[styles.headerName, { color: theme.ink }]}>{pageTitles[page]}</Text>
+          <Text style={[styles.headerName, { color: theme.mintText }]}>1Chatting</Text>
+          <Text style={[styles.greeting, { color: theme.muted }]}>Welcome to 1Chatting!</Text>
         </View>
 
         <View style={styles.headerActions}>
@@ -184,7 +184,7 @@ export function WorkspaceScreen({
             style={styles.actionBtn}
             hitSlop={8}
           >
-            <Wallet size={20} color={theme.mintText} strokeWidth={2.5} />
+            <Wallet size={20} color={theme.muted} strokeWidth={2.5} />
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -193,7 +193,7 @@ export function WorkspaceScreen({
             style={styles.actionBtn}
             hitSlop={8}
           >
-            <ArrowLeftRight size={20} color={theme.mintText} strokeWidth={2.5} />
+            <ArrowLeftRight size={20} color={theme.muted} strokeWidth={2.5} />
           </Pressable>
         </View>
       </View>
@@ -203,6 +203,8 @@ export function WorkspaceScreen({
           <DashboardScreen
             session={apiSession}
             projectId={projectId}
+            balance={String(session.balance || '0')}
+            projectCount={session.projects?.length || session.projectCount || 0}
             onOpenInbox={() => setPage('inbox')}
             onOpenProfile={() => setPage('profile')}
             onOpenProjectsHub={onOpenProjects}
@@ -283,8 +285,8 @@ const styles = StyleSheet.create({
   },
   greeting: { fontSize: 11, fontWeight: '600', letterSpacing: 0.5 },
   headerName: {
-    fontSize: 20,
-    fontWeight: '800',
+    fontSize: 24,
+    fontWeight: '900',
     marginTop: 1,
     letterSpacing: -0.3,
   },

@@ -30,6 +30,8 @@ export const getCampaigns = (session: ApiSession, projectId: string) =>
   );
 export const getProjectMeta = (session: ApiSession, projectId: string) =>
   post<any>('/project/meta-details', { project_id: projectId }, session);
+export const getProjectDashboard = (session: ApiSession, projectId: string) =>
+  post<any>('/project/dashboard', { project_id: projectId }, session);
 export const getUnreadCount = (session: ApiSession, projectId: string) =>
   post<any>('/message/total-unread-count', { project_id: projectId }, session);
 export const getChatHistory = (session: ApiSession, projectId: string, contactNumber: string, lastId?: number) =>
