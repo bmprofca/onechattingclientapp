@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import {
   FlatList,
   Pressable,
@@ -6,7 +6,9 @@ import {
   StyleSheet,
   Text,
   View,
+  TextInput,
 } from 'react-native';
+import { Search } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { getCampaigns, ListItem, unwrapList } from '../api/workspace';
 import { LoadState } from '../components/LoadState';
@@ -25,6 +27,23 @@ export function CampaignsScreen({
   const [items, setItems] = useState<ListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [mode, setMode] = useState<'all' | 'completed'>('all');
+
+  const filteredItems = useMemo(() => {
+    return items.filter((item) => {
+      const name = String(item.name || item.campaign_name || 'Untitled').toLowerCase();
+      const status = String(item.status || 'Active').toLowerCase();
+      
+      const matchesSearch = name.includes(searchQuery.toLowerCase());
+      
+      if (mode === 'completed') {
+        return matchesSearch && (status === 'completed' || status === 'complete');
+      }
+      return matchesSearch;
+    });
+  }, [items, searchQuery, mode]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -45,8 +64,60 @@ export function CampaignsScreen({
     load();
   }, [load]);
   return (
-    <FlatList
-      data={items}
+    <View style={{ flex: 1, backgroundColor: theme.canvas }}>
+      <View style={styles.heading}>
+        <View style={[styles.searchContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <Search size={18} color={theme.muted} />
+          <TextInput
+            style={[styles.searchInput, { color: theme.ink }]}
+            placeholder="Search campaigns..."
+            placeholderTextColor={theme.muted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            returnKeyType="search"
+          />
+        </View>
+        <View style={[styles.segmented, { backgroundColor: theme.cardHover }]}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setMode('all')}
+            style={[
+              styles.segment,
+              mode === 'all' && { backgroundColor: theme.surface },
+            ]}
+          >
+            <Text
+              style={[
+                styles.segmentText,
+                { color: mode === 'all' ? theme.emerald : theme.muted },
+              ]}
+            >
+              All
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setMode('completed')}
+            style={[
+              styles.segment,
+              mode === 'completed' && { backgroundColor: theme.surface },
+            ]}
+          >
+            <Text
+              style={[
+                styles.segmentText,
+                { color: mode === 'completed' ? theme.emerald : theme.muted },
+              ]}
+            >
+              Completed
+            </Text>
+          </Pressable>
+        </View>
+        <View style={[styles.rule, { backgroundColor: theme.border }]} />
+      </View>
+
+      <FlatList
+        data={filteredItems}
       keyExtractor={(item, index) =>
         String(item.campaign_id || item.id || item._id || index)
       }
@@ -57,11 +128,6 @@ export function CampaignsScreen({
           onRefresh={load}
           tintColor={theme.emerald}
         />
-      }
-      ListHeaderComponent={
-        <View style={styles.heading}>
-          <View style={[styles.rule, { backgroundColor: theme.border }]} />
-        </View>
       }
       ListEmptyComponent={
         <LoadState
@@ -75,6 +141,7 @@ export function CampaignsScreen({
         <CampaignCard item={item} onPress={onOpenCampaign} />
       )}
     />
+    </View>
   );
 }
 function CampaignCard({
@@ -97,7 +164,6 @@ function CampaignCard({
       onPress={() => onPress(campaignId, name)}
       style={[
         styles.card,
-        { backgroundColor: theme.surface, borderColor: theme.border },
       ]}
     >
       <View style={[styles.avatar, { backgroundColor: theme.mint }]}>
@@ -119,14 +185,42 @@ function CampaignCard({
   );
 }
 const styles = StyleSheet.create({
-  heading: { paddingTop: 12, paddingBottom: 5 },
-  rule: { height: 1, marginTop: 17 },
-  list: { paddingHorizontal: 20, paddingBottom: 18 },
+  heading: { paddingTop: 12, paddingBottom: 0, paddingHorizontal: 10 },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+  },
+  searchInput: {
+    flex: 1,
+    height: '100%',
+    marginLeft: 8,
+    fontSize: 15,
+  },
+  segmented: {
+    height: 40,
+    marginTop: 2,
+    padding: 3,
+    borderRadius: 12,
+    flexDirection: 'row',
+  },
+  segment: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 9,
+  },
+  segmentText: { fontSize: 13, fontWeight: '700' },
+  rule: { height: 1, marginTop: 8 },
+  list: { paddingHorizontal: 10, paddingBottom: 18, paddingTop: 4 },
   emptyList: { flexGrow: 1, paddingHorizontal: 20 },
   card: {
     borderRadius: 17,
-    borderWidth: 1,
-    padding: 13,
+    padding: 6,
     marginTop: 10,
     flexDirection: 'row',
     alignItems: 'center',

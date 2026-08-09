@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
-import { ArrowLeftRight, Home, MessageCircle, Megaphone, User, Wallet } from 'lucide-react-native';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import { BackHandler, Modal, Pressable, StyleSheet, Text, View, Animated, Easing } from 'react-native';
+import { ArrowLeftRight, Home, MessageCircle, Megaphone, User, Wallet, MoreVertical, Briefcase, Info, HelpCircle } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { Session } from '../services/session';
 import { useTheme } from '../theme/theme';
@@ -48,11 +48,27 @@ export function WorkspaceScreen({
   const [walletTarget, setWalletTarget] = useState(false);
   const [wabaTarget, setWabaTarget] = useState(false);
   const [supportTarget, setSupportTarget] = useState(false);
+  const [isMenuVisible, setIsMenuVisible] = useState(false);
   const projectId = session.selectedProjectId || session.projects[0]?.id || '';
   const apiSession = useMemo<ApiSession>(
     () => ({ token: session.token, username: session.username }),
     [session.token, session.username],
   );
+
+  const menuOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (isMenuVisible) {
+      Animated.timing(menuOpacity, {
+        toValue: 1,
+        duration: 150,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }).start();
+    } else {
+      menuOpacity.setValue(0);
+    }
+  }, [isMenuVisible, menuOpacity]);
 
   // Hardware back button (Android) has no stack to pop by default since
   // "pages" here are just local state, not real navigation screens.
@@ -195,6 +211,15 @@ export function WorkspaceScreen({
           >
             <ArrowLeftRight size={20} color={theme.ink} strokeWidth={2.5} />
           </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="More options"
+            onPress={() => setIsMenuVisible(true)}
+            style={styles.actionBtn}
+            hitSlop={8}
+          >
+            <MoreVertical size={20} color={theme.ink} strokeWidth={2.5} />
+          </Pressable>
         </View>
       </View>
 
@@ -266,6 +291,63 @@ export function WorkspaceScreen({
           );
         })}
       </View>
+
+      <Modal
+        visible={isMenuVisible}
+        transparent={true}
+        animationType="none"
+        onRequestClose={() => setIsMenuVisible(false)}
+      >
+        <Pressable 
+          style={styles.menuOverlay} 
+          onPress={() => setIsMenuVisible(false)}
+        >
+          <Animated.View style={[
+            styles.menuContent, 
+            { 
+              backgroundColor: theme.surface, 
+              borderColor: theme.border,
+              opacity: menuOpacity,
+              transform: [
+                {
+                  translateY: menuOpacity.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-15, 0],
+                  })
+                },
+                {
+                  scale: menuOpacity.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.95, 1],
+                  })
+                }
+              ]
+            }
+          ]}>
+            <Pressable
+              style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: theme.cardHover }]}
+              onPress={() => { setIsMenuVisible(false); onOpenProjects(); }}
+            >
+              <Briefcase size={18} color={theme.ink} />
+              <Text style={[styles.menuItemText, { color: theme.ink }]}>Projects</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: theme.cardHover }]}
+              onPress={() => { setIsMenuVisible(false); setWabaTarget(true); }}
+            >
+              <Info size={18} color={theme.ink} />
+              <Text style={[styles.menuItemText, { color: theme.ink }]}>WABA Info</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: theme.cardHover }]}
+              onPress={() => { setIsMenuVisible(false); setSupportTarget(true); }}
+            >
+              <HelpCircle size={18} color={theme.ink} />
+              <Text style={[styles.menuItemText, { color: theme.ink }]}>Support</Text>
+            </Pressable>
+          </Animated.View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -273,8 +355,8 @@ export function WorkspaceScreen({
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   header: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -287,7 +369,6 @@ const styles = StyleSheet.create({
   headerName: {
     fontSize: 24,
     fontWeight: '900',
-    marginTop: 1,
     letterSpacing: -0.3,
   },
   headerActions: {
@@ -365,4 +446,33 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   primaryButtonText: { color: '#FFF', fontWeight: '800', fontSize: 15 },
+  menuOverlay: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  menuContent: {
+    position: 'absolute',
+    top: 125,
+    right: 5,
+    width: 150,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingVertical: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
+  },
+  menuItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  menuItemText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
 });

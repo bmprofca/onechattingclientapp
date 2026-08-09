@@ -40,13 +40,11 @@ type CampaignDetails = {
   cost: Cost;
 };
 
-// Scoped to this screen — covers read/pending/failed states the shared
-// theme doesn't define.
 const ACCENTS = {
-  read: '#4FA8E0',
-  delivered: '#3ECF8E',
-  pending: '#E8A23C',
-  failed: '#E15C5C',
+  read: '#3B82F6',
+  delivered: '#10B981',
+  pending: '#F59E0B',
+  failed: '#EF4444',
 };
 
 export function CampaignDetailsScreen({
@@ -72,9 +70,6 @@ export function CampaignDetailsScreen({
     setLoading(true);
     setError('');
     try {
-      // Same two calls the web console fires on open: campaign-messages
-      // then campaign-details. post() already throws ApiError on
-      // {error: true}, so no manual error check needed here.
       const [messagesRes, detailsRes] = await Promise.all([
         getCampaignMessages(session, projectId, campaignId),
         getCampaignDetails(session, projectId, campaignId),
@@ -130,51 +125,56 @@ export function CampaignDetailsScreen({
         }
         ListHeaderComponent={
           <View>
+            {/* Header Campaign Meta Card */}
             <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <View style={styles.rowBetween}>
                 <View style={[styles.badge, { backgroundColor: theme.mint }]}>
                   <Text style={[styles.badgeText, { color: theme.mintText }]}>
-                    {template?.category || '—'}
+                    {template?.category || 'UTILITY'}
                   </Text>
                 </View>
                 <StatusChip status={details.status} theme={theme} />
               </View>
               <Text style={[styles.templateName, { color: theme.ink }]}>
-                {template?.template_name || '—'}
+                {template?.template_name || details.name || '—'}
               </Text>
               <Text style={[styles.metaText, { color: theme.muted }]}>
-                Created {details.create_date} · {details.source}
+                Created {details.create_date} · {details.source || 'contact'}
               </Text>
             </View>
 
-            <SectionLabel label={`Recipients — ${total} total`} theme={theme} />
+            {/* Recipients Section */}
+            <SectionLabel label={`Recipients — ${total} Total`} theme={theme} />
             {total > 0 ? (
-              <>
-                <View style={[styles.funnel, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                  <View style={{ flex: deliveredOnly || 0.0001, backgroundColor: ACCENTS.delivered }} />
+              <View style={[styles.sectionCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <View style={[styles.funnel, { backgroundColor: theme.isDark ? '#1E293B' : '#E2E8F0' }]}>
+                  <View style={{ flex: r.sent || 0.0001, backgroundColor: ACCENTS.delivered }} />
                   <View style={{ flex: r.read || 0.0001, backgroundColor: ACCENTS.read }} />
                   <View style={{ flex: r.pending || 0.0001, backgroundColor: ACCENTS.pending }} />
                   <View style={{ flex: r.failed || 0.0001, backgroundColor: ACCENTS.failed }} />
                 </View>
-                <View style={styles.legendRow}>
-                  <LegendItem color={ACCENTS.delivered} label="sent" value={r.sent} theme={theme} />
-                  <LegendItem color={ACCENTS.read} label="read" value={r.read} theme={theme} />
-                  <LegendItem color={ACCENTS.pending} label="pending" value={r.pending} theme={theme} />
-                  <LegendItem color={ACCENTS.failed} label="failed" value={r.failed} theme={theme} />
+                
+                <View style={styles.legendGrid}>
+                  <LegendChip color={ACCENTS.delivered} label="Sent" value={r.sent} theme={theme} />
+                  <LegendChip color={ACCENTS.read} label="Read" value={r.read} theme={theme} />
+                  <LegendChip color={ACCENTS.pending} label="Pending" value={r.pending} theme={theme} />
+                  <LegendChip color={ACCENTS.failed} label="Failed" value={r.failed} theme={theme} />
                 </View>
-              </>
+              </View>
             ) : (
               <Text style={[styles.emptyLog, { color: theme.muted }]}>No recipients yet</Text>
             )}
 
-            <SectionLabel label="Cost" theme={theme} />
+            {/* Cost Section */}
+            <SectionLabel label="Cost Overview" theme={theme} />
             <View style={styles.costRow}>
               <CostCell label="Total" value={cost?.total} theme={theme} />
-              <CostCell label="Per message" value={cost?.per_message} theme={theme} />
+              <CostCell label="Per Message" value={cost?.per_message} theme={theme} />
               <CostCell label="Used" value={cost?.used} theme={theme} />
             </View>
 
-            <SectionLabel label="Message log" theme={theme} />
+            {/* Log Section */}
+            <SectionLabel label="Message Log" theme={theme} />
           </View>
         }
         ListEmptyComponent={
@@ -204,7 +204,7 @@ function ScreenHeader({
         style={styles.backBtn}
         hitSlop={8}
       >
-        <ChevronLeft size={22} color={theme.mintText} strokeWidth={2.5} />
+        <ChevronLeft size={24} color={theme.emerald} strokeWidth={2.5} />
       </Pressable>
       <Text numberOfLines={1} style={[styles.headerTitle, { color: theme.ink }]}>
         {title}
@@ -218,7 +218,7 @@ function SectionLabel({ label, theme }: { label: string; theme: ReturnType<typeo
   return <Text style={[styles.sectionLabel, { color: theme.muted }]}>{label}</Text>;
 }
 
-function LegendItem({
+function LegendChip({
   color,
   label,
   value,
@@ -230,7 +230,7 @@ function LegendItem({
   theme: ReturnType<typeof useTheme>;
 }) {
   return (
-    <View style={styles.legendItem}>
+    <View style={[styles.legendChip, { backgroundColor: theme.isDark ? '#1E293B' : '#F8FAFC', borderColor: theme.border }]}>
       <View style={[styles.legendDot, { backgroundColor: color }]} />
       <Text style={[styles.legendValue, { color: theme.ink }]}>{value ?? 0}</Text>
       <Text style={[styles.legendLabel, { color: theme.muted }]}>{label}</Text>
@@ -256,13 +256,14 @@ function CostCell({
 }
 
 function StatusChip({ status, theme }: { status: string; theme: ReturnType<typeof useTheme> }) {
+  const isComplete = status === 'complete' || status === 'completed';
   const color =
-    status === 'complete' ? ACCENTS.delivered
+    isComplete ? ACCENTS.delivered
     : status === 'running' ? theme.emerald
     : status === 'scheduled' ? ACCENTS.pending
     : theme.muted;
   return (
-    <View style={[styles.statusChip, { backgroundColor: color + '22' }]}>
+    <View style={[styles.statusChip, { backgroundColor: color + '20' }]}>
       <Text style={[styles.statusChipText, { color }]}>{status}</Text>
     </View>
   );
@@ -277,7 +278,7 @@ function MessageRow({ item, theme }: { item: ListItem; theme: ReturnType<typeof 
   return (
     <View style={[styles.logRow, { borderColor: theme.border }]}>
       <View style={styles.logLeft}>
-        <Text style={[styles.logTime, { color: theme.muted }]}>{time}</Text>
+        <Text numberOfLines={1} style={[styles.logTime, { color: theme.muted }]}>{time}</Text>
         <Text style={[styles.logPhone, { color: theme.ink }]}>{phone}</Text>
       </View>
       <View style={styles.logRight}>
@@ -289,17 +290,18 @@ function MessageRow({ item, theme }: { item: ListItem; theme: ReturnType<typeof 
 }
 
 function StatusIcon({ status }: { status: string }) {
-  if (status === 'read') return <CheckCheck size={16} color={ACCENTS.read} strokeWidth={2.4} />;
-  if (status === 'delivered') return <CheckCheck size={16} color="#8B979C" strokeWidth={2.4} />;
-  if (status === 'sent') return <Check size={16} color="#8B979C" strokeWidth={2.4} />;
-  if (status === 'failed') return <X size={16} color={ACCENTS.failed} strokeWidth={2.4} />;
+  const lower = status.toLowerCase();
+  if (lower === 'read') return <CheckCheck size={16} color={ACCENTS.read} strokeWidth={2.4} />;
+  if (lower === 'delivered') return <CheckCheck size={16} color="#8B979C" strokeWidth={2.4} />;
+  if (lower === 'sent') return <Check size={16} color="#8B979C" strokeWidth={2.4} />;
+  if (lower === 'failed') return <X size={16} color={ACCENTS.failed} strokeWidth={2.4} />;
   return <Clock3 size={14} color="#5C666B" strokeWidth={2.2} />;
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   header: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -308,43 +310,61 @@ const styles = StyleSheet.create({
   backBtn: { width: 36, height: 36, alignItems: 'flex-start', justifyContent: 'center' },
   headerTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '800' },
   list: { paddingHorizontal: 16, paddingBottom: 24 },
-  card: { borderRadius: 17, borderWidth: 1, padding: 14, marginTop: 14 },
+  card: { borderRadius: 18, borderWidth: 1, padding: 16, marginTop: 14 },
+  sectionCard: { borderRadius: 18, borderWidth: 1, padding: 16, marginTop: 4 },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  badge: { paddingHorizontal: 9, paddingVertical: 3, borderRadius: 7 },
-  badgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.4, textTransform: 'uppercase' },
+  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  badgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },
   templateName: { fontSize: 18, fontWeight: '800', marginTop: 10 },
   metaText: { fontSize: 12, marginTop: 4 },
-  statusChip: { paddingHorizontal: 9, paddingVertical: 3, borderRadius: 7 },
-  statusChipText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.4, textTransform: 'uppercase' },
+  statusChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  statusChipText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },
   sectionLabel: {
     fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 0.6,
+    letterSpacing: 0.8,
     textTransform: 'uppercase',
-    marginTop: 22,
-    marginBottom: 10,
+    marginTop: 20,
+    marginBottom: 8,
+    marginLeft: 4,
   },
-  funnel: { height: 30, borderRadius: 9, borderWidth: 1, flexDirection: 'row', overflow: 'hidden' },
-  legendRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 12, gap: 16 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  legendDot: { width: 7, height: 7, borderRadius: 2 },
-  legendValue: { fontSize: 14, fontWeight: '800' },
-  legendLabel: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.4 },
-  costRow: { flexDirection: 'row', gap: 8 },
-  costCell: { flex: 1, borderRadius: 13, borderWidth: 1, padding: 12 },
-  costValue: { fontSize: 16, fontWeight: '800' },
-  costLabel: { fontSize: 10, marginTop: 4, textTransform: 'uppercase', letterSpacing: 0.3 },
+  funnel: { height: 12, borderRadius: 6, flexDirection: 'row', overflow: 'hidden' },
+  legendGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 14, gap: 8 },
+  legendChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 6,
+  },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  legendValue: { fontSize: 13, fontWeight: '800' },
+  legendLabel: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: '700' },
+  costRow: { flexDirection: 'row', gap: 10 },
+  costCell: {
+    flex: 1,
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  costValue: { fontSize: 17, fontWeight: '800' },
+  costLabel: { fontSize: 10, marginTop: 4, textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: '700' },
   emptyLog: { textAlign: 'center', paddingVertical: 20, fontSize: 13 },
   logRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 11,
+    paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  logLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  logTime: { fontSize: 11, width: 44 },
+  logLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  logTime: { fontSize: 11, width: 68 },
   logPhone: { fontSize: 13, fontWeight: '600' },
   logRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   logStatusText: { fontSize: 11, textTransform: 'capitalize' },
-});
+});

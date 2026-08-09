@@ -95,13 +95,27 @@ export function ProfileScreen({
 
       {/* Balance & Account Overview */}
       <View style={styles.statsRow}>
-        <View style={[styles.statCard, { backgroundColor: theme.isDark ? '#1200d3ff' : '#3104b8ff' }]}>
-          <Text style={styles.statLabel}>WALLET BALANCE</Text>
-          <Text style={styles.statValue}>₹{balance}</Text>
+        <View style={[
+          styles.statCard, 
+          { 
+            backgroundColor: theme.isDark ? theme.surface : '#EEF2FF',
+            borderColor: theme.isDark ? theme.border : '#E0E7FF',
+            borderWidth: 1,
+          }
+        ]}>
+          <Text style={[styles.statLabel, { color: theme.isDark ? theme.muted : '#4338CA' }]}>WALLET BALANCE</Text>
+          <Text style={[styles.statValue, { color: theme.ink }]}>₹{balance}</Text>
         </View>
-        <View style={[styles.statCard, { backgroundColor: theme.emerald }]}>
-          <Text style={styles.statLabel}>TOTAL PROJECTS</Text>
-          <Text style={styles.statValue}>{projectCount}</Text>
+        <View style={[
+          styles.statCard, 
+          { 
+            backgroundColor: theme.isDark ? theme.surface : '#E6F4ED',
+            borderColor: theme.isDark ? theme.border : '#D1E7DD',
+            borderWidth: 1,
+          }
+        ]}>
+          <Text style={[styles.statLabel, { color: theme.isDark ? theme.muted : '#047857' }]}>TOTAL PROJECTS</Text>
+          <Text style={[styles.statValue, { color: theme.ink }]}>{projectCount}</Text>
         </View>
       </View>
 

@@ -81,6 +81,56 @@ export function LiveChatScreen({
   };
   return (
     <View style={{ flex: 1, backgroundColor: theme.canvas }}>
+      <View style={styles.heading}>
+        <View style={[styles.searchContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <Search size={18} color={theme.muted} />
+          <TextInput
+            style={[styles.searchInput, { color: theme.ink }]}
+            placeholder="Search chats by name or number..."
+            placeholderTextColor={theme.muted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            returnKeyType="search"
+          />
+        </View>
+        <View style={[styles.segmented]}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setMode('chats')}
+            style={[
+              styles.segment,
+              mode === 'chats' && { backgroundColor: theme.surface },
+            ]}
+          >
+            <Text
+              style={[
+                styles.segmentText,
+                { color: mode === 'chats' ? theme.emerald : theme.muted },
+              ]}
+            >
+              Live chat
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setMode('cases')}
+            style={[
+              styles.segment,
+              mode === 'cases' && { backgroundColor: theme.surface },
+            ]}
+          >
+            <Text
+              style={[
+                styles.segmentText,
+                { color: mode === 'cases' ? theme.emerald : theme.muted },
+              ]}
+            >
+              Open cases
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+      
       <FlatList
         data={items}
         keyExtractor={(item, index) => String(item.id || item._id || index)}
@@ -92,58 +142,6 @@ export function LiveChatScreen({
             tintColor={theme.emerald}
           />
         }
-        ListHeaderComponent={
-          <View style={styles.heading}>
-            <View style={[styles.searchContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-              <Search size={18} color={theme.muted} />
-              <TextInput
-                style={[styles.searchInput, { color: theme.ink }]}
-                placeholder="Search chats by name or number..."
-                placeholderTextColor={theme.muted}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                returnKeyType="search"
-              />
-            </View>
-          <View style={[styles.segmented, { backgroundColor: theme.cardHover }]}>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setMode('chats')}
-              style={[
-                styles.segment,
-                mode === 'chats' && { backgroundColor: theme.surface },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.segmentText,
-                  { color: mode === 'chats' ? theme.emerald : theme.muted },
-                ]}
-              >
-                Live chat
-              </Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setMode('cases')}
-              style={[
-                styles.segment,
-                mode === 'cases' && { backgroundColor: theme.surface },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.segmentText,
-                  { color: mode === 'cases' ? theme.emerald : theme.muted },
-                ]}
-              >
-                Open cases
-              </Text>
-            </Pressable>
-          </View>
-          <View style={[styles.rule, { backgroundColor: theme.border }]} />
-        </View>
-      }
       ListEmptyComponent={
         <LoadState
           loading={false}
@@ -256,7 +254,6 @@ function ChatCard({ item, onPress }: { item: ListItem, onPress: (contactNumber: 
       onPress={() => onPress(contactNumber, name)}
       style={[
         styles.card,
-        { backgroundColor: theme.surface, borderColor: theme.border },
       ]}
     >
       <View style={[styles.avatar, { backgroundColor: theme.mint }]}>
@@ -275,11 +272,11 @@ function ChatCard({ item, onPress }: { item: ListItem, onPress: (contactNumber: 
             </Text>
           )}
         </View>
-        <Text numberOfLines={2} style={[styles.cardDetail, { color: theme.muted }]}>
+        <Text numberOfLines={1} style={[styles.cardDetail, { color: theme.muted }]}>
           {detail}
         </Text>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={[styles.cardMeta, { color: theme.emerald }]}>Conversation</Text>
+          <Text style={[styles.cardMeta, { color: theme.muted }]}>Unread Messages</Text>
           {unreadCount > 0 && (
             <View style={[styles.unreadBadge, { backgroundColor: theme.emerald }]}>
               <Text style={styles.unreadText}>{unreadCount}</Text>
@@ -293,7 +290,7 @@ function ChatCard({ item, onPress }: { item: ListItem, onPress: (contactNumber: 
 }
 
 const styles = StyleSheet.create({
-  heading: { paddingTop: 12, paddingBottom: 5 },
+  heading: { paddingTop: 12, paddingBottom: 0, paddingHorizontal: 10 },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -323,13 +320,12 @@ const styles = StyleSheet.create({
     borderRadius: 9,
   },
   segmentText: { fontSize: 13, fontWeight: '700' },
-  rule: { height: 1, marginTop: 17 },
-  list: { paddingHorizontal: 10, paddingBottom: 18 },
+  rule: { height: 1, marginTop: 8 },
+  list: { paddingHorizontal: 10, paddingBottom: 18, paddingTop: 4 },
   emptyList: { flexGrow: 1, paddingHorizontal: 0 },
   card: {
     borderRadius: 17,
-    borderWidth: 1,
-    padding: 13,
+    padding: 6,
     marginTop: 10,
     flexDirection: 'row',
     alignItems: 'center',
@@ -353,8 +349,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    marginTop: 6,
   },
   timeText: {
     fontSize: 12,

@@ -10,6 +10,9 @@ export const unwrapList = (response: any): ListItem[] => {
     [];
   return Array.isArray(value) ? value : [];
 };
+export const unwrapItem = (response: any): Record<string, unknown> | null => {
+  return response?.item || response?.data || response || null;
+};
 export const getInbox = (session: ApiSession, projectId: string, search?: string) =>
   post<any>(
     '/message/chat-list',
@@ -26,6 +29,18 @@ export const getCampaigns = (session: ApiSession, projectId: string) =>
   post<any>(
     '/campaign/list',
     { project_id: projectId, page: 1, limit: 30 },
+    session,
+  );
+export const getCampaignDetails = (session: ApiSession, projectId: string, campaignId: string) =>
+  post<any>(
+    '/campaign/campaign-details',
+    { project_id: projectId, campaign_id: campaignId },
+    session,
+  );
+export const getCampaignMessages = (session: ApiSession, projectId: string, campaignId: string) =>
+  post<any>(
+    '/campaign/campaign-messages',
+    { project_id: projectId, campaign_id: campaignId },
     session,
   );
 export const getProjectMeta = (session: ApiSession, projectId: string) =>

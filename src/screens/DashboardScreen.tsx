@@ -108,10 +108,17 @@ export function DashboardScreen({
       <LoadState loading={false} error={error} empty={false} onRetry={load} />
       {!loading && !error && (
         <>
-          <View style={[styles.overview, { backgroundColor: theme.isDark ? '#0437c3f3' : '#4300fcff' }]}>
-            <Text style={styles.overviewLabel}>AVAILABLE WALLET BALANCE</Text>
-            <Text style={styles.balance}>₹{balance}</Text>
-            <Text style={styles.overviewHint}>
+          <View style={[
+            styles.overview, 
+            { 
+              backgroundColor: theme.emerald,
+              borderColor: theme.border,
+              borderWidth: 1,
+            }
+          ]}>
+            <Text style={[styles.overviewLabel, { color: theme.header }]}>AVAILABLE WALLET BALANCE</Text>
+            <Text style={[styles.balance, { color: theme.header }]}>₹{balance}</Text>
+            <Text style={[styles.overviewHint, { color: theme.header }]}>
               Use wallet credit for messages and campaigns
             </Text>
           </View>
@@ -206,20 +213,24 @@ function Metric({
   return (
     <View style={[
       styles.metric,
-      { backgroundColor: tone === 'emerald' ? theme.mint : (theme.isDark ? '#1E293B' : '#E9EDFF') },
+      { 
+        backgroundColor: theme.surface,
+        borderColor: theme.border,
+        borderWidth: 1,
+      },
       style,
     ]}>
-      <Text style={[styles.metricValue, { color: tone === 'emerald' ? (theme.isDark ? theme.mintText : theme.ink) : theme.ink }]}>{value}</Text>
+      <Text style={[styles.metricValue, { color: theme.ink }]}>{value}</Text>
       <Text style={[styles.metricLabel, { color: theme.muted }]}>{label}</Text>
     </View>
   );
 }
 const styles = StyleSheet.create({
-  page: { padding: 20, paddingBottom: 28 },
+  page: { padding: 10, paddingBottom: 28 },
   overview: {
     borderRadius: 21,
     padding: 20,
-    marginTop: 20,
+    marginTop: 10,
   },
   overviewLabel: {
     fontSize: 10,
