@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
-import { ArrowLeftRight, Home, MessageCircle, Megaphone, User } from 'lucide-react-native';
+import { ArrowLeftRight, Home, MessageCircle, Megaphone, User, Wallet } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { Session } from '../services/session';
 import { useTheme } from '../theme/theme';
@@ -10,6 +10,8 @@ import { DashboardScreen } from './DashboardScreen';
 import { LiveChatScreen } from './LiveChatScreen';
 import { ChatRoomScreen } from './ChatRoomScreen';
 import { ProfileScreen } from './ProfileScreen';
+import { WalletScreen } from './WalletScreen';
+import { WabaOnboardingScreen } from './WabaOnboardingScreen';
 
 type Page = 'dashboard' | 'inbox' | 'campaigns' | 'profile';
 
@@ -42,6 +44,8 @@ export function WorkspaceScreen({
   const [page, setPage] = useState<Page>('dashboard');
   const [chatTarget, setChatTarget] = useState<{ number: string; name: string } | null>(null);
   const [campaignTarget, setCampaignTarget] = useState<{ id: string; name: string } | null>(null);
+  const [walletTarget, setWalletTarget] = useState(false);
+  const [wabaTarget, setWabaTarget] = useState(false);
   const projectId = session.selectedProjectId || session.projects[0]?.id || '';
   const apiSession = useMemo<ApiSession>(
     () => ({ token: session.token, username: session.username }),
@@ -59,6 +63,14 @@ export function WorkspaceScreen({
     }
     if (campaignTarget) {
       setCampaignTarget(null);
+      return true;
+    }
+    if (walletTarget) {
+      setWalletTarget(false);
+      return true;
+    }
+    if (wabaTarget) {
+      setWabaTarget(false);
       return true;
     }
     if (page !== 'dashboard') {
@@ -121,6 +133,26 @@ export function WorkspaceScreen({
     );
   }
 
+  if (walletTarget) {
+    return (
+      <WalletScreen
+        session={apiSession}
+        balance={session.balance || '0'}
+        onBack={() => setWalletTarget(false)}
+      />
+    );
+  }
+
+  if (wabaTarget) {
+    return (
+      <WabaOnboardingScreen
+        session={apiSession}
+        projectId={projectId}
+        onBack={() => setWabaTarget(false)}
+      />
+    );
+  }
+
   return (
     <View style={[styles.safe, { backgroundColor: theme.canvas }]}>
       <View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
@@ -130,6 +162,15 @@ export function WorkspaceScreen({
         </View>
 
         <View style={styles.headerActions}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open Wallet"
+            onPress={() => setWalletTarget(true)}
+            style={styles.actionBtn}
+            hitSlop={8}
+          >
+            <Wallet size={20} color={theme.mintText} strokeWidth={2.5} />
+          </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Choose another project"
@@ -150,6 +191,8 @@ export function WorkspaceScreen({
             onOpenInbox={() => setPage('inbox')}
             onOpenProfile={() => setPage('profile')}
             onOpenProjectsHub={onOpenProjects}
+            onOpenWallet={() => setWalletTarget(true)}
+            onOpenWaba={() => setWabaTarget(true)}
           />
         ) : page === 'inbox' ? (
           <LiveChatScreen

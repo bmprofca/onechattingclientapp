@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Toast from 'react-native-toast-message';
-import { Briefcase, FolderPlus } from 'lucide-react-native';
+import { Briefcase, FolderPlus, Package, CheckCircle2, Circle } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { createProject } from '../api/workspace';
 import { useTheme } from '../theme/theme';
@@ -18,6 +18,7 @@ export function CreateProjectScreen({
   const theme = useTheme();
   const [companyName, setCompanyName] = useState('');
   const [projectName, setProjectName] = useState('');
+  const [packageId, setPackageId] = useState('PROJECT_1M');
   const [loading, setLoading] = useState(false);
 
   const handleCreate = async () => {
@@ -32,7 +33,7 @@ export function CreateProjectScreen({
 
     setLoading(true);
     try {
-      const res = await createProject(session, companyName.trim(), projectName.trim());
+      const res = await createProject(session, companyName.trim(), projectName.trim(), packageId);
       Toast.show({ type: 'success', text1: 'Project Created', text2: 'Your new workspace is ready.' });
       if (res.data?.project_id) {
         onCreated({ id: String(res.data.project_id), name: res.data.name });
@@ -107,6 +108,47 @@ export function CreateProjectScreen({
                   style={[styles.input, { color: theme.ink }]}
                 />
               </View>
+            </View>
+
+            <View style={styles.field}>
+              <Text style={[styles.label, { color: theme.muted }]}>SUBSCRIPTION PACKAGE</Text>
+              
+              <Pressable
+                onPress={() => setPackageId('PROJECT_1M')}
+                style={[
+                  styles.packageOption,
+                  fieldStyle,
+                  packageId === 'PROJECT_1M' && { borderColor: theme.emerald, backgroundColor: theme.mint }
+                ]}
+              >
+                <View style={styles.packageOptionContent}>
+                  <Package size={17} color={packageId === 'PROJECT_1M' ? theme.emerald : theme.muted} strokeWidth={2.25} />
+                  <View style={styles.packageOptionTexts}>
+                    <Text style={[styles.packageOptionTitle, { color: packageId === 'PROJECT_1M' ? theme.emerald : theme.ink }]}>Basic Plan</Text>
+                    <Text style={[styles.packageOptionDesc, { color: packageId === 'PROJECT_1M' ? theme.emerald : theme.muted }]}>Up to 1M messages</Text>
+                  </View>
+                </View>
+                {packageId === 'PROJECT_1M' ? <CheckCircle2 size={20} color={theme.emerald} /> : <Circle size={20} color={theme.border} />}
+              </Pressable>
+
+              <Pressable
+                onPress={() => setPackageId('PROJECT_2M')}
+                style={[
+                  styles.packageOption,
+                  fieldStyle,
+                  packageId === 'PROJECT_2M' && { borderColor: theme.emerald, backgroundColor: theme.mint },
+                  { marginTop: 10 }
+                ]}
+              >
+                <View style={styles.packageOptionContent}>
+                  <Package size={17} color={packageId === 'PROJECT_2M' ? theme.emerald : theme.muted} strokeWidth={2.25} />
+                  <View style={styles.packageOptionTexts}>
+                    <Text style={[styles.packageOptionTitle, { color: packageId === 'PROJECT_2M' ? theme.emerald : theme.ink }]}>Premium Plan</Text>
+                    <Text style={[styles.packageOptionDesc, { color: packageId === 'PROJECT_2M' ? theme.emerald : theme.muted }]}>Up to 2M messages</Text>
+                  </View>
+                </View>
+                {packageId === 'PROJECT_2M' ? <CheckCircle2 size={20} color={theme.emerald} /> : <Circle size={20} color={theme.border} />}
+              </Pressable>
             </View>
 
             <Pressable
@@ -214,6 +256,30 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   input: { flex: 1, fontSize: 15, height: '100%' },
+  packageOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderRadius: 13,
+    padding: 14,
+  },
+  packageOptionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  packageOptionTexts: {
+    justifyContent: 'center',
+  },
+  packageOptionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  packageOptionDesc: {
+    fontSize: 12,
+    marginTop: 2,
+  },
   button: {
     height: 54,
     marginTop: 24,

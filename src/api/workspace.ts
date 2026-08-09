@@ -119,7 +119,7 @@ export async function createProject(
   session: ApiSession,
   companyName: string,
   projectName: string,
-  packageId = 'PROJECT_1M'
+  packageId: string
 ) {
   return post<any>('/project/create-project', {
     company_name: companyName,
@@ -136,5 +136,24 @@ export async function editProject(
   return post<any>('/project/edit-project', {
     company_name: companyName,
     project_name: projectName,
+  }, session);
+}
+
+export async function embedSignup(session: ApiSession, projectId: string) {
+  return post<any>('/project/embed-signup', {
+    project_id: projectId,
+  }, session);
+}
+
+export async function submitWabaId(session: ApiSession, projectId: string, wabaId: string) {
+  return post<any>('/project/submit-waba-id', {
+    project_id: projectId,
+    waba_id: wabaId,
+  }, session);
+}
+
+export async function getWabaInformation(session: ApiSession, projectId: string) {
+  return post<any>('/project/waba-information', {
+    project_id: projectId,
   }, session);
 }

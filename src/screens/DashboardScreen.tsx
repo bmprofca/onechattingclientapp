@@ -27,12 +27,16 @@ export function DashboardScreen({
   onOpenProfile,
   onOpenProjectsHub,
   onOpenInbox,
+  onOpenWallet,
+  onOpenWaba,
 }: {
   projectId: string;
   session: ApiSession;
   onOpenProfile?: () => void;
   onOpenProjectsHub?: () => void;
   onOpenInbox?: () => void;
+  onOpenWallet?: () => void;
+  onOpenWaba?: () => void;
 }) {
   const theme = useTheme();
   const [info, setInfo] = useState<any>(null);
@@ -66,7 +70,7 @@ export function DashboardScreen({
   const balance = String(value.wallet_balance || value.balance || '0');
   const actions = [
     { title: 'Projects', note: 'Switch workspace', onPress: onOpenProjectsHub },
-    { title: 'Wallet', note: 'Balance & top-up' },
+    { title: 'Wallet', note: 'Balance & top-up', onPress: onOpenWallet },
     { title: 'Profile', note: 'Account details', onPress: onOpenProfile },
     { title: 'Automation', note: 'Replies & agents' },
     { title: 'Team', note: 'People & access' },
@@ -126,20 +130,41 @@ export function DashboardScreen({
             ))}
           </View>
           <View style={[styles.projectCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <Text style={[styles.projectCardLabel, { color: theme.muted }]}>
-              CURRENT WHATSAPP ACCOUNT
-            </Text>
-            <Text style={[styles.projectCardTitle, { color: theme.ink }]}>
-              {String(
-                value.waba_name || value.project_name || 'WhatsApp account',
-              )}
-            </Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <View>
+                <Text style={[styles.projectCardLabel, { color: theme.muted }]}>
+                  CURRENT WHATSAPP ACCOUNT
+                </Text>
+                <Text style={[styles.projectCardTitle, { color: theme.ink }]}>
+                  {String(
+                    value.waba_name || value.project_name || 'WhatsApp account',
+                  )}
+                </Text>
+              </View>
+              <Text style={[{ color: value.waba_id ? theme.emerald : theme.warning, fontSize: 12, fontWeight: '700', backgroundColor: value.waba_id ? theme.mint : 'rgba(245, 158, 11, 0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }]}>
+                {value.waba_id ? 'CONNECTED' : 'NOT CONNECTED'}
+              </Text>
+            </View>
             <Text style={[styles.projectCardDetail, { color: theme.muted }]}>
               {String(
                 value.waba_id ||
-                  'Configure business profile and messaging settings',
+                  'Connect your business profile and messaging settings.',
               )}
             </Text>
+            <Pressable
+              onPress={onOpenWaba}
+              style={[
+                styles.wabaButton,
+                { backgroundColor: value.waba_id ? theme.surface : theme.emerald, borderColor: value.waba_id ? theme.border : theme.emerald }
+              ]}
+            >
+              <Text style={[
+                styles.wabaButtonText,
+                { color: value.waba_id ? theme.ink : '#FFF' }
+              ]}>
+                {value.waba_id ? 'Manage WhatsApp Account' : 'Connect Meta Account'}
+              </Text>
+            </Pressable>
           </View>
         </>
       )}
@@ -245,5 +270,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     marginTop: 5,
+    marginBottom: 16,
+  },
+  wabaButton: {
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  wabaButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
   },
 });
