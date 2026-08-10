@@ -14,6 +14,7 @@ import { ProjectsScreen } from './ProjectsScreen';
 import { WalletScreen } from './WalletScreen';
 import { WabaOnboardingScreen } from './WabaOnboardingScreen';
 import { SupportScreen } from './SupportScreen';
+import { socketManager, ConnectionStatus } from '../services/socketManager';
 
 type Page = 'dashboard' | 'inbox' | 'campaigns' | 'profile' | 'wallet' | 'projects';
 
@@ -58,6 +59,7 @@ export function WorkspaceScreen({
   const [supportTarget, setSupportTarget] = useState(false);
   const [projectsTarget, setProjectsTarget] = useState(false); // full-screen projects hub, used from full mode
   const [isMenuVisible, setIsMenuVisible] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
 
   const apiSession = useMemo<ApiSession>(
     () => ({ token: session.token, username: session.username }),
@@ -70,6 +72,11 @@ export function WorkspaceScreen({
   useEffect(() => {
     setPage('dashboard');
   }, [hasProject]);
+
+  useEffect(() => {
+    const unsub = socketManager.onConnectionChange(setConnectionStatus);
+    return () => unsub();
+  }, []);
 
   const menuOpacity = useRef(new Animated.Value(0)).current;
 
@@ -175,6 +182,13 @@ export function WorkspaceScreen({
 
   return (
     <View style={[styles.safe, { backgroundColor: theme.canvas }]}>
+      {connectionStatus !== 'connected' && (
+        <View style={{ backgroundColor: connectionStatus === 'connecting' ? '#F59E0B' : '#EF4444', padding: 4, alignItems: 'center' }}>
+          <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '700' }}>
+            {connectionStatus === 'connecting' ? 'Connecting...' : 'Waiting for network...'}
+          </Text>
+        </View>
+      )}
       {showOuterHeader && (
         <View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
           <View style={styles.headerTitleGroup}>

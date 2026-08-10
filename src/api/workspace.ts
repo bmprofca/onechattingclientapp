@@ -60,6 +60,12 @@ export const getContactDetails = (session: ApiSession, projectId: string, contac
 export const getOpenCaseCount = (session: ApiSession, projectId: string, contactNumber: string) =>
   post<any>('/message/open-case-count', { project_id: projectId, number: contactNumber }, session);
 
+export const getTemplates = (session: ApiSession, projectId: string, status?: string) =>
+  post<any>('/template/template-list', { project_id: projectId, status }, session);
+
+export const sendTemplate = (session: ApiSession, projectId: string, contactNumber: string, templateId: string, components: any[]) =>
+  post<any>('/message/send-template', { project_id: projectId, number: contactNumber, template_id: templateId, component: components }, session);
+
 // ---- Media messages ----
 
 export type SendMediaOptions = {

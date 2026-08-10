@@ -24,7 +24,7 @@ export function SupportScreen({
   const loadSupport = async () => {
     setLoading(true);
     try {
-      const res = await getSupportInfo(session);
+      const res: any = await getSupportInfo(session);
       if (res.data) {
         setData(res.data);
       }

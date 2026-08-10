@@ -17,13 +17,15 @@
     "lucide-react-native": "^1.30.0",
     "react": "19.2.3",
     "react-native": "0.86.2",
+    "react-native-blob-util": "^0.24.10",
     "react-native-get-random-values": "^2.0.0",
     "react-native-image-picker": "^8.2.1",
     "react-native-keychain": "^10.0.0",
     "react-native-razorpay": "^3.0.0",
     "react-native-safe-area-context": "^5.5.2",
     "react-native-svg": "^15.15.5",
-    "react-native-toast-message": "^2.4.0"
+    "react-native-toast-message": "^2.4.0",
+    "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

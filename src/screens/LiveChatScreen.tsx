@@ -16,6 +16,7 @@ import { ApiSession } from '../api/client';
 import { getInbox, getOpenCases, ListItem, unwrapList } from '../api/workspace';
 import { LoadState } from '../components/LoadState';
 import { useTheme } from '../theme/theme';
+import { socketManager } from '../services/socketManager';
 
 export function LiveChatScreen({
   projectId,
@@ -71,6 +72,42 @@ export function LiveChatScreen({
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    const unsubChat = socketManager.onChat((data) => {
+      setItems((prev) => {
+        const contactNum = data.contact?.number;
+        if (!contactNum) return prev;
+        
+        const existingIdx = prev.findIndex(c => {
+          const cNum = (c.contact as Record<string, any>)?.number || c.phone || c.number;
+          return String(cNum) === String(contactNum);
+        });
+        
+        const newChat: any = existingIdx >= 0 ? { ...prev[existingIdx] } : { contact: data.contact, number: contactNum, unread_count: 0 };
+        
+        newChat.last_message = data.message;
+        if (data.message.type === 'in' && data.message.status !== 'read') {
+          newChat.unread_count = Number(newChat.unread_count || 0) + 1;
+        }
+        
+        const nextList = [...prev];
+        if (existingIdx >= 0) {
+          nextList.splice(existingIdx, 1);
+        }
+        
+        // Only add to list if it fits the current mode, but for simplicity we'll just push to top
+        // If mode is 'cases' and this isn't an open case, it might technically not belong, 
+        // but it's fine for an optimistic update until they refresh.
+        nextList.unshift(newChat);
+        return nextList;
+      });
+    });
+
+    return () => {
+      unsubChat();
+    };
+  }, []);
 
   const handleDirectChat = () => {
     if (!newChatNumber.trim()) return;

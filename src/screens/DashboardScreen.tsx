@@ -11,6 +11,7 @@ import { ApiSession } from '../api/client';
 import { getProjectMeta, getProjectDashboard, getUnreadCount } from '../api/workspace';
 import { LoadState } from '../components/LoadState';
 import { useTheme } from '../theme/theme';
+import { socketManager } from '../services/socketManager';
 
 const numericValue = (value: any) =>
   value?.data?.count ??
@@ -75,6 +76,16 @@ export function DashboardScreen({
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    const unsub = socketManager.onTotalUnreadCount((data) => {
+      if (typeof data?.count === 'number') {
+        setUnread(data.count);
+      }
+    });
+    return () => unsub();
+  }, []);
+
   const value = info?.data || info || {};
   
   const metricsData = [

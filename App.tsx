@@ -19,6 +19,7 @@ import {
   saveSession,
 } from './src/services/session';
 import {useTheme} from './src/theme/theme';
+import {socketManager} from './src/services/socketManager';
 
 export default function App() {
   const theme = useTheme();
@@ -54,9 +55,12 @@ export default function App() {
 
         await saveSession(refreshed);
         setSession(refreshed);
+        socketManager.connect(refreshed.token, refreshed.username);
+        socketManager.setProjectId(refreshed.selectedProjectId);
       } catch {
         await clearSession();
         setSession(null);
+        socketManager.disconnect();
       }
     };
 
@@ -73,6 +77,7 @@ export default function App() {
 
     await saveSession(updated);
     setSession(updated);
+    socketManager.setProjectId(projectId);
   };
 
   // Clears the selected project (e.g. "switch workspace") without touching
@@ -82,6 +87,7 @@ export default function App() {
     const updated = { ...session, selectedProjectId: undefined };
     await saveSession(updated);
     setSession(updated);
+    socketManager.setProjectId(null);
   };
 
   const handleProjectCreated = async (newProject: { id: string; name: string }) => {
@@ -122,6 +128,8 @@ export default function App() {
               }
               await saveSession(sessionToSave);
               setSession(sessionToSave);
+              socketManager.connect(sessionToSave.token, sessionToSave.username);
+              socketManager.setProjectId(sessionToSave.selectedProjectId);
             }}
           />
         ) : !session.selectedProjectId && session.projects && session.projects.length > 1 ? (
@@ -138,6 +146,7 @@ export default function App() {
             onSignOut={async () => {
               await clearSession();
               setSession(null);
+              socketManager.disconnect();
             }}
           />
         )}

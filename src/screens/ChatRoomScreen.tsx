@@ -11,7 +11,9 @@ import {
   Text,
   TextInput,
   View,
+  Alert,
 } from 'react-native';
+import { Clock, Check, CheckCheck, AlertCircle, Info, Plus, X } from 'lucide-react-native';
 import {
   launchImageLibrary,
   ImagePickerResponse,
@@ -31,12 +33,17 @@ import {
   sendVideoMessage,
   sendDocumentMessage,
   sendAudioMessage,
+  sendTemplate,
   unwrapList,
 } from '../api/workspace';
 import { uploadFile, PickedFile } from '../api/upload';
 import { LoadState } from '../components/LoadState';
+import { TemplateModal } from '../components/TemplateModal';
+import { MediaViewerModal } from '../components/MediaViewerModal';
+import { resolveTemplateBodyText, getTemplateHeaderMedia } from '../utils/templateUtils';
 import { useTheme } from '../theme/theme';
-
+import { socketManager } from '../services/socketManager';
+import { Image as ImageIcon, Video, FileText, Music, LayoutTemplate } from 'lucide-react-native';
 type AttachmentKind = 'photo' | 'video' | 'document' | 'audio';
 
 type PendingAttachment = {
@@ -66,9 +73,23 @@ export function ChatRoomScreen({
   const [lastId, setLastId] = useState<number | undefined>();
   const [hasMore, setHasMore] = useState(true);
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
   const [uploadingKind, setUploadingKind] = useState<AttachmentKind | null>(null);
   // NEW: holds a picked-but-not-yet-sent attachment, shown as a preview above the input bar
   const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null);
+
+  // Media viewer state
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [viewerUrl, setViewerUrl] = useState('');
+  const [viewerType, setViewerType] = useState<'image' | 'video' | 'document' | 'audio'>('image');
+  const [viewerName, setViewerName] = useState('');
+
+  const openMediaViewer = (url: string, type: 'image' | 'video' | 'document' | 'audio', name?: string) => {
+    setViewerUrl(url);
+    setViewerType(type);
+    setViewerName(name || '');
+    setViewerVisible(true);
+  };
 
   const loadHistory = useCallback(
     async (loadMore = false) => {
@@ -119,6 +140,42 @@ export function ChatRoomScreen({
     loadHistory();
     markAsRead(session, projectId, contactNumber).catch(() => { });
   }, []);
+
+  useEffect(() => {
+    const unsubChat = socketManager.onChat((data) => {
+      if (data.contact?.number === contactNumber) {
+        setMessages((prev) => {
+          const msgId = data.message.message_id || data.message.unique_id;
+          const exists = prev.find(m => (m.message_id && m.message_id === msgId) || (m.unique_id && m.unique_id === msgId) || m.id === data.message.id);
+          if (exists) {
+            return prev.map(m => m.id === data.message.id ? { ...m, ...data.message, message_id: msgId } : m);
+          }
+          const newMsg = { ...data.message, message_id: msgId };
+          return [newMsg, ...prev];
+        });
+
+        if (data.message.type === 'in') {
+          markAsRead(session, projectId, contactNumber).catch(() => { });
+        }
+      }
+    });
+
+    const unsubStatus = socketManager.onMessageStatus((data) => {
+      setMessages((prev) =>
+        prev.map(m => {
+          if ((m.unique_id && m.unique_id === data.message_id) || (m.message_id && m.message_id === data.message_id) || m.id === data.last_id) {
+            return { ...m, status: data.changes };
+          }
+          return m;
+        })
+      );
+    });
+
+    return () => {
+      unsubChat();
+      unsubStatus();
+    };
+  }, [contactNumber, projectId, session]);
 
   const refreshAfterSend = async () => {
     setLastId(undefined);
@@ -278,17 +335,79 @@ export function ChatRoomScreen({
       const shouldSendStandaloneText = textToSend && (!hasAttachment || !captionRidesWithAttachment);
       if (shouldSendStandaloneText) {
         setInputText('');
+
+        // Optimistic UI update
+        const tempId = `temp-${Date.now()}`;
+        setMessages((prev) => [
+          {
+            id: tempId,
+            message_id: tempId,
+            create_date: new Date().toISOString(),
+            type: 'out',
+            message_type: 'text',
+            message: textToSend,
+            status: 'pending',
+          },
+          ...prev,
+        ]);
+
         try {
           await sendMessage(session, projectId, contactNumber, textToSend);
         } catch (err) {
           console.warn('Failed to send message', err);
+
+          // Revert optimistic message status to failed
+          setMessages((prev) =>
+            prev.map(m => m.id === tempId ? { ...m, status: 'failed', failed_reason: err instanceof Error ? err.message : String(err) } : m)
+          );
+
           setInputText(textToSend);
+
+          const message = err instanceof Error ? err.message : String(err);
+          Toast.show({
+            type: 'error',
+            text1: 'Could not send message',
+            text2: message,
+            visibilityTime: 6000,
+          });
         }
       }
 
-      await refreshAfterSend();
+      // No need to refreshAfterSend(), socket will echo the sent message back
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleSendTemplate = async (templateId: string, components: any[]) => {
+    setTemplateMenuOpen(false);
+
+    const tempId = `temp-${Date.now()}`;
+    setMessages((prev) => [
+      {
+        id: tempId,
+        message_id: tempId,
+        create_date: new Date().toISOString(),
+        type: 'out',
+        message_type: 'template',
+        message: 'Template sent',
+        status: 'pending',
+      },
+      ...prev,
+    ]);
+
+    try {
+      await sendTemplate(session, projectId, contactNumber, templateId, components);
+    } catch (err) {
+      console.warn('Failed to send template', err);
+      setMessages((prev) =>
+        prev.map(m => m.id === tempId ? { ...m, status: 'failed', failed_reason: err instanceof Error ? err.message : String(err) } : m)
+      );
+      Toast.show({
+        type: 'error',
+        text1: 'Could not send template',
+        text2: err instanceof Error ? err.message : String(err),
+      });
     }
   };
 
@@ -315,12 +434,22 @@ export function ChatRoomScreen({
               {new Date(item.create_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </Text>
             {isOut && (
-              <Text style={[
-                styles.messageStatusTicks,
-                isRead ? styles.tickRead : isDelivered ? { color: theme.muted } : { color: theme.muted },
-              ]}>
-                {isRead ? ' ✓✓' : isDelivered ? ' ✓✓' : ' ✓'}
-              </Text>
+              <View style={{ marginLeft: 4, flexDirection: 'row', alignItems: 'center' }}>
+                {item.status === 'pending' && <Clock size={14} color={theme.muted} />}
+                {item.status === 'sent' && <Check size={16} color={theme.muted} />}
+                {item.status === 'delivered' && <CheckCheck size={16} color={theme.muted} />}
+                {item.status === 'read' && <CheckCheck size={16} color="#34B7F1" />}
+                {item.status === 'failed' && (
+                  <Pressable
+                    onPress={() => Alert.alert('Message Failed', item.failed_reason || 'Unknown error')}
+                    hitSlop={8}
+                    style={{ marginLeft: 4, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                  >
+                    <AlertCircle size={14} color="#EF4444" />
+                    <Info size={14} color={theme.muted} />
+                  </Pressable>
+                )}
+              </View>
             )}
           </View>
         </View>
@@ -329,56 +458,77 @@ export function ChatRoomScreen({
 
     function renderMessageBody(msg: any, type: string, out: boolean) {
       const textColor = out ? theme.bubbleOutText : theme.bubbleInText;
-      const caption = msg.message ? (
-        <Text style={[styles.messageText, { color: textColor, marginTop: 6 }]}>{msg.message}</Text>
+
+      const templateMedia = (type === 'template' || msg.template) ? getTemplateHeaderMedia(msg) : null;
+
+      const textContent = (type === 'template' || msg.template)
+        ? resolveTemplateBodyText(msg)
+        : (msg.message || '');
+
+      const caption = textContent ? (
+        <Text style={[styles.messageText, { color: textColor, marginTop: templateMedia || (type !== 'text' && type !== 'template') ? 6 : 0 }]}>
+          {textContent}
+        </Text>
       ) : null;
 
-      if (type === 'image' && msg.media_url) {
+      const isDoc = type === 'document' || templateMedia?.type === 'document';
+      const isImg = type === 'image' || templateMedia?.type === 'image';
+      const isVid = type === 'video' || templateMedia?.type === 'video';
+
+      const mediaUrl = templateMedia?.url || msg.media_url;
+      const mediaName = templateMedia?.filename || msg.media_name || 'Document';
+
+      if (isImg && mediaUrl) {
         return (
           <>
-            <Image source={{ uri: msg.media_url }} style={styles.mediaImage} resizeMode="cover" />
+            <Pressable onPress={() => openMediaViewer(mediaUrl, 'image', mediaName)}>
+              <Image source={{ uri: mediaUrl }} style={styles.mediaImage} resizeMode="cover" />
+            </Pressable>
             {caption}
           </>
         );
       }
 
-      if (type === 'video' && msg.media_url) {
+      if (isVid && mediaUrl) {
         return (
           <>
-            <View style={styles.mediaPlaceholder}>
+            <Pressable onPress={() => openMediaViewer(mediaUrl, 'video', mediaName)} style={styles.mediaPlaceholder}>
               <Text style={styles.mediaPlaceholderIcon}>▶</Text>
               <Text style={[styles.mediaPlaceholderLabel, { color: textColor }]}>Video</Text>
-            </View>
+            </Pressable>
             {caption}
           </>
         );
       }
 
-      if (type === 'document') {
+      if (isDoc) {
         return (
-          <View style={styles.documentCard}>
-            <Text style={styles.documentIcon}>📄</Text>
-            <Text style={[styles.documentName, { color: textColor }]} numberOfLines={2}>
-              {msg.media_name || 'Document'}
-            </Text>
-          </View>
+          <>
+            <Pressable onPress={() => openMediaViewer(mediaUrl || '', 'document', mediaName)} style={styles.documentCard}>
+              <Text style={styles.documentIcon}>📄</Text>
+              <Text style={[styles.documentName, { color: textColor }]} numberOfLines={2}>
+                {mediaName}
+              </Text>
+            </Pressable>
+            {caption}
+          </>
         );
       }
 
       if (type === 'audio') {
         return (
-          <View style={styles.audioRow}>
+          <Pressable onPress={() => openMediaViewer(msg.media_url || '', 'audio', msg.media_name)} style={styles.audioRow}>
             <Text style={styles.audioIcon}>{msg.is_voice ? '🎤' : '🎵'}</Text>
             <Text style={[styles.messageText, { color: textColor }]}>
               {msg.is_voice ? 'Voice message' : 'Audio'}
             </Text>
-          </View>
+          </Pressable>
         );
       }
 
-      return (
+      return caption || (
         <Text style={[styles.messageText, { color: textColor }]}>
-          {msg.message || '(Unsupported message type)'}
+          (Unsupported message type)
         </Text>
       );
     }
@@ -427,7 +577,7 @@ export function ChatRoomScreen({
           onEndReached={() => loadHistory(true)}
           onEndReachedThreshold={0.5}
           ListEmptyComponent={
-            <View style={{ transform: [{ scaleY: -1 }] }}>
+            <View style={{ transform: [{ scaleY: -1 }, { scaleX: -1 }] }}>
               <LoadState
                 loading={loading}
                 error={error}
@@ -444,26 +594,35 @@ export function ChatRoomScreen({
         <View style={[styles.attachMenu, { backgroundColor: theme.header, borderColor: theme.border }]}>
           <AttachmentOption
             label="Photo"
-            icon="🖼️"
+            icon={ImageIcon}
             onPress={() => handlePickAttachment('photo')}
             theme={theme}
           />
           <AttachmentOption
             label="Video"
-            icon="🎬"
+            icon={Video}
             onPress={() => handlePickAttachment('video')}
             theme={theme}
           />
           <AttachmentOption
             label="Document"
-            icon="📄"
+            icon={FileText}
             onPress={() => handlePickAttachment('document')}
             theme={theme}
           />
           <AttachmentOption
             label="Audio"
-            icon="🎵"
+            icon={Music}
             onPress={() => handlePickAttachment('audio')}
+            theme={theme}
+          />
+          <AttachmentOption
+            label="Template"
+            icon={LayoutTemplate}
+            onPress={() => {
+              setAttachMenuOpen(false);
+              setTemplateMenuOpen(true);
+            }}
             theme={theme}
           />
         </View>
@@ -504,14 +663,18 @@ export function ChatRoomScreen({
       )}
 
       {/* Input Bar */}
-      <View style={[styles.inputContainer, { backgroundColor: theme.inputContainerBg }]}>
+      <View style={[styles.inputContainer]}>
         <Pressable
           style={styles.attachButton}
           hitSlop={8}
           disabled={isUploading}
           onPress={() => setAttachMenuOpen(open => !open)}
         >
-          <Text style={[styles.attachButtonIcon, { color: theme.ink }]}>{attachMenuOpen ? '✕' : '＋'}</Text>
+          {attachMenuOpen ? (
+            <X size={22} color={theme.emerald} />
+          ) : (
+            <Plus size={22} color={theme.emerald} />
+          )}
         </Pressable>
 
         <View style={[styles.inputPill, { backgroundColor: theme.inputBg }]}>
@@ -540,24 +703,42 @@ export function ChatRoomScreen({
           )}
         </Pressable>
       </View>
+
+      <TemplateModal
+        visible={templateMenuOpen}
+        onClose={() => setTemplateMenuOpen(false)}
+        session={session}
+        projectId={projectId}
+        onSelectTemplate={handleSendTemplate}
+      />
+
+      <MediaViewerModal
+        visible={viewerVisible}
+        onClose={() => setViewerVisible(false)}
+        mediaUrl={viewerUrl}
+        mediaType={viewerType}
+        mediaName={viewerName}
+      />
     </KeyboardAvoidingView>
   );
 }
 
 function AttachmentOption({
   label,
-  icon,
+  icon: IconComponent,
   onPress,
   theme,
 }: {
   label: string;
-  icon: string;
+  icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
   onPress: () => void;
   theme: any;
 }) {
   return (
     <Pressable style={styles.attachMenuItem} onPress={onPress}>
-      <Text style={styles.attachMenuIcon}>{icon}</Text>
+      <View style={[styles.attachMenuIconWrap, { backgroundColor: theme.inputBg }]}>
+        <IconComponent size={22} color={theme.emerald} strokeWidth={2} />
+      </View>
       <Text style={[styles.attachMenuLabel, { color: theme.ink }]}>{label}</Text>
     </Pressable>
   );
@@ -573,6 +754,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 10,
     borderBottomWidth: 1,
+  },
+  attachMenuItem: {
+    alignItems: 'center',
+    width: 72,
+  },
+  attachMenuIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  attachMenuLabel: {
+    fontSize: 12,
+    marginTop: 6,
   },
   backButton: {
     width: 40,
@@ -755,21 +951,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   attachMenu: {
+    position: 'absolute',
+    bottom: 60,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     justifyContent: 'space-around',
     paddingVertical: 14,
     borderTopWidth: 1,
-  },
-  attachMenuItem: {
-    alignItems: 'center',
-    width: 72,
-  },
-  attachMenuIcon: {
-    fontSize: 26,
-  },
-  attachMenuLabel: {
-    fontSize: 12,
-    marginTop: 4,
+    borderRadius: 20,
+    marginHorizontal: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    paddingHorizontal: 10,
   },
   previewBar: {
     flexDirection: 'row',
