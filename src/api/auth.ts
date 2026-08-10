@@ -9,8 +9,12 @@ const normalizeProjects = (value: any): Project[] => {
   return list.map((project: any) => ({id: String(project.id || project.project_id), name: String(project.name || project.project_name || 'Untitled project'), owned: Boolean(project.owned), ownerName: project.owner_name})).filter((project: Project) => project.id);
 };
 
-export async function login(email: string, password: string): Promise<LoginResponse> {
-  const response = await post<any>('/account/login', { email, password });
+export async function sendOtp(mobile: string): Promise<void> {
+  await post('/account/send-otp', { mobile });
+}
+
+export async function login(mobile: string, otp: string): Promise<LoginResponse> {
+  const response = await post<any>('/account/login', { mobile, otp });
   const source = response.data || response;
   if (!source.token || !source.username) throw new Error(response.message || 'The server returned an incomplete login response.');
   return { token: source.token, username: source.username, profile: source.profile || response.profile, projects: normalizeProjects(source.projects || response.projects) };
@@ -25,11 +29,10 @@ export async function getAccountProfile(session: ApiSession): Promise<{username:
 export async function register(fields: {
   name: string;
   email: string;
-  password: string;
-  confirm_password: string;
   firm_name: string;
   mobile: string;
   country_code: string;
+  otp: string;
 }): Promise<LoginResponse> {
   const response = await post<any>('/account/register', fields);
   const source = response.data || response;
@@ -40,8 +43,4 @@ export async function register(fields: {
     profile: source.profile || response.profile,
     projects: normalizeProjects(source.project?.projects || source.projects || response.projects),
   };
-}
-
-export async function requestPasswordReset(email: string): Promise<void> {
-  await post('/account/reset-password-request', { email });
 }

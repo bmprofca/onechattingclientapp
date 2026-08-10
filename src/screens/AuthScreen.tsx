@@ -1,98 +1,101 @@
 import React, {useState} from 'react';
 import {ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View} from 'react-native';
 import Toast from 'react-native-toast-message';
-import {Briefcase, Eye, EyeOff, Globe, Lock, Mail, Phone, User} from 'lucide-react-native';
-import {login, register, requestPasswordReset} from '../api/auth';
-import {saveSession, Session} from '../services/session';
-import {useTheme} from '../theme/theme';
+import { Briefcase, Globe, Mail, Phone, User, KeyRound } from 'lucide-react-native';
+import { login, register, sendOtp } from '../api/auth';
+import { saveSession, Session } from '../services/session';
+import { useTheme } from '../theme/theme';
 
-type AuthMode = 'login' | 'signup' | 'forgot';
+type AuthMode = 'login' | 'signup';
 
 export function AuthScreen({onAuthenticated}: {onAuthenticated: (session: Session) => void}) {
   const theme = useTheme();
-  const [mode, setMode] = useState<AuthMode>('login');
+  const [step, setStep] = useState<1 | 2>(1);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [firmName, setFirmName] = useState('');
   const [mobile, setMobile] = useState('');
   const [countryCode, setCountryCode] = useState('+91');
-  const [showPassword, setShowPassword] = useState(false);
+  const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState<AuthMode>('login');
 
   const switchMode = (nextMode: AuthMode) => {
     setMode(nextMode);
-    setPassword('');
-    setConfirmPassword('');
-    setShowPassword(false);
+    setStep(1);
+    setOtp('');
   };
 
   const submit = async () => {
-    if (!email.trim() || (mode !== 'forgot' && !password)) {
-      Toast.show({type: 'error', text1: 'Complete the form', text2: 'Fill in every required field.'});
-      return;
-    }
-    if (mode === 'signup' && !name.trim()) {
-      Toast.show({type: 'error', text1: 'Name required', text2: 'Enter your name to create an account.'});
-      return;
-    }
-    if (mode === 'signup' && !firmName.trim()) {
-      Toast.show({type: 'error', text1: 'Company name required', text2: 'Enter your company or business name.'});
-      return;
-    }
-    if (mode === 'signup' && !mobile.trim()) {
-      Toast.show({type: 'error', text1: 'Mobile required', text2: 'Enter your mobile number.'});
-      return;
-    }
-    if (mode === 'signup' && !countryCode.trim()) {
-      Toast.show({type: 'error', text1: 'Country code required', text2: 'Enter your country dial code (e.g. +91).'});
-      return;
-    }
-    if (mode === 'signup' && password !== confirmPassword) {
-      Toast.show({type: 'error', text1: 'Passwords do not match'});
-      return;
-    }
-
-    setLoading(true);
-    try {
-      if (mode === 'login') {
-        const result = await login(email.trim(), password);
-        const session: Session = {...result, projects: result.projects || []};
-        await saveSession(session);
-        Toast.show({type: 'success', text1: 'Signed in successfully'});
-        onAuthenticated(session);
-      } else if (mode === 'signup') {
-        const result = await register({
-          name: name.trim(),
-          email: email.trim(),
-          password,
-          confirm_password: confirmPassword,
-          firm_name: firmName.trim(),
-          mobile: mobile.trim(),
-          country_code: countryCode.trim(),
-        });
-        const session: Session = {...result, projects: result.projects || []};
-        await saveSession(session);
-        Toast.show({type: 'success', text1: 'Account created', text2: 'Welcome to 1chatting!'});
-        onAuthenticated(session);
-      } else {
-        await requestPasswordReset(email.trim());
-        Toast.show({type: 'success', text1: 'Reset link sent', text2: 'Check your email for password-reset instructions.'});
-        switchMode('login');
+    if (step === 1) {
+      if (!mobile.trim() || !countryCode.trim()) {
+        Toast.show({type: 'error', text1: 'Mobile required', text2: 'Enter your country code and mobile number.'});
+        return;
       }
-    } catch (error) {
-      Toast.show({type: 'error', text1: mode === 'forgot' ? 'Could not send reset link' : 'Request failed', text2: error instanceof Error ? error.message : 'Please try again.'});
-    } finally {
-      setLoading(false);
+      if (mode === 'signup') {
+        if (!name.trim()) {
+          Toast.show({type: 'error', text1: 'Name required', text2: 'Enter your name to create an account.'});
+          return;
+        }
+        if (!email.trim()) {
+          Toast.show({type: 'error', text1: 'Email required', text2: 'Enter your work email.'});
+          return;
+        }
+        if (!firmName.trim()) {
+          Toast.show({type: 'error', text1: 'Company name required', text2: 'Enter your company or business name.'});
+          return;
+        }
+      }
+
+      setLoading(true);
+      try {
+        await sendOtp(mobile.trim());
+        setStep(2);
+        Toast.show({type: 'success', text1: 'OTP Sent', text2: 'Please check your mobile for the OTP.'});
+      } catch (error) {
+        Toast.show({type: 'error', text1: 'Request failed', text2: error instanceof Error ? error.message : 'Please try again.'});
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      if (!otp.trim()) {
+        Toast.show({type: 'error', text1: 'OTP required', text2: 'Please enter the OTP sent to your mobile.'});
+        return;
+      }
+
+      setLoading(true);
+      try {
+        if (mode === 'login') {
+          const result = await login(mobile.trim(), otp.trim());
+          const session: Session = {...result, projects: result.projects || []};
+          await saveSession(session);
+          Toast.show({type: 'success', text1: 'Signed in successfully'});
+          onAuthenticated(session);
+        } else if (mode === 'signup') {
+          const result = await register({
+            name: name.trim(),
+            email: email.trim(),
+            firm_name: firmName.trim(),
+            mobile: mobile.trim(),
+            country_code: countryCode.trim(),
+            otp: otp.trim(),
+          });
+          const session: Session = {...result, projects: result.projects || []};
+          await saveSession(session);
+          Toast.show({type: 'success', text1: 'Account created', text2: 'Welcome to 1chatting!'});
+          onAuthenticated(session);
+        }
+      } catch (error) {
+        Toast.show({type: 'error', text1: 'Request failed', text2: error instanceof Error ? error.message : 'Please try again.'});
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
   const content = mode === 'login'
-    ? {eyebrow: 'WELCOME BACK', title: 'Your workspace,\nready when you are.', copy: 'Sign in to keep customer conversations moving.', action: 'Sign in'}
-    : mode === 'signup'
-      ? {eyebrow: 'CREATE ACCOUNT', title: 'Start something\nmeaningful.', copy: 'Create your secure 1chatting workspace.', action: 'Create account'}
-      : {eyebrow: 'RESET PASSWORD', title: 'Get back into\nyour workspace.', copy: 'We will email you a secure reset link.', action: 'Send reset link'};
+    ? {eyebrow: 'WELCOME BACK', title: 'Your workspace,\nready when you are.', copy: 'Sign in to keep customer conversations moving.', action: step === 1 ? 'Send OTP' : 'Sign in'}
+    : {eyebrow: 'CREATE ACCOUNT', title: 'Start something\nmeaningful.', copy: 'Create your secure 1chatting workspace.', action: step === 1 ? 'Send OTP' : 'Create account'};
 
   const fieldStyle = {
     backgroundColor: theme.canvas,
@@ -117,7 +120,6 @@ export function AuthScreen({onAuthenticated}: {onAuthenticated: (session: Sessio
           <Text style={[styles.copy, {color: theme.muted}]}>{content.copy}</Text>
 
           {/* Segmented mode switcher — only for login/signup, forgot is a separate flow */}
-          {mode !== 'forgot' && (
             <View style={[styles.segment, {backgroundColor: theme.isDark ? theme.surface : theme.mint, borderColor: theme.border}]}>
               <Pressable
                 onPress={() => switchMode('login')}
@@ -132,10 +134,9 @@ export function AuthScreen({onAuthenticated}: {onAuthenticated: (session: Sessio
                 <Text style={[styles.segmentText, {color: mode === 'signup' ? theme.ink : theme.muted}]}>Create account</Text>
               </Pressable>
             </View>
-          )}
 
           <View style={[styles.form, {backgroundColor: theme.surface, borderColor: theme.border, borderWidth: theme.isDark ? 1 : 0, shadowColor: theme.shadow}]}>
-            {mode === 'signup' && (
+            {mode === 'signup' && step === 1 && (
               <View style={styles.field}>
                 <Text style={[styles.label, {color: theme.muted}]}>FULL NAME</Text>
                 <View style={[styles.inputRow, fieldStyle]}>
@@ -152,24 +153,26 @@ export function AuthScreen({onAuthenticated}: {onAuthenticated: (session: Sessio
               </View>
             )}
 
-            <View style={styles.field}>
-              <Text style={[styles.label, {color: theme.muted}]}>WORK EMAIL</Text>
-              <View style={[styles.inputRow, fieldStyle]}>
-                <Mail size={17} color={theme.muted} strokeWidth={2.25} />
-                <TextInput
-                  value={email}
-                  onChangeText={setEmail}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="email-address"
-                  placeholder="you@company.com"
-                  placeholderTextColor={theme.muted}
-                  style={[styles.input, {color: theme.ink}]}
-                />
+            {mode === 'signup' && step === 1 && (
+              <View style={styles.field}>
+                <Text style={[styles.label, {color: theme.muted}]}>WORK EMAIL</Text>
+                <View style={[styles.inputRow, fieldStyle]}>
+                  <Mail size={17} color={theme.muted} strokeWidth={2.25} />
+                  <TextInput
+                    value={email}
+                    onChangeText={setEmail}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="email-address"
+                    placeholder="you@company.com"
+                    placeholderTextColor={theme.muted}
+                    style={[styles.input, {color: theme.ink}]}
+                  />
+                </View>
               </View>
-            </View>
+            )}
 
-            {mode === 'signup' && (
+            {mode === 'signup' && step === 1 && (
               <View style={styles.field}>
                 <Text style={[styles.label, {color: theme.muted}]}>COMPANY / BUSINESS NAME</Text>
                 <View style={[styles.inputRow, fieldStyle]}>
@@ -186,7 +189,7 @@ export function AuthScreen({onAuthenticated}: {onAuthenticated: (session: Sessio
               </View>
             )}
 
-            {mode === 'signup' && (
+            {step === 1 && (
               <View style={styles.field}>
                 <Text style={[styles.label, {color: theme.muted}]}>MOBILE NUMBER</Text>
                 <View style={[styles.inputRow, fieldStyle]}>
@@ -212,40 +215,19 @@ export function AuthScreen({onAuthenticated}: {onAuthenticated: (session: Sessio
               </View>
             )}
 
-            {mode !== 'forgot' && (
+            {step === 2 && (
               <View style={styles.field}>
-                <Text style={[styles.label, {color: theme.muted}]}>PASSWORD</Text>
+                <Text style={[styles.label, {color: theme.muted}]}>ENTER OTP</Text>
                 <View style={[styles.inputRow, fieldStyle]}>
-                  <Lock size={17} color={theme.muted} strokeWidth={2.25} />
+                  <KeyRound size={17} color={theme.muted} strokeWidth={2.25} />
                   <TextInput
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry={!showPassword}
-                    placeholder="Enter your password"
+                    value={otp}
+                    onChangeText={setOtp}
+                    keyboardType="number-pad"
+                    placeholder="Enter the 6-digit OTP"
                     placeholderTextColor={theme.muted}
                     style={[styles.input, {color: theme.ink}]}
-                  />
-                  <Pressable onPress={() => setShowPassword(v => !v)} hitSlop={8}>
-                    {showPassword
-                      ? <EyeOff size={17} color={theme.muted} strokeWidth={2.25} />
-                      : <Eye size={17} color={theme.muted} strokeWidth={2.25} />}
-                  </Pressable>
-                </View>
-              </View>
-            )}
-
-            {mode === 'signup' && (
-              <View style={styles.field}>
-                <Text style={[styles.label, {color: theme.muted}]}>CONFIRM PASSWORD</Text>
-                <View style={[styles.inputRow, fieldStyle]}>
-                  <Lock size={17} color={theme.muted} strokeWidth={2.25} />
-                  <TextInput
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                    secureTextEntry={!showPassword}
-                    placeholder="Enter password again"
-                    placeholderTextColor={theme.muted}
-                    style={[styles.input, {color: theme.ink}]}
+                    maxLength={6}
                   />
                 </View>
               </View>
@@ -267,15 +249,11 @@ export function AuthScreen({onAuthenticated}: {onAuthenticated: (session: Sessio
                 : <Text style={styles.buttonText}>{content.action}</Text>}
             </Pressable>
 
-            {mode === 'login' ? (
-              <Pressable onPress={() => switchMode('forgot')} style={styles.forgotLink}>
-                <Text style={[styles.link, {color: theme.mintText}]}>Forgot password?</Text>
+            {step === 2 && (
+              <Pressable onPress={() => setStep(1)} style={styles.forgotLink}>
+                <Text style={[styles.link, {color: theme.mintText}]}>← Back</Text>
               </Pressable>
-            ) : mode === 'forgot' ? (
-              <Pressable onPress={() => switchMode('login')} style={styles.forgotLink}>
-                <Text style={[styles.link, {color: theme.mintText}]}>← Back to sign in</Text>
-              </Pressable>
-            ) : null}
+            )}
           </View>
 
           <Text style={[styles.terms, {color: theme.muted}]}>Protected with secure, encrypted access.</Text>
