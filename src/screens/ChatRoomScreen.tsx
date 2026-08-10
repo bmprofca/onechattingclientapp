@@ -12,8 +12,10 @@ import {
   TextInput,
   View,
   Alert,
+  Animated,
+  PanResponder,
 } from 'react-native';
-import { Clock, Check, CheckCheck, AlertCircle, Info, Plus, X } from 'lucide-react-native';
+import { Clock, Check, CheckCheck, AlertCircle, Info, Plus, X, Reply, CornerUpLeft } from 'lucide-react-native';
 import {
   launchImageLibrary,
   ImagePickerResponse,
@@ -91,6 +93,9 @@ export function ChatRoomScreen({
     setViewerVisible(true);
   };
 
+  // Reply state
+  const [replyingTo, setReplyingTo] = useState<any | null>(null);
+
   const loadHistory = useCallback(
     async (loadMore = false) => {
       if (loading || (!hasMore && loadMore)) return;
@@ -146,10 +151,34 @@ export function ChatRoomScreen({
       if (data.contact?.number === contactNumber) {
         setMessages((prev) => {
           const msgId = data.message.message_id || data.message.unique_id;
-          const exists = prev.find(m => (m.message_id && m.message_id === msgId) || (m.unique_id && m.unique_id === msgId) || m.id === data.message.id);
-          if (exists) {
-            return prev.map(m => m.id === data.message.id ? { ...m, ...data.message, message_id: msgId } : m);
+          
+          // Match exactly by ID
+          const exactMatchIndex = prev.findIndex(m => (m.message_id && m.message_id === msgId) || (m.unique_id && m.unique_id === msgId) || m.id === data.message.id);
+          if (exactMatchIndex !== -1) {
+            const updated = [...prev];
+            updated[exactMatchIndex] = { ...updated[exactMatchIndex], ...data.message, message_id: msgId };
+            return updated;
           }
+
+          // Fuzzy match for optimistic outgoing messages (text or template)
+          if (data.message.type === 'out') {
+            const candidateIndex = prev.findIndex(m =>
+              m.type === 'out' &&
+              String(m.id).startsWith('temp-') &&
+              (m.status === 'pending' || m.status === 'sent') &&
+              (
+                (m.message_type === 'text' && data.message.message_type === 'text' && m.message === data.message.message) ||
+                (m.message_type === 'template' && data.message.is_template)
+              )
+            );
+
+            if (candidateIndex !== -1) {
+              const updated = [...prev];
+              updated[candidateIndex] = { ...updated[candidateIndex], ...data.message, message_id: msgId };
+              return updated;
+            }
+          }
+
           const newMsg = { ...data.message, message_id: msgId };
           return [newMsg, ...prev];
         });
@@ -336,6 +365,10 @@ export function ChatRoomScreen({
       if (shouldSendStandaloneText) {
         setInputText('');
 
+        // Capture reply info before clearing
+        const currentReply = replyingTo;
+        setReplyingTo(null);
+
         // Optimistic UI update
         const tempId = `temp-${Date.now()}`;
         setMessages((prev) => [
@@ -347,12 +380,20 @@ export function ChatRoomScreen({
             message_type: 'text',
             message: textToSend,
             status: 'pending',
+            ...(currentReply ? {
+              is_reply: true,
+              reply_wamid: currentReply.wamid,
+              reply_to_message: currentReply,
+            } : {}),
           },
           ...prev,
         ]);
 
         try {
-          await sendMessage(session, projectId, contactNumber, textToSend);
+          const res = await sendMessage(session, projectId, contactNumber, textToSend, currentReply?.wamid);
+          setMessages((prev) =>
+            prev.map(m => m.id === tempId ? { ...m, status: 'sent', message_id: res?.data?.message_id || res?.message_id || tempId } : m)
+          );
         } catch (err) {
           console.warn('Failed to send message', err);
 
@@ -397,7 +438,10 @@ export function ChatRoomScreen({
     ]);
 
     try {
-      await sendTemplate(session, projectId, contactNumber, templateId, components);
+      const res = await sendTemplate(session, projectId, contactNumber, templateId, components);
+      setMessages((prev) =>
+        prev.map(m => m.id === tempId ? { ...m, status: 'sent', message_id: res?.data?.message_id || res?.message_id || tempId } : m)
+      );
     } catch (err) {
       console.warn('Failed to send template', err);
       setMessages((prev) =>
@@ -417,14 +461,29 @@ export function ChatRoomScreen({
     const isDelivered = item.status === 'delivered';
     const messageType = item.message_type || 'text';
 
+    const canReply = Boolean(item.wamid && item.status !== 'failed');
+
     return (
-      <View style={[styles.messageRow, isOut ? styles.messageRowOut : styles.messageRowIn]}>
+      <SwipeableMessageWrapper
+        enabled={canReply}
+        onSwipe={() => setReplyingTo(item)}
+      >
+        <Pressable
+          onLongPress={() => {
+            if (canReply) {
+              setReplyingTo(item);
+            }
+          }}
+          delayLongPress={400}
+          style={[styles.messageRow, isOut ? styles.messageRowOut : styles.messageRowIn]}
+        >
         <View style={[
           styles.messageBubble,
           isOut
             ? { backgroundColor: theme.bubbleOut, borderTopRightRadius: 2 }
             : { backgroundColor: theme.bubbleIn, borderTopLeftRadius: 2 },
         ]}>
+          {renderReplyContext(item)}
           {renderMessageBody(item, messageType, isOut)}
           <View style={styles.messageFooter}>
             <Text style={[
@@ -451,10 +510,47 @@ export function ChatRoomScreen({
                 )}
               </View>
             )}
+            {canReply && (
+              <Pressable
+                onPress={() => setReplyingTo(item)}
+                hitSlop={12}
+                style={{ marginLeft: 6, opacity: 0.8 }}
+              >
+                <CornerUpLeft size={13} color={isOut ? theme.bubbleOutText + 'A0' : theme.muted} />
+              </Pressable>
+            )}
           </View>
         </View>
-      </View>
+      </Pressable>
+    </SwipeableMessageWrapper>
     );
+
+    function renderReplyContext(msg: any) {
+      const replyMsg = msg.reply_to_message || (msg.is_reply && msg.reply_wamid ? messages.find(m => m.wamid === msg.reply_wamid) : null);
+      if (!replyMsg) return null;
+
+      const replyType = (replyMsg.message_type || 'text').toLowerCase();
+      let replyPreview = replyMsg.message || '';
+      if (replyType === 'image' || replyType === 'photo') replyPreview = replyMsg.message || '📷 Photo';
+      else if (replyType === 'video') replyPreview = replyMsg.message || '🎥 Video';
+      else if (replyType === 'document') replyPreview = replyMsg.media_name || '📄 Document';
+      else if (replyType === 'audio') replyPreview = replyMsg.is_voice ? '🎤 Voice message' : '🎵 Audio';
+      else if (replyType === 'template') replyPreview = resolveTemplateBodyText(replyMsg);
+      if (!replyPreview) replyPreview = 'Message';
+
+      const isReplyFromMe = replyMsg.type === 'out';
+
+      return (
+        <View style={[styles.replyContext, { borderLeftColor: isReplyFromMe ? theme.emerald : '#3B82F6' }]}>
+          <Text style={[styles.replyContextName, { color: isReplyFromMe ? theme.emerald : '#3B82F6' }]}>
+            {isReplyFromMe ? 'You' : (contactName || contactNumber)}
+          </Text>
+          <Text style={[styles.replyContextText, { color: theme.muted }]} numberOfLines={1}>
+            {replyPreview}
+          </Text>
+        </View>
+      );
+    }
 
     function renderMessageBody(msg: any, type: string, out: boolean) {
       const textColor = out ? theme.bubbleOutText : theme.bubbleInText;
@@ -659,6 +755,36 @@ export function ChatRoomScreen({
               <Text style={[styles.previewCancelText, { color: theme.ink }]}>✕</Text>
             </Pressable>
           )}
+        </View>
+      )}
+
+      {/* Reply Preview Banner */}
+      {replyingTo && (
+        <View style={[styles.replyBanner, { backgroundColor: theme.surface, borderTopColor: theme.border }]}>
+          <View style={[styles.replyBannerContent, { borderLeftColor: '#3B82F6' }]}>
+            <View style={styles.replyBannerTextWrap}>
+              <View style={styles.replyBannerHeader}>
+                <CornerUpLeft size={14} color="#3B82F6" />
+                <Text style={[styles.replyBannerLabel, { color: '#3B82F6' }]}>
+                  Replying to {replyingTo.type === 'out' ? 'yourself' : (contactName || contactNumber)}
+                </Text>
+              </View>
+              <Text style={[styles.replyBannerMessage, { color: theme.muted }]} numberOfLines={1}>
+                {(() => {
+                  const rt = (replyingTo.message_type || 'text').toLowerCase();
+                  if (rt === 'image' || rt === 'photo') return replyingTo.message || '📷 Photo';
+                  if (rt === 'video') return replyingTo.message || '🎥 Video';
+                  if (rt === 'document') return replyingTo.media_name || '📄 Document';
+                  if (rt === 'audio') return replyingTo.is_voice ? '🎤 Voice message' : '🎵 Audio';
+                  if (rt === 'template') return resolveTemplateBodyText(replyingTo);
+                  return replyingTo.message || 'Message';
+                })()}
+              </Text>
+            </View>
+            <Pressable onPress={() => setReplyingTo(null)} hitSlop={8}>
+              <X size={20} color={theme.muted} />
+            </Pressable>
+          </View>
         </View>
       )}
 
@@ -1036,4 +1162,109 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginLeft: 2,
   },
+  replyContext: {
+    borderLeftWidth: 3,
+    paddingLeft: 8,
+    paddingVertical: 4,
+    marginBottom: 4,
+    borderRadius: 4,
+    backgroundColor: 'rgba(0,0,0,0.04)',
+  },
+  replyContextName: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 1,
+  },
+  replyContextText: {
+    fontSize: 13,
+    lineHeight: 16,
+  },
+  replyBanner: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+  },
+  replyBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderLeftWidth: 3,
+    paddingLeft: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: 'rgba(59,130,246,0.06)',
+  },
+  replyBannerTextWrap: {
+    flex: 1,
+  },
+  replyBannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 2,
+  },
+  replyBannerLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  replyBannerMessage: {
+    fontSize: 13,
+  },
 });
+
+function SwipeableMessageWrapper({ children, onSwipe, enabled }: { children: React.ReactNode, onSwipe: () => void, enabled: boolean }) {
+  const pan = React.useRef(new Animated.Value(0)).current;
+
+  const panResponder = React.useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        if (!enabled) return false;
+        return gestureState.dx > 20 && Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+      },
+      onPanResponderMove: (evt, gestureState) => {
+        if (gestureState.dx > 0) {
+          const val = gestureState.dx < 60 ? gestureState.dx : 60 + (gestureState.dx - 60) * 0.2;
+          pan.setValue(val);
+        }
+      },
+      onPanResponderRelease: (evt, gestureState) => {
+        if (gestureState.dx > 50) {
+          onSwipe();
+        }
+        Animated.spring(pan, {
+          toValue: 0,
+          useNativeDriver: true,
+          bounciness: 12,
+        }).start();
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(pan, {
+          toValue: 0,
+          useNativeDriver: true,
+        }).start();
+      },
+    })
+  ).current;
+
+  return (
+    <View style={{ width: '100%', flexDirection: 'row', alignItems: 'center' }}>
+      <Animated.View
+        style={{
+          position: 'absolute',
+          left: 16,
+          opacity: pan.interpolate({ inputRange: [0, 50], outputRange: [0, 1] }),
+          transform: [{ scale: pan.interpolate({ inputRange: [0, 50], outputRange: [0.5, 1], extrapolate: 'clamp' }) }]
+        }}
+      >
+        <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.2)', alignItems: 'center', justifyContent: 'center' }}>
+          <Reply size={14} color="#FFF" />
+        </View>
+      </Animated.View>
+      <Animated.View
+        {...(enabled ? panResponder.panHandlers : {})}
+        style={{ flex: 1, transform: [{ translateX: pan }] }}
+      >
+        {children}
+      </Animated.View>
+    </View>
+  );
+}

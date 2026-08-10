@@ -32,7 +32,7 @@ export function LiveChatScreen({
   const [items, setItems] = useState<ListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  
+
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -78,24 +78,24 @@ export function LiveChatScreen({
       setItems((prev) => {
         const contactNum = data.contact?.number;
         if (!contactNum) return prev;
-        
+
         const existingIdx = prev.findIndex(c => {
           const cNum = (c.contact as Record<string, any>)?.number || c.phone || c.number;
           return String(cNum) === String(contactNum);
         });
-        
+
         const newChat: any = existingIdx >= 0 ? { ...prev[existingIdx] } : { contact: data.contact, number: contactNum, unread_count: 0 };
-        
+
         newChat.last_message = data.message;
         if (data.message.type === 'in' && data.message.status !== 'read') {
           newChat.unread_count = Number(newChat.unread_count || 0) + 1;
         }
-        
+
         const nextList = [...prev];
         if (existingIdx >= 0) {
           nextList.splice(existingIdx, 1);
         }
-        
+
         // Only add to list if it fits the current mode, but for simplicity we'll just push to top
         // If mode is 'cases' and this isn't an open case, it might technically not belong, 
         // but it's fine for an optimistic update until they refresh.
@@ -167,7 +167,7 @@ export function LiveChatScreen({
           </Pressable>
         </View>
       </View>
-      
+
       <FlatList
         data={items}
         keyExtractor={(item, index) => String(item.id || item._id || index)}
@@ -179,21 +179,21 @@ export function LiveChatScreen({
             tintColor={theme.emerald}
           />
         }
-      ListEmptyComponent={
-        <LoadState
-          loading={false}
-          error={error}
-          empty={!loading && !error}
-          onRetry={load}
-        />
-      }
-      renderItem={({ item }) => (
-        <ChatCard 
-          item={item} 
-          onPress={(contactNumber, contactName) => onOpenChat(contactNumber, contactName)} 
-        />
-      )}
-    />
+        ListEmptyComponent={
+          <LoadState
+            loading={false}
+            error={error}
+            empty={!loading && !error}
+            onRetry={load}
+          />
+        }
+        renderItem={({ item }) => (
+          <ChatCard
+            item={item}
+            onPress={(contactNumber, contactName) => onOpenChat(contactNumber, contactName)}
+          />
+        )}
+      />
 
       {/* FAB */}
       <Pressable
@@ -215,7 +215,7 @@ export function LiveChatScreen({
         animationType="fade"
         onRequestClose={() => setIsModalVisible(false)}
       >
-        <KeyboardAvoidingView 
+        <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalOverlay}
         >
@@ -226,7 +226,7 @@ export function LiveChatScreen({
                 <X size={24} color={theme.muted} />
               </Pressable>
             </View>
-            
+
             <Text style={[styles.modalSubtitle, { color: theme.muted }]}>
               Enter a phone number with country code to start a new direct chat.
             </Text>
@@ -269,20 +269,20 @@ function ChatCard({ item, onPress }: { item: ListItem, onPress: (contactNumber: 
   const theme = useTheme();
   const contact = (item.contact as Record<string, any>) || {};
   const lastMessage = (item.last_message as Record<string, any>) || {};
-  
+
   const contactNumber = String(contact.number || '');
   const name = String(
     contact.name || contact.number || item.name || item.contact_name || item.phone || 'Untitled',
   );
   const detail = String(
     lastMessage.message ||
-      item.message ||
-      item.status ||
-      item.phone ||
-      item.email ||
-      'No details available',
+    item.message ||
+    item.status ||
+    item.phone ||
+    item.email ||
+    'No details available',
   );
-  
+
   const unreadCount = Number(item.unread_count || 0);
 
   return (
@@ -305,21 +305,22 @@ function ChatCard({ item, onPress }: { item: ListItem, onPress: (contactNumber: 
           </Text>
           {lastMessage.create_date && (
             <Text style={[styles.timeText, { color: theme.muted }]}>
-              {new Date(lastMessage.create_date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+              {new Date(lastMessage.create_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </Text>
           )}
         </View>
         <Text numberOfLines={1} style={[styles.cardDetail, { color: theme.muted }]}>
           {detail}
         </Text>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={[styles.cardMeta, { color: theme.muted }]}>Unread Messages</Text>
-          {unreadCount > 0 && (
+        {unreadCount > 0 && (
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={[styles.cardMeta, { color: theme.muted }]}>Unread Messages</Text>
+
             <View style={[styles.unreadBadge, { backgroundColor: theme.emerald }]}>
               <Text style={styles.unreadText}>{unreadCount}</Text>
             </View>
-          )}
-        </View>
+          </View>
+        )}
       </View>
       <Text style={[styles.arrow, { color: theme.muted }]}>›</Text>
     </Pressable>

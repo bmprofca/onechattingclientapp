@@ -1,6 +1,6 @@
 import { encryptPayload } from '../crypto/encryptPayload';
 
-export const API_BASE_URL = ('http://10.61.240.76:6540').replace(/\/$/, '');
+export const API_BASE_URL = ('https://server.onechatting.com').replace(/\/$/, '');
 export type ApiSession = { token: string; username: string };
 
 export class ApiError extends Error { constructor(message: string, public status?: number) { super(message); } }
