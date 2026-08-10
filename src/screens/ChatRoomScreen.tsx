@@ -392,7 +392,7 @@ export function ChatRoomScreen({
         try {
           const res = await sendMessage(session, projectId, contactNumber, textToSend, currentReply?.wamid);
           setMessages((prev) =>
-            prev.map(m => m.id === tempId ? { ...m, status: 'sent', message_id: res?.data?.message_id || res?.message_id || tempId } : m)
+            prev.map(m => m.id === tempId || m.message_id === tempId ? { ...m, ...res, status: res?.status || 'sent', message_id: res?.message_id || res?.data?.message_id || tempId } : m)
           );
         } catch (err) {
           console.warn('Failed to send message', err);
@@ -440,7 +440,7 @@ export function ChatRoomScreen({
     try {
       const res = await sendTemplate(session, projectId, contactNumber, templateId, components);
       setMessages((prev) =>
-        prev.map(m => m.id === tempId ? { ...m, status: 'sent', message_id: res?.data?.message_id || res?.message_id || tempId } : m)
+        prev.map(m => m.id === tempId || m.message_id === tempId ? { ...m, ...res, status: res?.status || 'sent', message_id: res?.message_id || res?.data?.message_id || tempId } : m)
       );
     } catch (err) {
       console.warn('Failed to send template', err);
