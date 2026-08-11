@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { BackHandler, Modal, Pressable, ScrollView, StyleSheet, Text, View, Animated, Easing } from 'react-native';
-import { ArrowLeftRight, Home, MessageCircle, Megaphone, User, Wallet, MoreVertical, Briefcase, Info, HelpCircle } from 'lucide-react-native';
+import { ArrowLeftRight, Home, MessageCircle, Megaphone, User, Wallet, MoreVertical, Briefcase, Info, HelpCircle, Brain, Settings, ReceiptText } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { Session } from '../services/session';
 import { useTheme } from '../theme/theme';
@@ -14,6 +14,11 @@ import { ProjectsScreen } from './ProjectsScreen';
 import { WalletScreen } from './WalletScreen';
 import { WabaOnboardingScreen } from './WabaOnboardingScreen';
 import { SupportScreen } from './SupportScreen';
+import { ContextConfigScreen } from './ContextConfigScreen';
+import { ProjectConfigScreen } from './ProjectConfigScreen';
+import { AgentConfigScreen } from './AgentConfigScreen';
+import { TransactionsScreen } from './TransactionsScreen';
+import { AiBillsScreen } from './AiBillsScreen';
 import { socketManager, ConnectionStatus } from '../services/socketManager';
 
 type Page = 'dashboard' | 'inbox' | 'campaigns' | 'profile' | 'wallet' | 'projects';
@@ -57,6 +62,11 @@ export function WorkspaceScreen({
   const [walletTarget, setWalletTarget] = useState(false); // full-screen wallet, used from full mode
   const [wabaTarget, setWabaTarget] = useState(false);
   const [supportTarget, setSupportTarget] = useState(false);
+  const [contextConfigTarget, setContextConfigTarget] = useState(false);
+  const [projectConfigTarget, setProjectConfigTarget] = useState(false);
+  const [agentConfigTarget, setAgentConfigTarget] = useState(false);
+  const [transactionsTarget, setTransactionsTarget] = useState(false);
+  const [aiBillsTarget, setAiBillsTarget] = useState(false);
   const [projectsTarget, setProjectsTarget] = useState(false); // full-screen projects hub, used from full mode
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
@@ -99,10 +109,15 @@ export function WorkspaceScreen({
     if (walletTarget) { setWalletTarget(false); return true; }
     if (wabaTarget) { setWabaTarget(false); return true; }
     if (supportTarget) { setSupportTarget(false); return true; }
+    if (contextConfigTarget) { setContextConfigTarget(false); return true; }
+    if (agentConfigTarget) { setAgentConfigTarget(false); return true; }
+    if (projectConfigTarget) { setProjectConfigTarget(false); return true; }
+    if (transactionsTarget) { setTransactionsTarget(false); return true; }
+    if (aiBillsTarget) { setAiBillsTarget(false); return true; }
     if (projectsTarget) { setProjectsTarget(false); return true; }
     if (page !== 'dashboard') { setPage('dashboard'); return true; }
     return false;
-  }, [chatTarget, campaignTarget, walletTarget, wabaTarget, supportTarget, projectsTarget, page]);
+  }, [chatTarget, campaignTarget, walletTarget, wabaTarget, supportTarget, contextConfigTarget, agentConfigTarget, projectConfigTarget, transactionsTarget, projectsTarget, page]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
@@ -157,6 +172,26 @@ export function WorkspaceScreen({
 
   if (supportTarget) {
     return <SupportScreen session={apiSession} onBack={() => setSupportTarget(false)} />;
+  }
+
+  if (contextConfigTarget) {
+    return <ContextConfigScreen projectId={projectId} session={apiSession} onBack={() => { setContextConfigTarget(false); setProjectConfigTarget(true); }} />;
+  }
+
+  if (agentConfigTarget) {
+    return <AgentConfigScreen projectId={projectId} session={apiSession} onBack={() => { setAgentConfigTarget(false); setProjectConfigTarget(true); }} />;
+  }
+
+  if (projectConfigTarget) {
+    return <ProjectConfigScreen projectId={projectId} session={apiSession} onBack={() => setProjectConfigTarget(false)} onOpenAgent={() => { setProjectConfigTarget(false); setAgentConfigTarget(true); }} onOpenContext={() => { setProjectConfigTarget(false); setContextConfigTarget(true); }} />;
+  }
+
+  if (transactionsTarget) {
+    return <TransactionsScreen session={apiSession} onBack={() => setTransactionsTarget(false)} />;
+  }
+
+  if (aiBillsTarget) {
+    return <AiBillsScreen projectId={projectId} session={apiSession} onBack={() => setAiBillsTarget(false)} />;
   }
 
   // Full-mode "Projects" hub (create/manage/switch), reached from the menu.
@@ -381,6 +416,35 @@ export function WorkspaceScreen({
                 <HelpCircle size={18} color={theme.ink} />
                 <Text style={[styles.menuItemText, { color: theme.ink }]}>Support</Text>
               </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: theme.cardHover }]}
+                onPress={() => { setIsMenuVisible(false); setProjectConfigTarget(true); }}
+              >
+                <Settings size={18} color={theme.ink} />
+                <Text style={[styles.menuItemText, { color: theme.ink }]}>Configuration</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: theme.cardHover }]}
+                onPress={() => { setIsMenuVisible(false); setTransactionsTarget(true); }}
+              >
+                <ReceiptText size={18} color={theme.ink} />
+                <Text style={[styles.menuItemText, { color: theme.ink }]}>Transactions</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: theme.cardHover }]}
+                onPress={() => { setIsMenuVisible(false); setContextConfigTarget(true); }}
+              >
+                <Brain size={18} color={theme.ink} />
+                <Text style={[styles.menuItemText, { color: theme.ink }]}>AI Context</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: theme.cardHover }]}
+                onPress={() => { setIsMenuVisible(false); setAiBillsTarget(true); }}
+              >
+                <ReceiptText size={18} color={theme.ink} />
+                <Text style={[styles.menuItemText, { color: theme.ink }]}>AI Bills</Text>
+              </Pressable>
+
             </Animated.View>
           </Pressable>
         </Modal>
@@ -450,9 +514,9 @@ const styles = StyleSheet.create({
   menuOverlay: { flex: 1, backgroundColor: 'transparent' },
   menuContent: {
     position: 'absolute',
-    top: 125,
+    top: 120,
     right: 5,
-    width: 150,
+    width: 180,
     borderRadius: 12,
     borderWidth: 1,
     paddingVertical: 8,

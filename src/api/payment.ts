@@ -65,3 +65,16 @@ export async function checkPaymentStatus(
 ): Promise<PaymentStatusResponse> {
   return post<PaymentStatusResponse>('/payment/payment-status', { order_id }, session);
 }
+
+export type TransactionHistoryParams = {
+  page_no: number;
+  limit: number;
+  project_ids?: string[];
+  from_date?: string;
+  to_date?: string;
+  transaction_type?: string;
+  type?: '0' | '1';
+};
+
+export const getTransactionHistory = (session: ApiSession, params: TransactionHistoryParams) =>
+  post<any>('/payment/transaction-history', params, session);
