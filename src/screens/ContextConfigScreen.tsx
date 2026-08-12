@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, ActivityIndicator, Alert, Modal, KeyboardAvoidingView, Platform } from 'react-native';
-import { ArrowLeft, Save, Plus, Trash2, X, FileText, Type, HelpCircle, Info, UploadCloud } from 'lucide-react-native';
+import { ArrowLeft, Save, Plus, Trash2, X, FileText, Type, HelpCircle, Info, UploadCloud, ChevronDown, ChevronUp } from 'lucide-react-native';
 import Toast from 'react-native-toast-message';
 import {
   errorCodes,
@@ -36,6 +36,7 @@ type Section = {
   title: string;
   type: SectionType;
   items: Item[];
+  collapsed?: boolean;
 };
 type BotSettings = {
   autoReplyStatus: boolean;
@@ -78,6 +79,7 @@ const normalizeSection = (value: unknown): Section | null => {
     title: typeof source.title === 'string' ? source.title : 'Untitled Section',
     type: source.type,
     items: items.map(item => ({ ...(item && typeof item === 'object' ? item : {}), id: (item as Item)?.id || generateId() })),
+    collapsed: false,
   };
 };
 
@@ -102,6 +104,9 @@ export function ContextConfigScreen({
   });
   
   const [showTypeModal, setShowTypeModal] = useState(false);
+  // When set, the type modal is being used to CHANGE an existing section's
+  // type rather than create a brand new section.
+  const [changeTypeSectionId, setChangeTypeSectionId] = useState<string | null>(null);
   const [uploadingDocId, setUploadingDocId] = useState<string | null>(null);
 
   // Load context
@@ -169,11 +174,13 @@ export function ContextConfigScreen({
 
     setSaving(true);
     try {
+      // Strip UI-only fields (collapsed) before persisting
+      const cleanSections = sections.map(({ collapsed, ...rest }) => rest);
       await updateBotSettings(session, projectId, {
         auto_reply_status: botSettings.autoReplyStatus ? 1 : 0,
         ai_provider: botSettings.provider,
         ai_model: botSettings.model,
-        context: JSON.stringify({ sections }),
+        context: JSON.stringify({ sections: cleanSections }),
       });
       Toast.show({ type: 'success', text1: 'Saved', text2: 'Company context saved successfully' });
       onBack();
@@ -193,6 +200,7 @@ export function ContextConfigScreen({
       title: 'New Section',
       type: typeId as SectionType,
       items: [createEmptyItem(typeId as SectionType)],
+      collapsed: false,
     };
     
     setSections(current => [...current, newSection]);
@@ -207,6 +215,40 @@ export function ContextConfigScreen({
         }
       }
     ]);
+  };
+
+  // Opens the type picker in "change type" mode for an existing section.
+  const openChangeType = (sectionId: string) => {
+    setChangeTypeSectionId(sectionId);
+    setShowTypeModal(true);
+  };
+
+  // Changing a section's type resets its items to a single empty item of
+  // the new type, mirroring the web behavior.
+  const changeSectionType = (sectionId: string, typeId: string) => {
+    setSections(current => current.map(s => {
+      if (s.id !== sectionId) return s;
+      return { ...s, type: typeId as SectionType, items: [createEmptyItem(typeId as SectionType)] };
+    }));
+    setShowTypeModal(false);
+    setChangeTypeSectionId(null);
+  };
+
+  const handleTypeModalSelect = (typeId: string) => {
+    if (changeTypeSectionId) {
+      changeSectionType(changeTypeSectionId, typeId);
+    } else {
+      addSection(typeId);
+    }
+  };
+
+  const closeTypeModal = () => {
+    setShowTypeModal(false);
+    setChangeTypeSectionId(null);
+  };
+
+  const toggleSectionCollapse = (sectionId: string) => {
+    setSections(current => current.map(s => (s.id === sectionId ? { ...s, collapsed: !s.collapsed } : s)));
   };
 
   const addItem = (sectionId: string, type: SectionType) => {
@@ -446,55 +488,75 @@ export function ContextConfigScreen({
                 <Text style={[styles.emptyDesc, { color: theme.muted }]}>Start by adding a section below to train your AI.</Text>
               </View>
             ) : (
-              sections.map((section) => (
-                <View key={section.id} style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                  <View style={[styles.sectionHeader, { borderBottomColor: theme.border }]}>
-                    <TextInput
-                      style={[styles.sectionTitleInput, { color: theme.ink }]}
-                      value={section.title}
-                      onChangeText={v => updateSectionTitle(section.id, v)}
-                      placeholder="Section Title (e.g. Business Hours)"
-                      placeholderTextColor={theme.muted}
-                    />
-                    <View style={styles.sectionBadge}>
-                      <Text style={styles.sectionBadgeText}>{section.type.toUpperCase()}</Text>
-                    </View>
-                    <Pressable onPress={() => removeSection(section.id)} hitSlop={8}>
-                      <Trash2 size={18} color={theme.danger} />
-                    </Pressable>
-                  </View>
-
-                  <View style={styles.sectionBody}>
-                    {section.items.map((item, index) => (
-                      <View key={item.id} style={styles.itemWrapper}>
-                        {renderSectionContent(section, item, index)}
-                        {section.items.length > 1 && (
-                          <Pressable
-                            onPress={() => removeItem(section.id, item.id)}
-                            style={styles.removeItemBtn}
-                            hitSlop={8}
-                          >
-                            <X size={16} color={theme.danger} />
-                          </Pressable>
-                        )}
+              sections.map((section) => {
+                const typeDef = SECTION_TYPES.find(t => t.id === section.type) || SECTION_TYPES[0];
+                const TypeIcon = typeDef.icon;
+                return (
+                  <View key={section.id} style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                    <View style={[styles.sectionHeader, { borderBottomColor: theme.border }]}>
+                      <View style={[styles.typeIconBg, { backgroundColor: theme.canvas }]}>
+                        <TypeIcon size={16} color={theme.mint} />
                       </View>
-                    ))}
-                    
-                    <Pressable
-                      style={[styles.addItemBtn, { borderColor: theme.mint }]}
-                      onPress={() => addItem(section.id, section.type)}
-                    >
-                      <Plus size={16} color={theme.mint} />
-                      <Text style={[styles.addItemText, { color: theme.mint }]}>Add Another Item</Text>
-                    </Pressable>
+                      <TextInput
+                        style={[styles.sectionTitleInput, { color: theme.ink }]}
+                        value={section.title}
+                        onChangeText={v => updateSectionTitle(section.id, v)}
+                        placeholder="Section Title (e.g. Business Hours)"
+                        placeholderTextColor={theme.muted}
+                      />
+                      <Pressable
+                        style={[styles.sectionTypeSelect, { borderColor: theme.border }]}
+                        onPress={() => openChangeType(section.id)}
+                      >
+                        <Text style={[styles.sectionBadgeText, { color: theme.ink }]}>{typeDef.label.split(' (')[0]}</Text>
+                        <ChevronDown size={14} color={theme.muted} />
+                      </Pressable>
+                      <Pressable onPress={() => toggleSectionCollapse(section.id)} hitSlop={8} style={{ padding: 2 }}>
+                        {section.collapsed ? (
+                          <ChevronDown size={18} color={theme.muted} />
+                        ) : (
+                          <ChevronUp size={18} color={theme.muted} />
+                        )}
+                      </Pressable>
+                      <Pressable onPress={() => removeSection(section.id)} hitSlop={8}>
+                        <Trash2 size={18} color={theme.danger} />
+                      </Pressable>
+                    </View>
+
+                    {!section.collapsed && (
+                      <View style={styles.sectionBody}>
+                        {section.items.map((item, index) => (
+                          <View key={item.id} style={styles.itemWrapper}>
+                            {renderSectionContent(section, item, index)}
+                            {section.items.length > 1 && (
+                              <Pressable
+                                onPress={() => removeItem(section.id, item.id)}
+                                style={styles.removeItemBtn}
+                                hitSlop={8}
+                              >
+                                <X size={16} color={theme.danger} />
+                              </Pressable>
+                            )}
+                          </View>
+                        ))}
+
+                        <Pressable
+                          style={[styles.addItemBtn, { borderColor: theme.mint }]}
+                          onPress={() => addItem(section.id, section.type)}
+                        >
+                          <Plus size={16} color={theme.mint} />
+                          <Text style={[styles.addItemText, { color: theme.mint }]}>Add Another Item</Text>
+                        </Pressable>
+                      </View>
+                    )}
                   </View>
-                </View>
-              ))
+                );
+              })
             )}
 
             <Pressable
               style={[styles.addSectionBtn, { backgroundColor: theme.mint }]}
-              onPress={() => setShowTypeModal(true)}
+              onPress={() => { setChangeTypeSectionId(null); setShowTypeModal(true); }}
             >
               <Plus size={20} color={theme.mintText} />
               <Text style={[styles.addSectionBtnText, { color: theme.mintText }]}>Add New Section</Text>
@@ -505,20 +567,27 @@ export function ContextConfigScreen({
         </KeyboardAvoidingView>
       )}
 
-      {/* Type Selection Modal */}
-      <Modal visible={showTypeModal} transparent animationType="fade" onRequestClose={() => setShowTypeModal(false)}>
+      {/* Type Selection / Change Modal */}
+      <Modal visible={showTypeModal} transparent animationType="fade" onRequestClose={closeTypeModal}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.ink }]}>Choose Section Type</Text>
-              <Pressable onPress={() => setShowTypeModal(false)} hitSlop={8}><X size={24} color={theme.muted} /></Pressable>
+              <Text style={[styles.modalTitle, { color: theme.ink }]}>
+                {changeTypeSectionId ? 'Change Section Type' : 'Choose Section Type'}
+              </Text>
+              <Pressable onPress={closeTypeModal} hitSlop={8}><X size={24} color={theme.muted} /></Pressable>
             </View>
+            {changeTypeSectionId && (
+              <Text style={[styles.modalWarning, { color: theme.muted }]}>
+                Changing the type will reset this section's items.
+              </Text>
+            )}
             <View style={styles.typeList}>
               {SECTION_TYPES.map(type => (
                 <Pressable
                   key={type.id}
                   style={({ pressed }) => [styles.typeOption, { borderColor: theme.border, backgroundColor: pressed ? theme.cardHover : theme.surface }]}
-                  onPress={() => addSection(type.id)}
+                  onPress={() => handleTypeModalSelect(type.id)}
                 >
                   <View style={[styles.typeIconBg, { backgroundColor: theme.canvas }]}>
                     <type.icon size={20} color={theme.mint} />
@@ -590,13 +659,16 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     padding: 0,
   },
-  sectionBadge: {
-    backgroundColor: '#E2E8F0',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+  sectionTypeSelect: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
-  sectionBadgeText: { fontSize: 10, fontWeight: '800', color: '#475569' },
+  sectionBadgeText: { fontSize: 11, fontWeight: '700' },
   
   sectionBody: { padding: 12 },
   itemWrapper: {
@@ -662,9 +734,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 20,
+    marginBottom: 8,
   },
   modalTitle: { fontSize: 18, fontWeight: '700' },
+  modalWarning: { fontSize: 12, marginBottom: 16 },
   typeList: { gap: 12 },
   typeOption: {
     flexDirection: 'row',
