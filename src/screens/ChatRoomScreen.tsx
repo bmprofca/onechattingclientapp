@@ -15,7 +15,7 @@ import {
   Animated,
   PanResponder,
 } from 'react-native';
-import Svg, { Circle, Path, Pattern, Rect } from 'react-native-svg';
+import Svg, { Circle, G, Path, Pattern, Rect } from 'react-native-svg';
 import { Clock, Check, CheckCheck, AlertCircle, Info, Plus, X, Reply, CornerUpLeft } from 'lucide-react-native';
 import {
   launchImageLibrary,
@@ -1214,16 +1214,23 @@ const styles = StyleSheet.create({
 });
 
 function ChatWallpaper({isDark}: {isDark: boolean}) {
-  const stroke = isDark ? '#8696A0' : '#9AAFA8';
+  const stroke = isDark ? '#A5BBC3' : '#8EA69C';
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      <Svg width="100%" height="100%" opacity={isDark ? 0.09 : 0.16}>
-        <Pattern id="chatDoodle" width="120" height="120" patternUnits="userSpaceOnUse">
-          <Path d="M14 22c0-7 6-12 13-12s13 5 13 12-6 12-13 12c-2 0-4 0-6-1l-7 4 2-7c-1-2-2-5-2-8Z" fill="none" stroke={stroke} strokeWidth="1.4" />
-          <Circle cx="94" cy="21" r="8" fill="none" stroke={stroke} strokeWidth="1.3" />
-          <Path d="m89 21 4 4 7-9M70 48l5 5m0-5-5 5M22 70c8-8 19-8 27 0M84 77l14 7-5 4 2 10-11-7-11 7 2-10-5-4 14-7Z" fill="none" stroke={stroke} strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
-          <Path d="M30 104c0-5 4-9 9-9s9 4 9 9-4 9-9 9l-5 3 1-5c-3-2-5-4-5-7ZM104 103h-15m8-7-8 7 8 7" fill="none" stroke={stroke} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+      <Svg width="100%" height="100%" opacity={isDark ? 0.11 : 0.19}>
+        <Pattern id="chatDoodle" width="154" height="146" patternUnits="userSpaceOnUse">
+          <G transform="rotate(-12 27 22)"><Path d="M10 20c0-8 7-14 16-14s16 6 16 14-7 14-16 14c-3 0-6-1-8-2l-9 5 3-9c-1-2-2-5-2-8Z" fill="none" stroke={stroke} strokeWidth="1.25" /><Circle cx="20" cy="20" r="1.2" fill={stroke} /><Circle cx="26" cy="20" r="1.2" fill={stroke} /><Circle cx="32" cy="20" r="1.2" fill={stroke} /></G>
+          <G transform="rotate(18 92 20)"><Path d="m80 18 6 6 12-15M101 12l7 7m0-7-7 7" fill="none" stroke={stroke} strokeWidth="1.45" strokeLinecap="round" strokeLinejoin="round" /></G>
+          <G transform="rotate(-24 132 39)"><Path d="M123 38c0-5 4-9 9-9s9 4 9 9-4 9-9 9l-5 4 1-6c-3-2-5-4-5-7Z" fill="none" stroke={stroke} strokeWidth="1.2" /></G>
+          <G transform="rotate(12 55 61)"><Path d="M43 61c7-9 19-9 26 0M49 63c3 5 11 7 15 0" fill="none" stroke={stroke} strokeWidth="1.2" strokeLinecap="round" /></G>
+          <G transform="rotate(-15 100 65)"><Path d="M89 58h18v15H89zM93 58v-4h10v4M95 66h6" fill="none" stroke={stroke} strokeWidth="1.2" strokeLinejoin="round" /></G>
+          <G transform="rotate(22 23 100)"><Path d="M15 94c0-4 3-7 7-7h4c4 0 7 3 7 7v5c0 4-3 7-7 7h-4c-4 0-7-3-7-7v-5Z M19 106v4m10-4v4m-10-19h10" fill="none" stroke={stroke} strokeWidth="1.1" strokeLinecap="round" /></G>
+          <G transform="rotate(-17 66 113)"><Path d="M55 113c0-6 5-11 11-11s11 5 11 11-5 11-11 11l-6 4 2-7c-4-2-7-5-7-8Z M61 113l3 3 6-7" fill="none" stroke={stroke} strokeWidth="1.15" strokeLinecap="round" strokeLinejoin="round" /></G>
+          <G transform="rotate(10 120 112)"><Path d="m110 105 10-5 10 5v10l-10 5-10-5v-10ZM120 100v20M110 105l10 6 10-6" fill="none" stroke={stroke} strokeWidth="1.1" strokeLinejoin="round" /></G>
+          <G transform="rotate(-20 143 84)"><Path d="M136 82h13m-7-6 7 6-7 6" fill="none" stroke={stroke} strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" /></G>
+          <Circle cx="78" cy="87" r="3" fill="none" stroke={stroke} strokeWidth="1.1" />
+          <Path d="m73 91 10-8M3 57l5 5m0-5-5 5M143 132l4 4m0-4-4 4" fill="none" stroke={stroke} strokeWidth="1.1" strokeLinecap="round" />
         </Pattern>
         <Rect width="100%" height="100%" fill="url(#chatDoodle)" />
       </Svg>
