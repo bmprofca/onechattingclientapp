@@ -22,6 +22,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     reactNativeFactory = factory
 
     window = UIWindow(frame: UIScreen.main.bounds)
+    // Prevent a bright launch-to-JS flash and keep native chrome aligned with
+    // the React Native WhatsApp-inspired light/dark palettes.
+    window?.backgroundColor = UIColor { traits in
+      traits.userInterfaceStyle == .dark
+        ? UIColor(red: 11.0 / 255.0, green: 20.0 / 255.0, blue: 26.0 / 255.0, alpha: 1)
+        : UIColor(red: 247.0 / 255.0, green: 248.0 / 255.0, blue: 250.0 / 255.0, alpha: 1)
+    }
 
     factory.startReactNative(
       withModuleName: "OneChatClient",
