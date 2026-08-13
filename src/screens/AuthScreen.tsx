@@ -1,10 +1,11 @@
-import React, {useState} from 'react';
-import {ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View} from 'react-native';
+import React, {useMemo, useState} from 'react';
+import {ActivityIndicator, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View} from 'react-native';
 import Toast from 'react-native-toast-message';
-import { Briefcase, Globe, Mail, Phone, User, KeyRound } from 'lucide-react-native';
+import { Briefcase, ChevronDown, Globe, Mail, Phone, User, KeyRound, X } from 'lucide-react-native';
 import { login, register, sendOtp } from '../api/auth';
 import { saveSession, Session } from '../services/session';
 import { useTheme } from '../theme/theme';
+import {countryCodes} from '../utils/countryCodes';
 
 type AuthMode = 'login' | 'signup';
 
@@ -16,6 +17,8 @@ export function AuthScreen({onAuthenticated}: {onAuthenticated: (session: Sessio
   const [firmName, setFirmName] = useState('');
   const [mobile, setMobile] = useState('');
   const [countryCode, setCountryCode] = useState('+91');
+  const [countryPickerOpen, setCountryPickerOpen] = useState(false);
+  const [countrySearch, setCountrySearch] = useState('');
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<AuthMode>('login');
@@ -100,6 +103,19 @@ export function AuthScreen({onAuthenticated}: {onAuthenticated: (session: Sessio
   const fieldStyle = {
     backgroundColor: theme.canvas,
     borderColor: theme.border,
+  };
+  const filteredCountryCodes = useMemo(() => {
+    const query = countrySearch.trim().toLowerCase();
+    if (!query) return countryCodes;
+    return countryCodes.filter(country =>
+      country.name.toLowerCase().includes(query) || country.dialCode.includes(query) || country.code.toLowerCase().includes(query),
+    );
+  }, [countrySearch]);
+
+  const chooseCountry = (dialCode: string) => {
+    setCountryCode(dialCode);
+    setCountryPickerOpen(false);
+    setCountrySearch('');
   };
 
   return (
@@ -194,14 +210,15 @@ export function AuthScreen({onAuthenticated}: {onAuthenticated: (session: Sessio
                 <Text style={[styles.label, {color: theme.muted}]}>MOBILE NUMBER</Text>
                 <View style={[styles.inputRow, fieldStyle]}>
                   <Globe size={17} color={theme.muted} strokeWidth={2.25} />
-                  <TextInput
-                    value={countryCode}
-                    onChangeText={setCountryCode}
-                    keyboardType="phone-pad"
-                    placeholder="+91"
-                    placeholderTextColor={theme.muted}
-                    style={[styles.countryCodeInput, {color: theme.ink, borderRightColor: theme.border}]}
-                  />
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Select country code"
+                    onPress={() => setCountryPickerOpen(true)}
+                    style={[styles.countryCodePicker, {borderRightColor: theme.border}]}
+                  >
+                    <Text style={[styles.countryCodeText, {color: theme.ink}]}>{countryCode}</Text>
+                    <ChevronDown size={14} color={theme.muted} />
+                  </Pressable>
                   <Phone size={17} color={theme.muted} strokeWidth={2.25} />
                   <TextInput
                     value={mobile}
@@ -259,6 +276,38 @@ export function AuthScreen({onAuthenticated}: {onAuthenticated: (session: Sessio
           <Text style={[styles.terms, {color: theme.muted}]}>Protected with secure, encrypted access.</Text>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <Modal visible={countryPickerOpen} animationType="slide" transparent onRequestClose={() => setCountryPickerOpen(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.countryModal, {backgroundColor: theme.surface}]}>
+            <View style={[styles.modalHeader, {borderBottomColor: theme.border}]}>
+              <View>
+                <Text style={[styles.modalTitle, {color: theme.ink}]}>Select country or region</Text>
+                <Text style={[styles.modalSubtitle, {color: theme.muted}]}>Choose the phone country code</Text>
+              </View>
+              <Pressable accessibilityRole="button" accessibilityLabel="Close country selector" onPress={() => setCountryPickerOpen(false)} style={styles.closeButton}>
+                <X size={22} color={theme.ink} />
+              </Pressable>
+            </View>
+            <View style={[styles.searchRow, {backgroundColor: theme.canvas, borderColor: theme.border}]}>
+              <Globe size={17} color={theme.muted} />
+              <TextInput autoFocus value={countrySearch} onChangeText={setCountrySearch} placeholder="Search country or code" placeholderTextColor={theme.muted} style={[styles.searchInput, {color: theme.ink}]} />
+            </View>
+            <FlatList
+              data={filteredCountryCodes}
+              keyExtractor={country => country.code}
+              keyboardShouldPersistTaps="handled"
+              renderItem={({item}) => (
+                <Pressable onPress={() => chooseCountry(item.dialCode)} style={[styles.countryOption, {borderBottomColor: theme.border}]}>
+                  <Text style={[styles.countryName, {color: theme.ink}]}>{item.name}</Text>
+                  <Text style={[styles.countryDialCode, {color: item.dialCode === countryCode ? theme.emerald : theme.muted}]}>{item.dialCode}</Text>
+                </Pressable>
+              )}
+              ListEmptyComponent={<Text style={[styles.emptyCountries, {color: theme.muted}]}>No country or region found.</Text>}
+            />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -283,7 +332,8 @@ const styles = StyleSheet.create({
   label: {fontSize: 10, fontWeight: '800', letterSpacing: 1.1, marginBottom: 7},
   inputRow: {flexDirection: 'row', alignItems: 'center', height: 52, borderWidth: 1, borderRadius: 13, paddingHorizontal: 14, gap: 10},
   input: {flex: 1, fontSize: 15, height: '100%'},
-  countryCodeInput: {width: 52, fontSize: 15, height: '100%', borderRightWidth: 1, marginRight: 4, textAlign: 'center'},
+  countryCodePicker: {width: 76, height: '100%', borderRightWidth: 1, marginRight: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2},
+  countryCodeText: {fontSize: 14, fontWeight: '700'},
   button: {height: 54, marginTop: 22, borderRadius: 14, justifyContent: 'center', alignItems: 'center', shadowOpacity: .35, shadowRadius: 9, elevation: 4},
   buttonPressed: {opacity: 0.9, transform: [{scale: 0.99}]},
   buttonText: {color: '#FFF', fontSize: 15, fontWeight: '800'},
@@ -291,4 +341,16 @@ const styles = StyleSheet.create({
   forgotLink: {marginTop: 16, alignItems: 'center'},
   link: {fontSize: 13, fontWeight: '800'},
   terms: {fontSize: 11, textAlign: 'center', marginTop: 24},
+  modalBackdrop: {flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)'},
+  countryModal: {maxHeight: '82%', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 18},
+  modalHeader: {minHeight: 76, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1},
+  modalTitle: {fontSize: 18, fontWeight: '800'},
+  modalSubtitle: {fontSize: 13, marginTop: 3},
+  closeButton: {padding: 10, marginRight: -10},
+  searchRow: {height: 48, borderWidth: 1, borderRadius: 12, margin: 16, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', gap: 9},
+  searchInput: {flex: 1, height: '100%', fontSize: 15},
+  countryOption: {minHeight: 54, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: StyleSheet.hairlineWidth},
+  countryName: {fontSize: 15, fontWeight: '600', flex: 1, paddingRight: 12},
+  countryDialCode: {fontSize: 14, fontWeight: '800'},
+  emptyCountries: {textAlign: 'center', paddingVertical: 36, fontSize: 14},
 });
