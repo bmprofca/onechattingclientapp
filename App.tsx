@@ -80,16 +80,6 @@ export default function App() {
     socketManager.setProjectId(projectId);
   };
 
-  // Clears the selected project (e.g. "switch workspace") without touching
-  // the projects list itself.
-  const deselectProject = async () => {
-    if (!session) return;
-    const updated = { ...session, selectedProjectId: undefined };
-    await saveSession(updated);
-    setSession(updated);
-    socketManager.setProjectId(null);
-  };
-
   const handleProjectCreated = async (newProject: { id: string; name: string }) => {
     if (!session) return;
     const updated = {
@@ -141,7 +131,6 @@ export default function App() {
           <WorkspaceScreen
             session={session}
             onSelectProject={selectProject}
-            onDeselectProject={deselectProject}
             onProjectCreated={handleProjectCreated}
             onSignOut={async () => {
               await clearSession();

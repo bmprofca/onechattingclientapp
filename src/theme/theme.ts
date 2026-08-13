@@ -33,7 +33,7 @@ export const darkColors = {
   // WhatsApp dark uses blue-black surfaces with an emerald action color.
   canvas: '#060c10ff',
   surface: '#111B21',
-  header: '#0b0c0dff',
+  header: '#0c1115ff',
   border: '#2A3942',
   ink: '#ffffffd8',
   muted: '#8696A0',

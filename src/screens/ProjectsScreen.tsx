@@ -19,8 +19,8 @@ export function ProjectsScreen({
 }: {
   session: ApiSession;
   projects: Project[];
-  onSelect: (projectId: string) => void;
-  onProjectCreated: (newProject: Project) => void;
+  onSelect: (projectId: string) => void | Promise<void>;
+  onProjectCreated: (newProject: Project) => void | Promise<void>;
   onClose?: () => void;
   onRechargeWallet?: () => void;
 }) {
@@ -135,7 +135,7 @@ export function ProjectsScreen({
         renderItem={({ item }) => (
           <Pressable
             accessibilityRole="button"
-            onPress={() => onSelect(item.id)}
+            onPress={() => { void onSelect(item.id); }}
             style={({ pressed }) => [
               styles.card,
               { backgroundColor: theme.surface, borderColor: theme.border, shadowColor: theme.shadow },

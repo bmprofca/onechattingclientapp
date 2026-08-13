@@ -15,6 +15,7 @@ import {
   Animated,
   PanResponder,
 } from 'react-native';
+import Svg, { Circle, Path, Pattern, Rect } from 'react-native-svg';
 import { Clock, Check, CheckCheck, AlertCircle, Info, Plus, X, Reply, CornerUpLeft } from 'lucide-react-native';
 import {
   launchImageLibrary,
@@ -664,6 +665,7 @@ export function ChatRoomScreen({
 
       {/* Message List area */}
       <View style={[styles.chatBackground, { backgroundColor: theme.chatBg }]}>
+        <ChatWallpaper isDark={theme.isDark} />
         <FlatList
           data={messages}
           keyExtractor={item => String(item.id || item.message_id)}
@@ -1210,6 +1212,24 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 });
+
+function ChatWallpaper({isDark}: {isDark: boolean}) {
+  const stroke = isDark ? '#8696A0' : '#9AAFA8';
+
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <Svg width="100%" height="100%" opacity={isDark ? 0.09 : 0.16}>
+        <Pattern id="chatDoodle" width="120" height="120" patternUnits="userSpaceOnUse">
+          <Path d="M14 22c0-7 6-12 13-12s13 5 13 12-6 12-13 12c-2 0-4 0-6-1l-7 4 2-7c-1-2-2-5-2-8Z" fill="none" stroke={stroke} strokeWidth="1.4" />
+          <Circle cx="94" cy="21" r="8" fill="none" stroke={stroke} strokeWidth="1.3" />
+          <Path d="m89 21 4 4 7-9M70 48l5 5m0-5-5 5M22 70c8-8 19-8 27 0M84 77l14 7-5 4 2 10-11-7-11 7 2-10-5-4 14-7Z" fill="none" stroke={stroke} strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
+          <Path d="M30 104c0-5 4-9 9-9s9 4 9 9-4 9-9 9l-5 3 1-5c-3-2-5-4-5-7ZM104 103h-15m8-7-8 7 8 7" fill="none" stroke={stroke} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+        </Pattern>
+        <Rect width="100%" height="100%" fill="url(#chatDoodle)" />
+      </Svg>
+    </View>
+  );
+}
 
 function SwipeableMessageWrapper({ children, onSwipe, enabled }: { children: React.ReactNode, onSwipe: () => void, enabled: boolean }) {
   const pan = React.useRef(new Animated.Value(0)).current;

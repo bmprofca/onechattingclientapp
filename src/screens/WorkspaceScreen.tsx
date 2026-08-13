@@ -42,14 +42,12 @@ const LIMITED_TABS: { key: Page; label: string; icon: typeof Home }[] = [
 export function WorkspaceScreen({
   session,
   onSelectProject,
-  onDeselectProject,
   onProjectCreated,
   onSignOut,
 }: {
   session: Session;
-  onSelectProject: (projectId: string) => void;
-  onDeselectProject: () => void;
-  onProjectCreated: (newProject: { id: string; name: string }) => void;
+  onSelectProject: (projectId: string) => void | Promise<void>;
+  onProjectCreated: (newProject: { id: string; name: string }) => void | Promise<void>;
   onSignOut: () => void;
 }) {
   const theme = useTheme();
@@ -76,9 +74,9 @@ export function WorkspaceScreen({
     [session.token, session.username],
   );
 
-  // If the user switches into/out of having a project, land back on Home
-  // rather than staying on a tab that no longer exists (e.g. 'inbox' when
-  // they had a project selected, then deselected it).
+  // Only entering/leaving workspace mode resets the page. Switching between
+  // projects keeps the current page mounted and its projectId-aware loaders
+  // fetch the new workspace data.
   useEffect(() => {
     setPage('dashboard');
   }, [hasProject]);
@@ -200,8 +198,8 @@ export function WorkspaceScreen({
       <ProjectsScreen
         session={apiSession}
         projects={session.projects || []}
-        onSelect={(id) => { onSelectProject(id); setProjectsTarget(false); }}
-        onProjectCreated={(proj) => { onProjectCreated(proj); onSelectProject(proj.id); setProjectsTarget(false); }}
+        onSelect={async (id) => { await onSelectProject(id); setProjectsTarget(false); }}
+        onProjectCreated={async (proj) => { await onProjectCreated(proj); await onSelectProject(proj.id); setProjectsTarget(false); }}
         onClose={() => setProjectsTarget(false)}
         onRechargeWallet={() => { setProjectsTarget(false); setWalletTarget(true); }}
       />
@@ -261,7 +259,7 @@ export function WorkspaceScreen({
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Choose another project"
-                  onPress={onDeselectProject}
+                  onPress={() => setProjectsTarget(true)}
                   style={styles.actionBtn}
                   hitSlop={8}
                 >
@@ -295,8 +293,8 @@ export function WorkspaceScreen({
             <ProjectsScreen
               session={apiSession}
               projects={session.projects || []}
-              onSelect={(id) => onSelectProject(id)}
-              onProjectCreated={(proj) => { onProjectCreated(proj); onSelectProject(proj.id); }}
+              onSelect={onSelectProject}
+              onProjectCreated={async (proj) => { await onProjectCreated(proj); await onSelectProject(proj.id); }}
               onRechargeWallet={() => setPage('wallet')}
             />
           ) : (
