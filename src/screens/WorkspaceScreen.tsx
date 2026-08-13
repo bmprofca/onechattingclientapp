@@ -356,7 +356,7 @@ export function WorkspaceScreen({
         )}
       </View>
 
-      <View style={[styles.tabBar, { backgroundColor: theme.surface, borderTopColor: theme.border }]}>
+      <View style={[styles.tabBar, { backgroundColor: theme.header, borderTopColor: theme.border }]}>
         {tabs.map(tab => {
           const Icon = tab.icon;
           const active = page === tab.key;
@@ -369,7 +369,7 @@ export function WorkspaceScreen({
               style={styles.tabItem}
               hitSlop={4}
             >
-              <View style={[styles.tabPill, active && { backgroundColor: theme.mint }]}>
+              <View style={[styles.tabPill ]}>
                 <Icon size={22} color={active ? theme.emerald : theme.ink} strokeWidth={active ? 2.5 : 2} />
                 <Text style={[styles.tabLabel, { color: active ? theme.emerald : theme.ink }, active && styles.tabLabelActive]}>
                   {tab.label}

@@ -3,16 +3,16 @@ import { useColorScheme } from 'react-native';
 export const lightColors = {
   // WhatsApp-inspired light palette: warm chat canvas, deep teal chrome,
   // and the familiar green sent-message treatment.
-  canvas: '#F7F8FA',
+  canvas: '#ffffffff',
   surface: '#FFFFFF',
   header: '#FFFFFF',
   border: '#D8E0E4',
   ink: '#111B21',
   muted: '#667781',
-  emerald: '#00A884',
-  emeraldDark: '#008069',
+  emerald: '#09a01dff',
+  emeraldDark: '#008037ff',
   mint: '#E7F8F2',
-  mintText: '#008069',
+  mintText: '#089748ff',
   danger: '#E5484D',
   dangerBg: '#ff000dff',
   dangerBorder: '#F5B8BB',
@@ -31,11 +31,11 @@ export const lightColors = {
 
 export const darkColors = {
   // WhatsApp dark uses blue-black surfaces with an emerald action color.
-  canvas: '#0B141A',
+  canvas: '#060c10ff',
   surface: '#111B21',
-  header: '#202C33',
+  header: '#0b0c0dff',
   border: '#2A3942',
-  ink: '#E9EDEF',
+  ink: '#ffffffd8',
   muted: '#8696A0',
   emerald: '#00A884',
   emeraldDark: '#008069',
