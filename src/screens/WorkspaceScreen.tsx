@@ -231,10 +231,10 @@ export function WorkspaceScreen({
               alignItems: "center",
               gap: 5,
             }}>
-              <View style={[styles.logo, { backgroundColor: theme.mint }]}>
-                <Text style={[styles.logoText, { color: theme.mintText }]}>1</Text>
+              <View style={[styles.logo, { backgroundColor: theme.mint }]}> 
+                <Text style={[styles.logoText, { color: theme.isDark? '#ffffffff' : theme.mintText }]}>1</Text>
               </View>
-              <Text style={[styles.logoText, { color: theme.mintText }]}>Chatting</Text>
+              <Text style={[styles.logoText, { color: theme.isDark ? '#ffffffff':theme.mintText }]}>Chatting</Text>
 
             </View>
             {!hasProject &&
