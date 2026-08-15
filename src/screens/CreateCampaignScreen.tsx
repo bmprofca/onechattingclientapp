@@ -149,6 +149,12 @@ export function CreateCampaignScreen({
     loadTemplates();
   }, [loadTemplates]);
 
+  useEffect(() => {
+    if (contactsModalOpen) {
+      loadContacts();
+    }
+  }, [contactsModalOpen, loadContacts]);
+
   // When user selects a template
   const handleSelectTemplate = (template: any) => {
     setSelectedTemplate(template);
@@ -737,7 +743,7 @@ export function CreateCampaignScreen({
             <Text style={[styles.sectionHeading, { color: theme.ink }]}>4. Delivery Schedule</Text>
             <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <View style={styles.scheduleRow}>
-                <ScalePressable
+                <Pressable
                   onPress={() => setSendType('immediate')}
                   style={[
                     styles.scheduleOption,
@@ -749,8 +755,8 @@ export function CreateCampaignScreen({
                   <Text style={[styles.scheduleOptionText, { color: sendType === 'immediate' ? theme.emerald : theme.ink }]}>
                     Send Immediately
                   </Text>
-                </ScalePressable>
-                <ScalePressable
+                </Pressable>
+                <Pressable
                   onPress={() => setSendType('scheduled')}
                   style={[
                     styles.scheduleOption,
@@ -762,7 +768,7 @@ export function CreateCampaignScreen({
                   <Text style={[styles.scheduleOptionText, { color: sendType === 'scheduled' ? theme.emerald : theme.ink }]}>
                     Schedule Later
                   </Text>
-                </ScalePressable>
+                </Pressable>
               </View>
 
               {sendType === 'scheduled' && (
@@ -812,7 +818,8 @@ export function CreateCampaignScreen({
       <SlideUpModal
         visible={templatePickerOpen}
         onClose={() => setTemplatePickerOpen(false)}
-        maxHeight="88%"
+        maxHeight="90%"
+        contentStyle={{ height: '82%' }}
       >
         <View style={[styles.modalInner, { backgroundColor: theme.surface }]}>
           <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
@@ -842,6 +849,12 @@ export function CreateCampaignScreen({
               data={filteredTemplates}
               keyExtractor={(item) => String(item.template_id || item.id || item.template_name)}
               contentContainerStyle={{ padding: 16 }}
+              ListEmptyComponent={
+                <View style={styles.centerBox}>
+                  <Layers size={36} color={theme.border} />
+                  <Text style={[styles.emptyModalText, { color: theme.muted }]}>No templates found</Text>
+                </View>
+              }
               renderItem={({ item }) => (
                 <ScalePressable
                   onPress={() => handleSelectTemplate(item)}
@@ -878,7 +891,8 @@ export function CreateCampaignScreen({
       <SlideUpModal
         visible={contactsModalOpen}
         onClose={() => setContactsModalOpen(false)}
-        maxHeight="88%"
+        maxHeight="90%"
+        contentStyle={{ height: '82%' }}
       >
         <View style={[styles.modalInner, { backgroundColor: theme.surface }]}>
           <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
@@ -893,7 +907,7 @@ export function CreateCampaignScreen({
             <TextInput
               value={contactsSearch}
               onChangeText={setContactsSearch}
-              placeholder="Search contacts..."
+              placeholder="Search contacts by name or phone..."
               placeholderTextColor={theme.muted}
               style={[styles.searchInput, { color: theme.ink }]}
             />
@@ -902,12 +916,21 @@ export function CreateCampaignScreen({
           {loadingContacts ? (
             <View style={styles.centerBox}>
               <ActivityIndicator size="large" color={theme.emerald} />
+              <Text style={[styles.emptyModalText, { color: theme.muted, marginTop: 10 }]}>Loading contacts...</Text>
             </View>
           ) : (
             <FlatList
               data={filteredContacts}
-              keyExtractor={(item, index) => String(item.number || item.phone || index)}
+              keyExtractor={(item, index) => String(item.number || item.phone || item.id || index)}
               contentContainerStyle={{ padding: 16 }}
+              ListEmptyComponent={
+                <View style={styles.centerBox}>
+                  <Users size={36} color={theme.border} />
+                  <Text style={[styles.emptyModalText, { color: theme.muted }]}>
+                    {contactsSearch ? 'No matching contacts found' : 'No contacts available in workspace'}
+                  </Text>
+                </View>
+              }
               renderItem={({ item }) => {
                 const num = String(item.number || item.phone || '');
                 const isSelected = selectedContacts.includes(num);
@@ -926,7 +949,7 @@ export function CreateCampaignScreen({
                       {isSelected && <Check size={14} color="#FFF" />}
                     </View>
                     <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text style={[styles.contactName, { color: theme.ink }]}>{item.name || 'Unnamed'}</Text>
+                      <Text style={[styles.contactName, { color: theme.ink }]}>{item.name || item.contact_name || 'Unnamed'}</Text>
                       <Text style={[styles.contactNumber, { color: theme.muted }]}>{num}</Text>
                     </View>
                   </Pressable>
@@ -1220,6 +1243,7 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: 13, height: '100%' },
   centerBox: { padding: 40, alignItems: 'center', justifyContent: 'center' },
+  emptyModalText: { fontSize: 13, fontWeight: '600', textAlign: 'center' },
   templateModalItem: {
     borderRadius: 12,
     borderWidth: 1,
