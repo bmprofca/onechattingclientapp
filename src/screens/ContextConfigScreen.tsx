@@ -12,6 +12,7 @@ import { useTheme } from '../theme/theme';
 import { ApiSession } from '../api/client';
 import { getBotSettings, updateBotSettings } from '../api/context';
 import { uploadFile } from '../api/upload';
+import { ScalePressable, FadeInView, SlideUpModal } from '../components/animations';
 
 // Types
 type SectionType = 'qa' | 'info' | 'text' | 'docs';
@@ -554,13 +555,13 @@ export function ContextConfigScreen({
               })
             )}
 
-            <Pressable
+            <ScalePressable
               style={[styles.addSectionBtn, { backgroundColor: theme.mint }]}
               onPress={() => { setChangeTypeSectionId(null); setShowTypeModal(true); }}
             >
               <Plus size={20} color={theme.mintText} />
               <Text style={[styles.addSectionBtnText, { color: theme.mintText }]}>Add New Section</Text>
-            </Pressable>
+            </ScalePressable>
             
             <View style={{ height: 40 }} />
           </ScrollView>
@@ -568,37 +569,35 @@ export function ContextConfigScreen({
       )}
 
       {/* Type Selection / Change Modal */}
-      <Modal visible={showTypeModal} transparent animationType="fade" onRequestClose={closeTypeModal}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.ink }]}>
-                {changeTypeSectionId ? 'Change Section Type' : 'Choose Section Type'}
-              </Text>
-              <Pressable onPress={closeTypeModal} hitSlop={8}><X size={24} color={theme.muted} /></Pressable>
-            </View>
-            {changeTypeSectionId && (
-              <Text style={[styles.modalWarning, { color: theme.muted }]}>
-                Changing the type will reset this section's items.
-              </Text>
-            )}
-            <View style={styles.typeList}>
-              {SECTION_TYPES.map(type => (
-                <Pressable
-                  key={type.id}
-                  style={({ pressed }) => [styles.typeOption, { borderColor: theme.border, backgroundColor: pressed ? theme.cardHover : theme.surface }]}
-                  onPress={() => handleTypeModalSelect(type.id)}
-                >
-                  <View style={[styles.typeIconBg, { backgroundColor: theme.canvas }]}>
-                    <type.icon size={20} color={theme.mint} />
-                  </View>
-                  <Text style={[styles.typeOptionText, { color: theme.ink }]}>{type.label}</Text>
-                </Pressable>
-              ))}
-            </View>
+      <SlideUpModal visible={showTypeModal} onClose={closeTypeModal} maxHeight="65%">
+        <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
+          <View style={styles.modalHeader}>
+            <Text style={[styles.modalTitle, { color: theme.ink }]}>
+              {changeTypeSectionId ? 'Change Section Type' : 'Choose Section Type'}
+            </Text>
+            <ScalePressable onPress={closeTypeModal} hitSlop={8}><X size={24} color={theme.muted} /></ScalePressable>
+          </View>
+          {changeTypeSectionId && (
+            <Text style={[styles.modalWarning, { color: theme.muted }]}>
+              Changing the type will reset this section's items.
+            </Text>
+          )}
+          <View style={styles.typeList}>
+            {SECTION_TYPES.map(type => (
+              <ScalePressable
+                key={type.id}
+                style={[styles.typeOption, { borderColor: theme.border, backgroundColor: theme.surface }]}
+                onPress={() => handleTypeModalSelect(type.id)}
+              >
+                <View style={[styles.typeIconBg, { backgroundColor: theme.canvas }]}>
+                  <type.icon size={20} color={theme.mint} />
+                </View>
+                <Text style={[styles.typeOptionText, { color: theme.ink }]}>{type.label}</Text>
+              </ScalePressable>
+            ))}
           </View>
         </View>
-      </Modal>
+      </SlideUpModal>
     </View>
   );
 }

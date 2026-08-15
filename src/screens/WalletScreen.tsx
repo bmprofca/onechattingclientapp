@@ -24,8 +24,10 @@ import {
   BadgeCheck,
 } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
+import { getAccountProfile } from '../api/auth';
 import { checkPaymentStatus, PaymentStatusResponse, topupWallet } from '../api/payment';
 import { useTheme } from '../theme/theme';
+import { ScalePressable, FadeInView } from '../components/animations';
 
 // ─── Polling Helper ───────────────────────────────────────────────────────────
 
@@ -59,16 +61,41 @@ export function WalletScreen({
   session,
   balance,
   onBack,
+  onBalanceUpdated,
 }: {
   session: ApiSession;
-  balance: string;
+  balance?: string | number;
   onBack: () => void;
+  onBalanceUpdated?: (newBalance: number) => void;
 }) {
   const theme = useTheme();
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  const [liveBalance, setLiveBalance] = useState<string | number | undefined>(balance);
   const [paymentResult, setPaymentResult] = useState<PaymentStatusResponse | null>(null);
+
+  const fetchLatestBalance = useCallback(async () => {
+    try {
+      const profile = await getAccountProfile(session);
+      if (profile.balance !== undefined) {
+        setLiveBalance(profile.balance);
+        onBalanceUpdated?.(profile.balance);
+      }
+    } catch {
+      // ignore
+    }
+  }, [session, onBalanceUpdated]);
+
+  useEffect(() => {
+    fetchLatestBalance();
+  }, [fetchLatestBalance]);
+
+  useEffect(() => {
+    if (balance !== undefined) {
+      setLiveBalance(balance);
+    }
+  }, [balance]);
 
   // Hardware back button
   useEffect(() => {
@@ -89,9 +116,10 @@ export function WalletScreen({
     setPaymentResult(null);
     setAmount('');
     if (wasSuccess) {
+      fetchLatestBalance();
       onBack(); // navigate back so parent can refresh balance
     }
-  }, [paymentResult, onBack]);
+  }, [paymentResult, onBack, fetchLatestBalance]);
 
   // ─── Main top-up handler ────────────────────────────────────────────────────
   const handleTopup = async () => {
@@ -182,13 +210,13 @@ export function WalletScreen({
           <View style={styles.headerRight} />
         </View>
         <View style={styles.verifyingBody}>
-          <View style={[styles.verifyingCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <FadeInView scale={true} startScale={0.9} duration={350} style={[styles.verifyingCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <ActivityIndicator size="large" color={theme.emerald} style={{ marginBottom: 24 }} />
             <Text style={[styles.verifyingTitle, { color: theme.ink }]}>Confirming with bank…</Text>
             <Text style={[styles.verifyingDesc, { color: theme.muted }]}>
               Please wait while we verify your payment. This usually takes a few seconds.
             </Text>
-          </View>
+          </FadeInView>
         </View>
       </View>
     );
@@ -247,9 +275,9 @@ export function WalletScreen({
     return (
       <View style={[styles.safe, { backgroundColor: theme.canvas }]}>
         <View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
-          <Pressable onPress={handleResultClose} style={styles.backButton} hitSlop={8}>
+          <ScalePressable onPress={handleResultClose} style={styles.backButton} hitSlop={8}>
             <ArrowLeft size={24} color={theme.ink} />
-          </Pressable>
+          </ScalePressable>
           <Text style={[styles.headerTitle, { color: theme.ink }]}>Payment Receipt</Text>
           <View style={styles.headerRight} />
         </View>
@@ -258,64 +286,50 @@ export function WalletScreen({
           contentContainerStyle={styles.resultPage}
           showsVerticalScrollIndicator={false}>
 
-          {/* Status badge */}
-          <View style={[styles.statusBadge, { backgroundColor: bgColor }]}>
-            <Icon size={52} color={iconColor} strokeWidth={1.5} />
+          {/* Status banner */}
+          <FadeInView scale={true} startScale={0.92} duration={350} style={[styles.statusBadge, { backgroundColor: bgColor }]}>
+            <Icon size={48} color={iconColor} strokeWidth={1.75} />
             <Text style={[styles.statusLabel, { color: iconColor }]}>{label}</Text>
             <Text style={[styles.statusDesc, { color: theme.muted }]}>{desc}</Text>
-          </View>
+          </FadeInView>
 
-          {/* Amount hero */}
-          <View style={[styles.amountCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <View style={[styles.receiptIconWrap, { backgroundColor: theme.mint }]}>
-              <Receipt size={20} color={theme.emerald} />
-            </View>
-            <Text style={[styles.amountLabel, { color: theme.muted }]}>TOTAL PAID</Text>
-            <Text style={[styles.amountValue, { color: theme.ink }]}>
-              ₹{Number(paymentResult.amount || 0).toFixed(2)}
-            </Text>
-          </View>
-
-          {/* Detail rows */}
-          <View style={[styles.detailCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            {detailRows.map((row, index) => (
+          {/* Details list */}
+          <FadeInView delay={120} duration={350} style={[styles.detailCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            {detailRows.map((row, idx) => (
               <View
                 key={row.label}
                 style={[
                   styles.detailRow,
-                  index < detailRows.length - 1 && {
-                    borderBottomWidth: 1,
-                    borderBottomColor: theme.border,
-                  },
+                  idx < detailRows.length - 1 && { borderBottomColor: theme.border, borderBottomWidth: StyleSheet.hairlineWidth },
                 ]}>
                 <Text style={[styles.detailLabel, { color: theme.muted }]}>{row.label}</Text>
                 <Text
+                  selectable
                   style={[
                     styles.detailValue,
                     { color: row.highlight ? theme.emerald : theme.ink },
                     row.highlight && { fontWeight: '700' },
-                  ]}
-                  numberOfLines={2}
-                  selectable>
+                  ]}>
                   {row.value}
                 </Text>
               </View>
             ))}
-          </View>
+          </FadeInView>
 
           {/* CTA button */}
-          <Pressable
-            onPress={handleResultClose}
-            style={({ pressed }) => [
-              styles.button,
-              { backgroundColor: btnColor },
-              pressed && styles.buttonPressed,
-            ]}>
-            {isSuccess && (
-              <BadgeCheck size={18} color="#FFF" style={{ marginRight: 8 }} />
-            )}
-            <Text style={styles.buttonText}>{btnLabel}</Text>
-          </Pressable>
+          <FadeInView delay={220} duration={350}>
+            <ScalePressable
+              onPress={handleResultClose}
+              style={[
+                styles.button,
+                { backgroundColor: btnColor },
+              ]}>
+              {isSuccess && (
+                <BadgeCheck size={18} color="#FFF" style={{ marginRight: 8 }} />
+              )}
+              <Text style={styles.buttonText}>{btnLabel}</Text>
+            </ScalePressable>
+          </FadeInView>
         </ScrollView>
       </View>
     );
@@ -325,9 +339,9 @@ export function WalletScreen({
   return (
     <View style={[styles.safe, { backgroundColor: theme.canvas }]}>
       <View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
-        <Pressable onPress={onBack} style={styles.backButton} hitSlop={8}>
+        <ScalePressable onPress={onBack} style={styles.backButton} hitSlop={8}>
           <ArrowLeft size={24} color={theme.ink} />
-        </Pressable>
+        </ScalePressable>
         <Text style={[styles.headerTitle, { color: theme.ink }]}>Wallet</Text>
         <View style={styles.headerRight} />
       </View>
@@ -341,86 +355,91 @@ export function WalletScreen({
           showsVerticalScrollIndicator={false}>
 
           {/* Balance hero */}
-          <View style={[styles.heroCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <View style={[styles.walletIconWrap, { backgroundColor: theme.mint }]}>
-              <Wallet size={32} color={theme.emerald} strokeWidth={2} />
+          <FadeInView direction="down" distance={12} duration={350}>
+            <View style={[styles.heroCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <View style={[styles.walletIconWrap, { backgroundColor: theme.mint }]}>
+                <Wallet size={32} color={theme.emerald} strokeWidth={2} />
+              </View>
+              <Text style={[styles.balanceLabel, { color: theme.muted }]}>AVAILABLE BALANCE</Text>
+              <Text style={[styles.balanceAmount, { color: theme.ink }]}>
+                ₹{Number(liveBalance !== undefined ? liveBalance : (balance ?? 0)).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+              </Text>
             </View>
-            <Text style={[styles.balanceLabel, { color: theme.muted }]}>AVAILABLE BALANCE</Text>
-            <Text style={[styles.balanceAmount, { color: theme.ink }]}>₹{balance}</Text>
-          </View>
+          </FadeInView>
 
           {/* Add funds form */}
-          <View
-            style={[
-              styles.form,
-              { backgroundColor: theme.surface, borderColor: theme.border, shadowColor: theme.shadow },
-            ]}>
-            <Text style={[styles.sectionTitle, { color: theme.ink }]}>Add Funds</Text>
-            <Text style={[styles.sectionDesc, { color: theme.muted }]}>
-              Select or enter an amount to recharge your wallet.
-            </Text>
-
-            {/* Quick amount presets */}
-            <View style={styles.quickAmountsRow}>
-              {quickAmounts.map(preset => (
-                <Pressable
-                  key={preset}
-                  onPress={() => setAmount(preset)}
-                  style={[
-                    styles.quickAmountBtn,
-                    { backgroundColor: theme.canvas, borderColor: theme.border },
-                    amount === preset && { borderColor: theme.emerald, backgroundColor: theme.mint },
-                  ]}>
-                  <Text
-                    style={[
-                      styles.quickAmountText,
-                      { color: theme.ink },
-                      amount === preset && { color: theme.emerald, fontWeight: '700' },
-                    ]}>
-                    ₹{preset}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-
-            {/* Custom amount input */}
-            <View style={styles.field}>
-              <Text style={[styles.fieldLabel, { color: theme.muted }]}>CUSTOM AMOUNT</Text>
-              <View
-                style={[
-                  styles.inputRow,
-                  { backgroundColor: theme.canvas, borderColor: theme.border },
-                ]}>
-                <IndianRupee size={17} color={theme.muted} strokeWidth={2.25} />
-                <TextInput
-                  value={amount}
-                  onChangeText={setAmount}
-                  keyboardType="numeric"
-                  placeholder="Enter amount"
-                  placeholderTextColor={theme.muted}
-                  style={[styles.input, { color: theme.ink }]}
-                />
-              </View>
-            </View>
-
-            {/* Pay button */}
-            <Pressable
-              accessibilityRole="button"
-              disabled={loading}
-              onPress={handleTopup}
-              style={({ pressed }) => [
-                styles.button,
-                { backgroundColor: theme.emerald },
-                pressed && !loading && styles.buttonPressed,
-                loading && styles.disabled,
+          <FadeInView delay={120} duration={400} scale={true} startScale={0.96}>
+            <View
+              style={[
+                styles.form,
+                { backgroundColor: theme.surface, borderColor: theme.border, shadowColor: theme.shadow },
               ]}>
-              {loading ? (
-                <ActivityIndicator color="#FFF" />
-              ) : (
-                <Text style={styles.buttonText}>Proceed to Pay</Text>
-              )}
-            </Pressable>
-          </View>
+              <Text style={[styles.sectionTitle, { color: theme.ink }]}>Add Funds</Text>
+              <Text style={[styles.sectionDesc, { color: theme.muted }]}>
+                Select or enter an amount to recharge your wallet.
+              </Text>
+
+              {/* Quick amount presets */}
+              <View style={styles.quickAmountsRow}>
+                {quickAmounts.map(preset => (
+                  <ScalePressable
+                    key={preset}
+                    onPress={() => setAmount(preset)}
+                    style={[
+                      styles.quickAmountBtn,
+                      { backgroundColor: theme.canvas, borderColor: theme.border },
+                      amount === preset && { borderColor: theme.emerald, backgroundColor: theme.mint },
+                    ]}>
+                    <Text
+                      style={[
+                        styles.quickAmountText,
+                        { color: theme.ink },
+                        amount === preset && { color: theme.emerald, fontWeight: '700' },
+                      ]}>
+                      ₹{preset}
+                    </Text>
+                  </ScalePressable>
+                ))}
+              </View>
+
+              {/* Custom amount input */}
+              <View style={styles.field}>
+                <Text style={[styles.fieldLabel, { color: theme.muted }]}>CUSTOM AMOUNT</Text>
+                <View
+                  style={[
+                    styles.inputRow,
+                    { backgroundColor: theme.canvas, borderColor: theme.border },
+                  ]}>
+                  <IndianRupee size={17} color={theme.muted} strokeWidth={2.25} />
+                  <TextInput
+                    value={amount}
+                    onChangeText={setAmount}
+                    keyboardType="numeric"
+                    placeholder="Enter amount"
+                    placeholderTextColor={theme.muted}
+                    style={[styles.input, { color: theme.ink }]}
+                  />
+                </View>
+              </View>
+
+              {/* Pay button */}
+              <ScalePressable
+                accessibilityRole="button"
+                disabled={loading}
+                onPress={handleTopup}
+                style={[
+                  styles.button,
+                  { backgroundColor: theme.emerald },
+                  loading && styles.disabled,
+                ]}>
+                {loading ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <Text style={styles.buttonText}>Proceed to Pay</Text>
+                )}
+              </ScalePressable>
+            </View>
+          </FadeInView>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>

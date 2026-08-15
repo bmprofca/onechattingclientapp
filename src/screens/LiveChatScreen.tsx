@@ -17,6 +17,7 @@ import { getInbox, getOpenCases, ListItem, unwrapList } from '../api/workspace';
 import { LoadState } from '../components/LoadState';
 import { useTheme } from '../theme/theme';
 import { socketManager } from '../services/socketManager';
+import { ScalePressable, FadeInView, SlideUpModal, PulseView } from '../components/animations';
 
 export function LiveChatScreen({
   projectId,
@@ -118,7 +119,7 @@ export function LiveChatScreen({
   };
   return (
     <View style={{ flex: 1, backgroundColor: theme.canvas }}>
-      <View style={styles.heading}>
+      <FadeInView direction="down" distance={10} duration={300} style={styles.heading}>
         <View style={[styles.searchContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <Search size={18} color={theme.muted} />
           <TextInput
@@ -130,7 +131,7 @@ export function LiveChatScreen({
             returnKeyType="search"
           />
         </View>
-        <View style={[styles.segmented]}>
+        <View style={[styles.segmented, { backgroundColor: theme.cardHover }]}>
           <Pressable
             accessibilityRole="button"
             onPress={() => setMode('chats')}
@@ -166,7 +167,7 @@ export function LiveChatScreen({
             </Text>
           </Pressable>
         </View>
-      </View>
+      </FadeInView>
 
       <FlatList
         data={items}
@@ -187,80 +188,78 @@ export function LiveChatScreen({
             onRetry={load}
           />
         }
-        renderItem={({ item }) => (
-          <ChatCard
-            item={item}
-            onPress={(contactNumber, contactName) => onOpenChat(contactNumber, contactName)}
-          />
+        renderItem={({ item, index }) => (
+          <FadeInView delay={Math.min(index * 35, 250)} distance={12}>
+            <ChatCard
+              item={item}
+              onPress={(contactNumber, contactName) => onOpenChat(contactNumber, contactName)}
+            />
+          </FadeInView>
         )}
       />
 
       {/* FAB */}
-      <Pressable
+      <ScalePressable
         accessibilityRole="button"
         onPress={() => setIsModalVisible(true)}
-        style={({ pressed }) => [
+        style={[
           styles.fab,
           { backgroundColor: theme.emerald },
-          pressed && { opacity: 0.9, transform: [{ scale: 0.97 }] }
         ]}
       >
         <MessageSquarePlus size={24} color="#FFF" />
-      </Pressable>
+      </ScalePressable>
 
       {/* Direct Chat Modal */}
-      <Modal
+      <SlideUpModal
         visible={isModalVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setIsModalVisible(false)}
+        onClose={() => setIsModalVisible(false)}
+        maxHeight="70%"
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={[styles.modalContent, { backgroundColor: theme.surface }]}
         >
-          <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.ink }]}>New Chat</Text>
-              <Pressable onPress={() => setIsModalVisible(false)} hitSlop={8}>
-                <X size={24} color={theme.muted} />
-              </Pressable>
-            </View>
-
-            <Text style={[styles.modalSubtitle, { color: theme.muted }]}>
-              Enter a phone number with country code to start a new direct chat.
-            </Text>
-
-            <View style={[styles.inputWrapper, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
-              <TextInput
-                style={[styles.modalInput, { color: theme.ink }]}
-                placeholder="Phone Number (e.g. 919876543210)"
-                placeholderTextColor={theme.muted}
-                keyboardType="phone-pad"
-                value={newChatNumber}
-                onChangeText={setNewChatNumber}
-              />
-            </View>
-
-            <View style={[styles.inputWrapper, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
-              <TextInput
-                style={[styles.modalInput, { color: theme.ink }]}
-                placeholder="Contact Name (Optional)"
-                placeholderTextColor={theme.muted}
-                value={newChatName}
-                onChangeText={setNewChatName}
-              />
-            </View>
-
-            <Pressable
-              style={[styles.modalButton, { backgroundColor: theme.emerald }]}
-              onPress={handleDirectChat}
-            >
-              <Text style={styles.modalButtonText}>Start Conversation</Text>
-            </Pressable>
+          <View style={styles.modalHeader}>
+            <Text style={[styles.modalTitle, { color: theme.ink }]}>New Chat</Text>
+            <ScalePressable onPress={() => setIsModalVisible(false)} hitSlop={8}>
+              <X size={24} color={theme.muted} />
+            </ScalePressable>
           </View>
+
+          <Text style={[styles.modalSubtitle, { color: theme.muted }]}>
+            Enter a phone number with country code to start a new direct chat.
+          </Text>
+
+          <View style={[styles.inputWrapper, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
+            <TextInput
+              style={[styles.modalInput, { color: theme.ink }]}
+              placeholder="Phone Number (e.g. 919876543210)"
+              placeholderTextColor={theme.muted}
+              keyboardType="phone-pad"
+              value={newChatNumber}
+              onChangeText={setNewChatNumber}
+            />
+          </View>
+
+          <View style={[styles.inputWrapper, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
+            <TextInput
+              style={[styles.modalInput, { color: theme.ink }]}
+              placeholder="Contact Name (Optional)"
+              placeholderTextColor={theme.muted}
+              value={newChatName}
+              onChangeText={setNewChatName}
+            />
+          </View>
+
+          <ScalePressable
+            style={[styles.modalButton, { backgroundColor: theme.emerald }]}
+            onPress={handleDirectChat}
+          >
+            <Text style={styles.modalButtonText}>Start Conversation</Text>
+          </ScalePressable>
         </KeyboardAvoidingView>
-      </Modal>
+      </SlideUpModal>
     </View>
   );
 }
@@ -286,7 +285,7 @@ function ChatCard({ item, onPress }: { item: ListItem, onPress: (contactNumber: 
   const unreadCount = Number(item.unread_count || 0);
 
   return (
-    <Pressable
+    <ScalePressable
       accessibilityRole="button"
       onPress={() => onPress(contactNumber, name)}
       style={[
@@ -316,14 +315,16 @@ function ChatCard({ item, onPress }: { item: ListItem, onPress: (contactNumber: 
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <Text style={[styles.cardMeta, { color: theme.muted }]}>Unread Messages</Text>
 
-            <View style={[styles.unreadBadge, { backgroundColor: theme.emerald }]}>
-              <Text style={styles.unreadText}>{unreadCount}</Text>
-            </View>
+            <PulseView duration={1400} maxScale={1.1} minScale={0.94}>
+              <View style={[styles.unreadBadge, { backgroundColor: theme.emerald }]}>
+                <Text style={styles.unreadText}>{unreadCount}</Text>
+              </View>
+            </PulseView>
           </View>
         )}
       </View>
       <Text style={[styles.arrow, { color: theme.muted }]}>›</Text>
-    </Pressable>
+    </ScalePressable>
   );
 }
 

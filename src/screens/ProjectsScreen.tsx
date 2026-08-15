@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { BackHandler, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { BackHandler, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Settings, Plus, ArrowLeft } from 'lucide-react-native';
 import { Project } from '../api/auth';
 import { ApiSession } from '../api/client';
+import { getProjectMeta } from '../api/workspace';
 import { useTheme } from '../theme/theme';
 import { CreateProjectScreen } from './CreateProjectScreen';
 import { ManageProjectScreen } from './ManageProjectScreen';
@@ -12,21 +13,49 @@ type Mode = 'list' | 'create' | 'manage';
 export function ProjectsScreen({
   session,
   projects,
+  currentProjectId,
   onSelect,
   onProjectCreated,
   onClose,
   onRechargeWallet,
+  onOpenWaba,
 }: {
   session: ApiSession;
   projects: Project[];
+  currentProjectId?: string;
   onSelect: (projectId: string) => void | Promise<void>;
   onProjectCreated: (newProject: Project) => void | Promise<void>;
   onClose?: () => void;
   onRechargeWallet?: () => void;
+  onOpenWaba?: () => void;
 }) {
   const theme = useTheme();
   const [mode, setMode] = useState<Mode>('list');
   const [manageProjectId, setManageProjectId] = useState<string | null>(null);
+  const [wabaInfo, setWabaInfo] = useState<any>(null);
+  const [wabaLoading, setWabaLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!currentProjectId) {
+      setWabaInfo(null);
+      return;
+    }
+    setWabaLoading(true);
+    getProjectMeta(session, currentProjectId)
+      .then((res) => {
+        if (!cancelled) setWabaInfo(res?.data || res);
+      })
+      .catch(() => {
+        if (!cancelled) setWabaInfo(null);
+      })
+      .finally(() => {
+        if (!cancelled) setWabaLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session, currentProjectId]);
 
   useEffect(() => {
     const handleBackPress = () => {
@@ -115,6 +144,76 @@ export function ProjectsScreen({
                 Select a project to open its workspace, or tap the gear icon to manage settings.
               </Text>
             ) : null}
+
+            {currentProjectId && !wabaLoading && (
+              <View
+                style={[
+                  styles.wabaCard,
+                  { backgroundColor: theme.surface, borderColor: theme.border },
+                ]}
+              >
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                  }}
+                >
+                  <View>
+                    <Text style={[styles.wabaCardLabel, { color: theme.muted }]}>
+                      CURRENT WHATSAPP ACCOUNT
+                    </Text>
+                    <Text style={[styles.wabaCardTitle, { color: theme.ink }]}>
+                      {String(
+                        wabaInfo?.waba_name || wabaInfo?.project_name || 'WhatsApp account',
+                      )}
+                    </Text>
+                  </View>
+                  <Text
+                    style={[
+                      {
+                        color: wabaInfo?.waba_id ? theme.emerald : theme.warning,
+                        fontSize: 12,
+                        fontWeight: '700',
+                        backgroundColor: wabaInfo?.waba_id
+                          ? theme.mint
+                          : 'rgba(245, 158, 11, 0.15)',
+                        paddingHorizontal: 8,
+                        paddingVertical: 4,
+                        borderRadius: 8,
+                      },
+                    ]}
+                  >
+                    {wabaInfo?.waba_id ? 'CONNECTED' : 'NOT CONNECTED'}
+                  </Text>
+                </View>
+                <Text style={[styles.wabaCardDetail, { color: theme.muted }]}>
+                  {String(
+                    wabaInfo?.waba_id ||
+                      'Connect your business profile and messaging settings.',
+                  )}
+                </Text>
+                <Pressable
+                  onPress={onOpenWaba}
+                  style={[
+                    styles.wabaButton,
+                    {
+                      backgroundColor: wabaInfo?.waba_id ? theme.surface : theme.emerald,
+                      borderColor: wabaInfo?.waba_id ? theme.border : theme.emerald,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.wabaButtonText,
+                      { color: wabaInfo?.waba_id ? theme.ink : '#FFF' },
+                    ]}
+                  >
+                    {wabaInfo?.waba_id ? 'Manage WhatsApp Account' : 'Connect Meta Account'}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
           </>
         }
         ListEmptyComponent={
@@ -132,43 +231,49 @@ export function ProjectsScreen({
             </Pressable>
           </View>
         }
-        renderItem={({ item }) => (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => { void onSelect(item.id); }}
-            style={({ pressed }) => [
-              styles.card,
-              { backgroundColor: theme.surface, borderColor: theme.border, shadowColor: theme.shadow },
-              pressed && { backgroundColor: theme.cardHover },
-            ]}
-          >
-            <View style={[styles.icon, { backgroundColor: theme.mint }]}>
-              <Text style={[styles.iconText, { color: theme.mintText }]}>
-                {item.name.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-            <View style={styles.cardText}>
-              <Text numberOfLines={1} style={[styles.name, { color: theme.ink }]}>
-                {item.name}
-              </Text>
-              <Text style={[styles.meta, { color: theme.muted }]}>
-                {item.owned ? 'Owned by you' : item.ownerName || 'Shared workspace'}
-              </Text>
-            </View>
-
+        renderItem={({ item }) => {
+          const profileImg = (item as any).profile_image || (item as any).logo || (item as any).image;
+          return (
             <Pressable
-              hitSlop={12}
-              style={styles.manageBtn}
-              onPress={() => {
-                setManageProjectId(item.id);
-                setMode('manage');
-              }}
+              accessibilityRole="button"
+              onPress={() => { void onSelect(item.id); }}
+              style={({ pressed }) => [
+                styles.card,
+                { backgroundColor: theme.surface, borderColor: theme.border, shadowColor: theme.shadow },
+                pressed && { backgroundColor: theme.cardHover },
+              ]}
             >
-              <Settings size={20} color={theme.muted} />
-            </Pressable>
+              <View style={[styles.icon, { backgroundColor: theme.mint }]}>
+                {profileImg ? (
+                  <Image source={{ uri: profileImg }} style={{ width: 44, height: 44, borderRadius: 14 }} />
+                ) : (
+                  <Text style={[styles.iconText, { color: theme.mintText }]}>
+                    {item.name.charAt(0).toUpperCase()}
+                  </Text>
+                )}
+              </View>
+              <View style={styles.cardText}>
+                <Text numberOfLines={1} style={[styles.name, { color: theme.ink }]}>
+                  {item.name}
+                </Text>
+                <Text style={[styles.meta, { color: theme.muted }]}>
+                  {item.owned ? 'Owned by you' : item.ownerName || 'Shared workspace'}
+                </Text>
+              </View>
 
-          </Pressable>
-        )}
+              <Pressable
+                hitSlop={12}
+                style={styles.manageBtn}
+                onPress={() => {
+                  setManageProjectId(item.id);
+                  setMode('manage');
+                }}
+              >
+                <Settings size={20} color={theme.muted} />
+              </Pressable>
+            </Pressable>
+          );
+        }}
       />
     </View>
   );
@@ -219,6 +324,40 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   copy: { fontSize: 14, lineHeight: 21, marginTop: 8, marginBottom: 18 },
+
+  wabaCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 17,
+    marginBottom: 20,
+  },
+  wabaCardLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  wabaCardTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginTop: 8,
+  },
+  wabaCardDetail: {
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 5,
+    marginBottom: 16,
+  },
+  wabaButton: {
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  wabaButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
 
   card: {
     minHeight: 76,

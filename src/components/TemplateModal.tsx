@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Image,
 } from 'react-native';
 import { X, Search, FileText, ArrowLeft, Upload } from 'lucide-react-native';
 import {
@@ -22,6 +23,7 @@ import { getTemplates, unwrapList } from '../api/workspace';
 import { uploadFile } from '../api/upload';
 import { useTheme } from '../theme/theme';
 import { applyBodyParameters } from '../utils/templateUtils';
+import { SlideUpModal, ScalePressable, FadeInView } from './animations';
 
 type TemplateModalProps = {
   visible: boolean;
@@ -87,11 +89,16 @@ export function TemplateModal({
     let hasVariables = false;
     let requiredVars: string[] = [];
     let requiresMedia = false;
+    let defaultMedia = '';
 
-    const components = template.template?.components || [];
+    const components = template.template?.components || template.components || [];
     components.forEach((component: any) => {
       if (component.type === 'HEADER' && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(component.format)) {
         requiresMedia = true;
+        const handle = component.example?.header_handle?.[0] || component.example?.header_url?.[0] || '';
+        if (handle) {
+          defaultMedia = handle;
+        }
       }
       if (component.type === 'BODY' && component.text) {
         const matches = component.text.match(/\{\{\d+\}\}/g);
@@ -108,9 +115,10 @@ export function TemplateModal({
     if (hasVariables || requiresMedia) {
       setSelectedTemplate(template);
       setVariables(requiredVars);
-      setHeaderMediaUrl('');
+      setHeaderMediaUrl(defaultMedia);
+      setUploadedFileName(defaultMedia ? 'Default Template Media' : '');
     } else {
-      submitTemplate(template, [], '');
+      submitTemplate(template, [], defaultMedia);
     }
   };
 
@@ -131,7 +139,7 @@ export function TemplateModal({
 
       if (uploaded.success && uploaded.url) {
         setHeaderMediaUrl(uploaded.url);
-        setUploadedFileName(uploaded.meta?.originalName || result.name || 'File');
+        setUploadedFileName(uploaded.meta?.originalName || result.name || 'Custom Media');
       } else {
         console.warn('Upload failed', uploaded);
       }
@@ -146,17 +154,18 @@ export function TemplateModal({
 
   const submitTemplate = (template: any, currentVars: string[], mediaUrl: string) => {
     const formattedComponents: any[] = [];
-    const components = template.template?.components || [];
+    const components = template.template?.components || template.components || [];
 
     components.forEach((component: any) => {
       if (component.type === 'HEADER' && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(component.format)) {
-        if (mediaUrl) {
+        const effectiveMedia = mediaUrl || component.example?.header_handle?.[0] || component.example?.header_url?.[0] || '';
+        if (effectiveMedia) {
           formattedComponents.push({
             type: 'header',
             parameters: [
               {
                 type: component.format.toLowerCase(),
-                [component.format.toLowerCase()]: { link: mediaUrl }
+                [component.format.toLowerCase()]: { link: effectiveMedia }
               }
             ]
           });
@@ -180,42 +189,43 @@ export function TemplateModal({
       }
     });
 
-    onSelectTemplate(template.template_id, formattedComponents);
+    onSelectTemplate(template.template_id || template.id, formattedComponents);
     setSelectedTemplate(null);
   };
 
-  const renderItem = ({ item }: { item: any }) => {
+  const renderItem = ({ item, index }: { item: any; index: number }) => {
     return (
-      <Pressable
-        style={({ pressed }) => [
-          styles.templateCard,
-          { backgroundColor: theme.canvas, borderColor: theme.border },
-          pressed && { opacity: 0.8 },
-        ]}
-        onPress={() => handleSelect(item)}
-      >
-        <View style={styles.cardHeader}>
-          <Text style={[styles.templateName, { color: theme.ink }]} numberOfLines={1}>
-            {item.template_name}
-          </Text>
-          <View style={[styles.categoryBadge, { backgroundColor: theme.mint }]}>
-            <Text style={[styles.categoryText, { color: theme.mintText }]}>
-              {item.category || 'MARKETING'}
+      <FadeInView delay={Math.min(index * 40, 300)} distance={12}>
+        <ScalePressable
+          style={[
+            styles.templateCard,
+            { backgroundColor: theme.canvas, borderColor: theme.border },
+          ]}
+          onPress={() => handleSelect(item)}
+        >
+          <View style={styles.cardHeader}>
+            <Text style={[styles.templateName, { color: theme.ink }]} numberOfLines={1}>
+              {item.template_name}
             </Text>
-          </View>
-        </View>
-        
-        {item.template?.components?.map((comp: any, idx: number) => {
-          if (comp.type === 'BODY') {
-            return (
-              <Text key={idx} style={[styles.templateBody, { color: theme.muted }]} numberOfLines={3}>
-                {comp.text}
+            <View style={[styles.categoryBadge, { backgroundColor: theme.mint }]}>
+              <Text style={[styles.categoryText, { color: theme.mintText }]}>
+                {item.category || 'MARKETING'}
               </Text>
-            );
-          }
-          return null;
-        })}
-      </Pressable>
+            </View>
+          </View>
+          
+          {item.template?.components?.map((comp: any, idx: number) => {
+            if (comp.type === 'BODY') {
+              return (
+                <Text key={idx} style={[styles.templateBody, { color: theme.muted }]} numberOfLines={3}>
+                  {comp.text}
+                </Text>
+              );
+            }
+            return null;
+          })}
+        </ScalePressable>
+      </FadeInView>
     );
   };
 
@@ -230,7 +240,7 @@ export function TemplateModal({
     const previewText = bodyComponent ? applyBodyParameters(bodyComponent.text, previewParams) : '';
 
     return (
-      <View style={styles.editContainer}>
+      <FadeInView duration={250} distance={10} style={styles.editContainer}>
         <View style={[styles.previewBox, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
           <Text style={[styles.previewLabel, { color: theme.muted }]}>Preview</Text>
           <Text style={[styles.previewText, { color: theme.ink }]}>{previewText}</Text>
@@ -241,13 +251,27 @@ export function TemplateModal({
             <View style={styles.inputGroup}>
               <Text style={[styles.inputLabel, { color: theme.ink }]}>Header Media ({headerComponent.format})</Text>
               {headerMediaUrl ? (
-                <View style={[styles.uploadedRow, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
-                  <Text style={[styles.uploadedFileName, { color: theme.ink }]} numberOfLines={1}>
-                    {uploadedFileName || 'File uploaded'}
-                  </Text>
-                  <Pressable onPress={() => { setHeaderMediaUrl(''); setUploadedFileName(''); }} hitSlop={8}>
+                <View style={[styles.uploadedRow, { backgroundColor: theme.canvas, borderColor: theme.border, alignItems: 'center' }]}>
+                  {headerComponent.format === 'IMAGE' && headerMediaUrl.startsWith('http') && (
+                    <Image source={{ uri: headerMediaUrl }} style={{ width: 42, height: 42, borderRadius: 8, marginRight: 10 }} />
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.uploadedFileName, { color: theme.ink }]} numberOfLines={1}>
+                      {uploadedFileName || 'Media attached'}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: theme.emerald, fontWeight: '600' }}>
+                      {uploadedFileName?.includes('Default') ? 'Default template media' : 'Ready to send'}
+                    </Text>
+                  </View>
+                  <ScalePressable
+                    style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: theme.mint, marginRight: 6 }}
+                    onPress={handlePickHeaderMedia}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: theme.emerald }}>Replace</Text>
+                  </ScalePressable>
+                  <ScalePressable onPress={() => { setHeaderMediaUrl(''); setUploadedFileName(''); }} hitSlop={8}>
                     <X size={18} color={theme.muted} />
-                  </Pressable>
+                  </ScalePressable>
                 </View>
               ) : uploadingMedia ? (
                 <View style={[styles.uploadingRow, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
@@ -255,13 +279,13 @@ export function TemplateModal({
                   <Text style={[styles.uploadingText, { color: theme.muted }]}>Uploading...</Text>
                 </View>
               ) : (
-                <Pressable
+                <ScalePressable
                   style={[styles.uploadBtn, { backgroundColor: theme.emerald }]}
                   onPress={handlePickHeaderMedia}
                 >
                   <Upload size={18} color="#FFF" />
                   <Text style={styles.uploadBtnText}>Choose File</Text>
-                </Pressable>
+                </ScalePressable>
               )}
             </View>
           )}
@@ -283,86 +307,85 @@ export function TemplateModal({
         </ScrollView>
 
         <View style={[styles.editFooter, { borderTopColor: theme.border }]}>
-          <Pressable
+          <ScalePressable
             style={[styles.sendBtn, { backgroundColor: theme.emerald }]}
             onPress={() => submitTemplate(selectedTemplate, variables, headerMediaUrl)}
           >
             <Text style={styles.sendBtnText}>Send Template</Text>
-          </Pressable>
+          </ScalePressable>
         </View>
-      </View>
+      </FadeInView>
     );
   };
 
   return (
-    <Modal
+    <SlideUpModal
       visible={visible}
-      transparent={true}
-      animationType="slide"
-      onRequestClose={onClose}
+      onClose={onClose}
+      maxHeight="92%"
     >
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.overlay}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={[styles.modalContent, { backgroundColor: theme.surface }]}
       >
-        <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
-          <View style={[styles.header, { borderBottomColor: theme.border }]}>
-            {selectedTemplate ? (
-              <Pressable onPress={() => setSelectedTemplate(null)} hitSlop={8} style={{ marginRight: 12 }}>
-                <ArrowLeft size={24} color={theme.ink} />
-              </Pressable>
-            ) : null}
-            <Text style={[styles.title, { color: theme.ink, flex: 1 }]}>
-              {selectedTemplate ? 'Edit Template' : 'Select Template'}
-            </Text>
-            <Pressable onPress={onClose} hitSlop={8}>
-              <X size={24} color={theme.muted} />
-            </Pressable>
-          </View>
-
-          {!selectedTemplate ? (
-            <>
-              <View style={[styles.searchContainer, { borderBottomColor: theme.border }]}>
-                <View style={[styles.searchBar, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
-                  <Search size={18} color={theme.muted} style={styles.searchIcon} />
-                  <TextInput
-                    style={[styles.searchInput, { color: theme.ink }]}
-                    placeholder="Search templates..."
-                    placeholderTextColor={theme.muted}
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                  />
-                </View>
-              </View>
-
-              {loading ? (
-                <View style={styles.centerContainer}>
-                  <ActivityIndicator size="large" color={theme.emerald} />
-                  <Text style={[styles.loadingText, { color: theme.muted }]}>Loading templates...</Text>
-                </View>
-              ) : (
-                <FlatList
-                  data={filteredTemplates}
-                  keyExtractor={(item) => item.template_id}
-                  renderItem={renderItem}
-                  contentContainerStyle={styles.listContent}
-                  ListEmptyComponent={
-                    <View style={styles.centerContainer}>
-                      <FileText size={48} color={theme.border} />
-                      <Text style={[styles.emptyText, { color: theme.muted }]}>
-                        No templates found
-                      </Text>
-                    </View>
-                  }
-                />
-              )}
-            </>
-          ) : (
-            renderEditView()
-          )}
+        <View style={[styles.header, { borderBottomColor: theme.border }]}>
+          {selectedTemplate ? (
+            <ScalePressable onPress={() => setSelectedTemplate(null)} hitSlop={8} style={{ marginRight: 12 }}>
+              <ArrowLeft size={24} color={theme.ink} />
+            </ScalePressable>
+          ) : null}
+          <Text style={[styles.title, { color: theme.ink, flex: 1 }]}>
+            {selectedTemplate ? 'Edit Template' : 'Select Template'}
+          </Text>
+          <ScalePressable onPress={onClose} hitSlop={8}>
+            <X size={24} color={theme.muted} />
+          </ScalePressable>
         </View>
+
+        {!selectedTemplate ? (
+          <>
+            <View style={[styles.searchContainer, { borderBottomColor: theme.border }]}>
+              <View style={[styles.searchBar, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
+                <Search size={18} color={theme.muted} style={styles.searchIcon} />
+                <TextInput
+                  style={[styles.searchInput, { color: theme.ink }]}
+                  placeholder="Search templates..."
+                  placeholderTextColor={theme.muted}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                />
+              </View>
+            </View>
+
+            {loading ? (
+              <View style={styles.centerContainer}>
+                <ActivityIndicator size="large" color={theme.emerald} />
+                <Text style={[styles.loadingText, { color: theme.muted }]}>
+                  Loading templates...
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={filteredTemplates}
+                keyExtractor={(item) => String(item.id || item.template_id || item.name)}
+                renderItem={renderItem}
+                contentContainerStyle={styles.listContent}
+                ListEmptyComponent={
+                  <View style={styles.centerContainer}>
+                    <FileText size={48} color={theme.border} />
+                    <Text style={[styles.emptyText, { color: theme.muted }]}>
+                      No templates found
+                    </Text>
+                  </View>
+                }
+              />
+            )}
+          </>
+        ) : (
+          renderEditView()
+        )}
       </KeyboardAvoidingView>
-    </Modal>
+    </SlideUpModal>
   );
 }
 

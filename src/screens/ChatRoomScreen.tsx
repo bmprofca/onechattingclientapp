@@ -47,6 +47,7 @@ import { resolveTemplateBodyText, getTemplateHeaderMedia } from '../utils/templa
 import { useTheme } from '../theme/theme';
 import { socketManager } from '../services/socketManager';
 import { Image as ImageIcon, Video, FileText, Music, LayoutTemplate } from 'lucide-react-native';
+import { ScalePressable, FadeInView } from '../components/animations';
 type AttachmentKind = 'photo' | 'video' | 'document' | 'audio';
 
 type PendingAttachment = {
@@ -465,65 +466,67 @@ export function ChatRoomScreen({
     const canReply = Boolean(item.wamid && item.status !== 'failed');
 
     return (
-      <SwipeableMessageWrapper
-        enabled={canReply}
-        onSwipe={() => setReplyingTo(item)}
-      >
-        <Pressable
-          onLongPress={() => {
-            if (canReply) {
-              setReplyingTo(item);
-            }
-          }}
-          delayLongPress={400}
-          style={[styles.messageRow, isOut ? styles.messageRowOut : styles.messageRowIn]}
+      <FadeInView duration={220} distance={6}>
+        <SwipeableMessageWrapper
+          enabled={canReply}
+          onSwipe={() => setReplyingTo(item)}
         >
-        <View style={[
-          styles.messageBubble,
-          isOut
-            ? { backgroundColor: theme.bubbleOut, borderTopRightRadius: 2 }
-            : { backgroundColor: theme.bubbleIn, borderTopLeftRadius: 2 },
-        ]}>
-          {renderReplyContext(item)}
-          {renderMessageBody(item, messageType, isOut)}
-          <View style={styles.messageFooter}>
-            <Text style={[
-              styles.messageTime,
-              { color: isOut ? theme.bubbleOutText + 'A0' : theme.muted },
-            ]}>
-              {new Date(item.create_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </Text>
-            {isOut && (
-              <View style={{ marginLeft: 4, flexDirection: 'row', alignItems: 'center' }}>
-                {item.status === 'pending' && <Clock size={14} color={theme.muted} />}
-                {item.status === 'sent' && <Check size={16} color={theme.muted} />}
-                {item.status === 'delivered' && <CheckCheck size={16} color={theme.muted} />}
-                {item.status === 'read' && <CheckCheck size={16} color="#34B7F1" />}
-                {item.status === 'failed' && (
-                  <Pressable
-                    onPress={() => Alert.alert('Message Failed', item.failed_reason || 'Unknown error')}
-                    hitSlop={8}
-                    style={{ marginLeft: 4, flexDirection: 'row', alignItems: 'center', gap: 4 }}
-                  >
-                    <AlertCircle size={14} color="#EF4444" />
-                    <Info size={14} color={theme.muted} />
-                  </Pressable>
-                )}
-              </View>
-            )}
-            {canReply && (
-              <Pressable
-                onPress={() => setReplyingTo(item)}
-                hitSlop={12}
-                style={{ marginLeft: 6, opacity: 0.8 }}
-              >
-                <CornerUpLeft size={13} color={isOut ? theme.bubbleOutText + 'A0' : theme.muted} />
-              </Pressable>
-            )}
+          <Pressable
+            onLongPress={() => {
+              if (canReply) {
+                setReplyingTo(item);
+              }
+            }}
+            delayLongPress={400}
+            style={[styles.messageRow, isOut ? styles.messageRowOut : styles.messageRowIn]}
+          >
+          <View style={[
+            styles.messageBubble,
+            isOut
+              ? { backgroundColor: theme.bubbleOut, borderTopRightRadius: 2 }
+              : { backgroundColor: theme.bubbleIn, borderTopLeftRadius: 2 },
+          ]}>
+            {renderReplyContext(item)}
+            {renderMessageBody(item, messageType, isOut)}
+            <View style={styles.messageFooter}>
+              <Text style={[
+                styles.messageTime,
+                { color: isOut ? theme.bubbleOutText + 'A0' : theme.muted },
+              ]}>
+                {new Date(item.create_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </Text>
+              {isOut && (
+                <View style={{ marginLeft: 4, flexDirection: 'row', alignItems: 'center' }}>
+                  {item.status === 'pending' && <Clock size={14} color={theme.muted} />}
+                  {item.status === 'sent' && <Check size={16} color={theme.muted} />}
+                  {item.status === 'delivered' && <CheckCheck size={16} color={theme.muted} />}
+                  {item.status === 'read' && <CheckCheck size={16} color="#34B7F1" />}
+                  {item.status === 'failed' && (
+                    <ScalePressable
+                      onPress={() => Alert.alert('Message Failed', item.failed_reason || 'Unknown error')}
+                      hitSlop={8}
+                      style={{ marginLeft: 4, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                    >
+                      <AlertCircle size={14} color="#EF4444" />
+                      <Info size={14} color={theme.muted} />
+                    </ScalePressable>
+                  )}
+                </View>
+              )}
+              {canReply && (
+                <ScalePressable
+                  onPress={() => setReplyingTo(item)}
+                  hitSlop={12}
+                  style={{ marginLeft: 6, opacity: 0.8 }}
+                >
+                  <CornerUpLeft size={13} color={isOut ? theme.bubbleOutText + 'A0' : theme.muted} />
+                </ScalePressable>
+              )}
+            </View>
           </View>
-        </View>
-      </Pressable>
-    </SwipeableMessageWrapper>
+        </Pressable>
+      </SwipeableMessageWrapper>
+    </FadeInView>
     );
 
     function renderReplyContext(msg: any) {
@@ -537,16 +540,13 @@ export function ChatRoomScreen({
       else if (replyType === 'document') replyPreview = replyMsg.media_name || '📄 Document';
       else if (replyType === 'audio') replyPreview = replyMsg.is_voice ? '🎤 Voice message' : '🎵 Audio';
       else if (replyType === 'template') replyPreview = resolveTemplateBodyText(replyMsg);
-      if (!replyPreview) replyPreview = 'Message';
-
-      const isReplyFromMe = replyMsg.type === 'out';
 
       return (
-        <View style={[styles.replyContext, { borderLeftColor: isReplyFromMe ? theme.emerald : '#3B82F6' }]}>
-          <Text style={[styles.replyContextName, { color: isReplyFromMe ? theme.emerald : '#3B82F6' }]}>
-            {isReplyFromMe ? 'You' : (contactName || contactNumber)}
+        <View style={[styles.replyContext, { borderLeftColor: theme.emerald }]}>
+          <Text style={[styles.replyContextName, { color: theme.emerald }]}>
+            {replyMsg.type === 'out' ? 'You' : (contactName || contactNumber)}
           </Text>
-          <Text style={[styles.replyContextText, { color: theme.muted }]} numberOfLines={1}>
+          <Text style={[styles.replyContextText, { color: theme.muted }]} numberOfLines={2}>
             {replyPreview}
           </Text>
         </View>
@@ -642,10 +642,10 @@ export function ChatRoomScreen({
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
       {/* Sleek Top Header */}
-      <View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
-        <Pressable onPress={onBack} style={styles.backButton} hitSlop={8}>
+      <FadeInView direction="down" distance={8} duration={250} style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
+        <ScalePressable onPress={onBack} style={styles.backButton} hitSlop={8}>
           <Text style={[styles.backButtonText, { color: theme.ink }]}>‹</Text>
-        </Pressable>
+        </ScalePressable>
 
         <View style={[styles.avatar, { backgroundColor: theme.mint }]}>
           <Text style={[styles.avatarText, { color: theme.mintText }]}>{initialLetter}</Text>
@@ -657,11 +657,11 @@ export function ChatRoomScreen({
         </View>
 
         <View style={styles.headerRightActions}>
-          <Pressable style={styles.headerIconBtn} hitSlop={8}>
+          <ScalePressable style={styles.headerIconBtn} hitSlop={8}>
             <Text style={[styles.headerIcon, { color: theme.ink }]}>⋮</Text>
-          </Pressable>
+          </ScalePressable>
         </View>
-      </View>
+      </FadeInView>
 
       {/* Message List area */}
       <View style={[styles.chatBackground, { backgroundColor: theme.chatBg }]}>
@@ -689,110 +689,116 @@ export function ChatRoomScreen({
 
       {/* Attachment menu */}
       {attachMenuOpen && (
-        <View style={[styles.attachMenu, { backgroundColor: theme.header, borderColor: theme.border }]}>
-          <AttachmentOption
-            label="Photo"
-            icon={ImageIcon}
-            onPress={() => handlePickAttachment('photo')}
-            theme={theme}
-          />
-          <AttachmentOption
-            label="Video"
-            icon={Video}
-            onPress={() => handlePickAttachment('video')}
-            theme={theme}
-          />
-          <AttachmentOption
-            label="Document"
-            icon={FileText}
-            onPress={() => handlePickAttachment('document')}
-            theme={theme}
-          />
-          <AttachmentOption
-            label="Audio"
-            icon={Music}
-            onPress={() => handlePickAttachment('audio')}
-            theme={theme}
-          />
-          <AttachmentOption
-            label="Template"
-            icon={LayoutTemplate}
-            onPress={() => {
-              setAttachMenuOpen(false);
-              setTemplateMenuOpen(true);
-            }}
-            theme={theme}
-          />
-        </View>
+        <FadeInView direction="up" distance={12} duration={200}>
+          <View style={[styles.attachMenu, { backgroundColor: theme.header, borderColor: theme.border }]}>
+            <AttachmentOption
+              label="Photo"
+              icon={ImageIcon}
+              onPress={() => handlePickAttachment('photo')}
+              theme={theme}
+            />
+            <AttachmentOption
+              label="Video"
+              icon={Video}
+              onPress={() => handlePickAttachment('video')}
+              theme={theme}
+            />
+            <AttachmentOption
+              label="Document"
+              icon={FileText}
+              onPress={() => handlePickAttachment('document')}
+              theme={theme}
+            />
+            <AttachmentOption
+              label="Audio"
+              icon={Music}
+              onPress={() => handlePickAttachment('audio')}
+              theme={theme}
+            />
+            <AttachmentOption
+              label="Template"
+              icon={LayoutTemplate}
+              onPress={() => {
+                setAttachMenuOpen(false);
+                setTemplateMenuOpen(true);
+              }}
+              theme={theme}
+            />
+          </View>
+        </FadeInView>
       )}
 
       {/* NEW: Pending attachment preview, shown above the input bar until sent or cancelled */}
       {pendingAttachment && (
-        <View style={[styles.previewBar, { backgroundColor: theme.inputContainerBg, borderColor: theme.border }]}>
-          {pendingAttachment.kind === 'photo' ? (
-            <Image source={{ uri: pendingAttachment.file.uri }} style={styles.previewThumb} resizeMode="cover" />
-          ) : (
-            <View style={[styles.previewIconBox, { backgroundColor: theme.inputBg }]}>
-              <Text style={styles.previewIconText}>
-                {pendingAttachment.kind === 'video' ? '🎬' : pendingAttachment.kind === 'audio' ? '🎵' : '📄'}
+        <FadeInView direction="up" distance={10} duration={200}>
+          <View style={[styles.previewBar, { backgroundColor: theme.inputContainerBg, borderColor: theme.border }]}>
+            {pendingAttachment.kind === 'photo' ? (
+              <Image source={{ uri: pendingAttachment.file.uri }} style={styles.previewThumb} resizeMode="cover" />
+            ) : (
+              <View style={[styles.previewIconBox, { backgroundColor: theme.inputBg }]}>
+                <Text style={styles.previewIconText}>
+                  {pendingAttachment.kind === 'video' ? '🎬' : pendingAttachment.kind === 'audio' ? '🎵' : '📄'}
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.previewInfo}>
+              <Text style={[styles.previewName, { color: theme.ink }]} numberOfLines={1}>
+                {pendingAttachment.file.name}
+              </Text>
+              <Text style={[styles.previewKind, { color: theme.muted }]}>
+                {isUploading
+                  ? 'Sending…'
+                  : pendingAttachment.kind.charAt(0).toUpperCase() + pendingAttachment.kind.slice(1)}
               </Text>
             </View>
-          )}
 
-          <View style={styles.previewInfo}>
-            <Text style={[styles.previewName, { color: theme.ink }]} numberOfLines={1}>
-              {pendingAttachment.file.name}
-            </Text>
-            <Text style={[styles.previewKind, { color: theme.muted }]}>
-              {isUploading
-                ? 'Sending…'
-                : pendingAttachment.kind.charAt(0).toUpperCase() + pendingAttachment.kind.slice(1)}
-            </Text>
+            {isUploading ? (
+              <ActivityIndicator size="small" color={theme.muted} style={styles.previewCancel} />
+            ) : (
+              <ScalePressable onPress={cancelPendingAttachment} hitSlop={8} style={styles.previewCancel}>
+                <Text style={[styles.previewCancelText, { color: theme.ink }]}>✕</Text>
+              </ScalePressable>
+            )}
           </View>
-
-          {isUploading ? (
-            <ActivityIndicator size="small" color={theme.muted} style={styles.previewCancel} />
-          ) : (
-            <Pressable onPress={cancelPendingAttachment} hitSlop={8} style={styles.previewCancel}>
-              <Text style={[styles.previewCancelText, { color: theme.ink }]}>✕</Text>
-            </Pressable>
-          )}
-        </View>
+        </FadeInView>
       )}
 
       {/* Reply Preview Banner */}
       {replyingTo && (
-        <View style={[styles.replyBanner, { backgroundColor: theme.surface, borderTopColor: theme.border }]}>
-          <View style={[styles.replyBannerContent, { borderLeftColor: '#3B82F6' }]}>
-            <View style={styles.replyBannerTextWrap}>
-              <View style={styles.replyBannerHeader}>
-                <CornerUpLeft size={14} color="#3B82F6" />
-                <Text style={[styles.replyBannerLabel, { color: '#3B82F6' }]}>
-                  Replying to {replyingTo.type === 'out' ? 'yourself' : (contactName || contactNumber)}
+        <FadeInView direction="up" distance={10} duration={200}>
+          <View style={[styles.replyBanner, { backgroundColor: theme.surface, borderTopColor: theme.border }]}>
+            <View style={[styles.replyBannerContent, { borderLeftColor: '#3B82F6' }]}>
+              <View style={styles.replyBannerTextWrap}>
+                <View style={styles.replyBannerHeader}>
+                  <CornerUpLeft size={14} color="#3B82F6" />
+                  <Text style={[styles.replyBannerLabel, { color: '#3B82F6' }]}>
+                    Replying to {replyingTo.type === 'out' ? 'yourself' : (contactName || contactNumber)}
+                  </Text>
+                </View>
+                <Text style={[styles.replyBannerMessage, { color: theme.muted }]} numberOfLines={1}>
+                  {(() => {
+                    const rt = (replyingTo.message_type || 'text').toLowerCase();
+                    if (rt === 'image' || rt === 'photo') return replyingTo.message || '📷 Photo';
+                    if (rt === 'video') return replyingTo.message || '🎥 Video';
+                    if (rt === 'document') return replyingTo.media_name || '📄 Document';
+                    if (rt === 'audio') return replyingTo.is_voice ? '🎤 Voice message' : '🎵 Audio';
+                    if (rt === 'template') return resolveTemplateBodyText(replyingTo);
+                    return replyingTo.message || 'Message';
+                  })()}
                 </Text>
               </View>
-              <Text style={[styles.replyBannerMessage, { color: theme.muted }]} numberOfLines={1}>
-                {(() => {
-                  const rt = (replyingTo.message_type || 'text').toLowerCase();
-                  if (rt === 'image' || rt === 'photo') return replyingTo.message || '📷 Photo';
-                  if (rt === 'video') return replyingTo.message || '🎥 Video';
-                  if (rt === 'document') return replyingTo.media_name || '📄 Document';
-                  if (rt === 'audio') return replyingTo.is_voice ? '🎤 Voice message' : '🎵 Audio';
-                  if (rt === 'template') return resolveTemplateBodyText(replyingTo);
-                  return replyingTo.message || 'Message';
-                })()}
-              </Text>
+              <ScalePressable onPress={() => setReplyingTo(null)} hitSlop={8}>
+                <X size={20} color={theme.muted} />
+              </ScalePressable>
             </View>
-            <Pressable onPress={() => setReplyingTo(null)} hitSlop={8}>
-              <X size={20} color={theme.muted} />
-            </Pressable>
           </View>
-        </View>
+        </FadeInView>
       )}
 
       {/* Input Bar */}
       <View style={[styles.inputContainer]}>
-        <Pressable
+        <ScalePressable
           style={styles.attachButton}
           hitSlop={8}
           disabled={isUploading}
@@ -803,7 +809,7 @@ export function ChatRoomScreen({
           ) : (
             <Plus size={22} color={theme.emerald} />
           )}
-        </Pressable>
+        </ScalePressable>
 
         <View style={[styles.inputPill, { backgroundColor: theme.inputBg }]}>
           <TextInput
@@ -815,7 +821,7 @@ export function ChatRoomScreen({
             multiline
           />
         </View>
-        <Pressable
+        <ScalePressable
           style={[
             styles.sendButton,
             { backgroundColor: theme.emerald },
@@ -829,7 +835,7 @@ export function ChatRoomScreen({
           ) : (
             <Text style={styles.sendButtonIcon}>➤</Text>
           )}
-        </Pressable>
+        </ScalePressable>
       </View>
 
       <TemplateModal
@@ -863,12 +869,12 @@ function AttachmentOption({
   theme: any;
 }) {
   return (
-    <Pressable style={styles.attachMenuItem} onPress={onPress}>
+    <ScalePressable style={styles.attachMenuItem} onPress={onPress}>
       <View style={[styles.attachMenuIconWrap, { backgroundColor: theme.inputBg }]}>
         <IconComponent size={22} color={theme.emerald} strokeWidth={2} />
       </View>
       <Text style={[styles.attachMenuLabel, { color: theme.ink }]}>{label}</Text>
-    </Pressable>
+    </ScalePressable>
   );
 }
 

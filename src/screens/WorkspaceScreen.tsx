@@ -1,11 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { BackHandler, Modal, Pressable, ScrollView, StyleSheet, Text, View, Animated, Easing } from 'react-native';
+import { BackHandler, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View, Animated, Easing } from 'react-native';
 import { ArrowLeftRight, Home, MessageCircle, Megaphone, User, Wallet, MoreVertical, Briefcase, Info, HelpCircle, Brain, Settings, ReceiptText } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
-import { Session } from '../services/session';
+import { getAccountProfile } from '../api/auth';
+import { getProjectMeta } from '../api/workspace';
+import { Session, loadSession, saveSession } from '../services/session';
 import { useTheme } from '../theme/theme';
 import { CampaignsScreen } from './CampaignsScreen';
 import { CampaignDetailsScreen } from './CampaignDetailsScreen';
+import { CreateCampaignScreen } from './CreateCampaignScreen';
 import { DashboardScreen } from './DashboardScreen';
 import { LiveChatScreen } from './LiveChatScreen';
 import { ChatRoomScreen } from './ChatRoomScreen';
@@ -20,6 +23,7 @@ import { AgentConfigScreen } from './AgentConfigScreen';
 import { TransactionsScreen } from './TransactionsScreen';
 import { AiBillsScreen } from './AiBillsScreen';
 import { socketManager, ConnectionStatus } from '../services/socketManager';
+import { ScalePressable, FadeInView } from '../components/animations';
 
 type Page = 'dashboard' | 'inbox' | 'campaigns' | 'profile' | 'wallet' | 'projects';
 
@@ -55,8 +59,11 @@ export function WorkspaceScreen({
   const hasProject = !!projectId;
 
   const [page, setPage] = useState<Page>('dashboard');
+  const [walletBalance, setWalletBalance] = useState<number | string>(session.balance ?? 0);
+  const [projectCount, setProjectCount] = useState<number>(session.projectCount ?? session.projects?.length ?? 0);
   const [chatTarget, setChatTarget] = useState<{ number: string; name: string } | null>(null);
   const [campaignTarget, setCampaignTarget] = useState<{ id: string; name: string } | null>(null);
+  const [createCampaignTarget, setCreateCampaignTarget] = useState(false);
   const [walletTarget, setWalletTarget] = useState(false); // full-screen wallet, used from full mode
   const [wabaTarget, setWabaTarget] = useState(false);
   const [supportTarget, setSupportTarget] = useState(false);
@@ -68,11 +75,64 @@ export function WorkspaceScreen({
   const [projectsTarget, setProjectsTarget] = useState(false); // full-screen projects hub, used from full mode
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
+  const [projectProfileImage, setProjectProfileImage] = useState<string>('');
 
   const apiSession = useMemo<ApiSession>(
     () => ({ token: session.token, username: session.username }),
     [session.token, session.username],
   );
+
+  const currentProject = useMemo(() => {
+    return session.projects?.find((p) => p.id === projectId);
+  }, [session.projects, projectId]);
+
+  useEffect(() => {
+    if (!projectId) {
+      setProjectProfileImage('');
+      return;
+    }
+    // Set initial from project if available
+    const initialImg = (currentProject as any)?.profile_image || (currentProject as any)?.logo || '';
+    if (initialImg) {
+      setProjectProfileImage(initialImg);
+    }
+    getProjectMeta(apiSession, projectId)
+      .then((res) => {
+        const proj = res?.data?.project || res?.project || {};
+        const img = proj.profile_image || proj.logo || proj.image || '';
+        if (img) {
+          setProjectProfileImage(img);
+        }
+      })
+      .catch(() => {});
+  }, [apiSession, projectId, currentProject]);
+
+  const refreshAccount = useCallback(async () => {
+    try {
+      const updated = await getAccountProfile(apiSession);
+      if (updated.balance !== undefined) {
+        setWalletBalance(updated.balance);
+      }
+      if (updated.projectCount !== undefined) {
+        setProjectCount(updated.projectCount);
+      }
+      const stored = await loadSession();
+      if (stored) {
+        const refreshed: Session = {
+          ...stored,
+          ...updated,
+          selectedProjectId: stored.selectedProjectId,
+        };
+        await saveSession(refreshed);
+      }
+    } catch {
+      // ignore
+    }
+  }, [apiSession]);
+
+  useEffect(() => {
+    refreshAccount();
+  }, [refreshAccount]);
 
   // Only entering/leaving workspace mode resets the page. Switching between
   // projects keeps the current page mounted and its projectId-aware loaders
@@ -104,6 +164,7 @@ export function WorkspaceScreen({
   const handleBackPress = useCallback(() => {
     if (chatTarget) { setChatTarget(null); return true; }
     if (campaignTarget) { setCampaignTarget(null); return true; }
+    if (createCampaignTarget) { setCreateCampaignTarget(false); return true; }
     if (walletTarget) { setWalletTarget(false); return true; }
     if (wabaTarget) { setWabaTarget(false); return true; }
     if (supportTarget) { setSupportTarget(false); return true; }
@@ -115,7 +176,7 @@ export function WorkspaceScreen({
     if (projectsTarget) { setProjectsTarget(false); return true; }
     if (page !== 'dashboard') { setPage('dashboard'); return true; }
     return false;
-  }, [chatTarget, campaignTarget, walletTarget, wabaTarget, supportTarget, contextConfigTarget, agentConfigTarget, projectConfigTarget, transactionsTarget, projectsTarget, page]);
+  }, [chatTarget, campaignTarget, createCampaignTarget, walletTarget, wabaTarget, supportTarget, contextConfigTarget, agentConfigTarget, projectConfigTarget, transactionsTarget, projectsTarget, page]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
@@ -148,12 +209,30 @@ export function WorkspaceScreen({
     );
   }
 
+  if (createCampaignTarget) {
+    return (
+      <CreateCampaignScreen
+        projectId={projectId}
+        session={apiSession}
+        onBack={() => setCreateCampaignTarget(false)}
+        onCreated={() => {
+          setCreateCampaignTarget(false);
+          setPage('campaigns');
+        }}
+      />
+    );
+  }
+
   if (walletTarget) {
     return (
       <WalletScreen
         session={apiSession}
-        balance={String(session.balance || '0')}
-        onBack={() => setWalletTarget(false)}
+        balance={walletBalance ?? session.balance ?? 0}
+        onBack={() => {
+          setWalletTarget(false);
+          refreshAccount();
+        }}
+        onBalanceUpdated={(bal) => setWalletBalance(bal)}
       />
     );
   }
@@ -198,20 +277,22 @@ export function WorkspaceScreen({
       <ProjectsScreen
         session={apiSession}
         projects={session.projects || []}
+        currentProjectId={projectId}
         onSelect={async (id) => { await onSelectProject(id); setProjectsTarget(false); }}
         onProjectCreated={async (proj) => { await onProjectCreated(proj); await onSelectProject(proj.id); setProjectsTarget(false); }}
         onClose={() => setProjectsTarget(false)}
         onRechargeWallet={() => { setProjectsTarget(false); setWalletTarget(true); }}
+        onOpenWaba={() => { setProjectsTarget(false); setWabaTarget(true); }}
       />
     );
   }
 
   const tabs = hasProject ? FULL_TABS : LIMITED_TABS;
 
-  // In limited mode, the Wallet tab renders WalletScreen directly, which
-  // already has its own header + back arrow — showing our own header on
-  // top of it would just duplicate it, so we skip it for that one page.
-  const showOuterHeader = hasProject || page !== 'wallet';
+  // In limited mode, the Wallet and Projects tabs render their own screens
+  // with their own headers — showing our own header on top of them would
+  // just duplicate it, so we skip it for those pages.
+  const showOuterHeader = hasProject || (page !== 'wallet' && page !== 'projects');
 
   return (
     <View style={[styles.safe, { backgroundColor: theme.canvas }]}>
@@ -247,7 +328,7 @@ export function WorkspaceScreen({
           <View style={styles.headerActions}>
             {hasProject && (
               <>
-                <Pressable
+                <ScalePressable
                   accessibilityRole="button"
                   accessibilityLabel="Open Wallet"
                   onPress={() => setWalletTarget(true)}
@@ -255,17 +336,36 @@ export function WorkspaceScreen({
                   hitSlop={8}
                 >
                   <Wallet size={20} color={theme.ink} strokeWidth={2.5} />
-                </Pressable>
-                <Pressable
+                </ScalePressable>
+                <ScalePressable
                   accessibilityRole="button"
                   accessibilityLabel="Choose another project"
                   onPress={() => setProjectsTarget(true)}
-                  style={styles.actionBtn}
+                  style={styles.projectSwitchBtn}
                   hitSlop={8}
                 >
-                  <ArrowLeftRight size={20} color={theme.ink} strokeWidth={2.5} />
-                </Pressable>
-                <Pressable
+                  {projectProfileImage ? (
+                    <View style={styles.projectAvatarContainer}>
+                      <Image
+                        source={{ uri: projectProfileImage }}
+                        style={[styles.projectAvatarImage, { borderColor: theme.emerald }]}
+                      />
+                      <View style={[styles.projectSwitchBadge, { backgroundColor: theme.emerald }]}>
+                        <ArrowLeftRight size={8} color="#FFF" strokeWidth={3} />
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={[styles.projectAvatarFallback, { backgroundColor: theme.mint, borderColor: theme.border }]}>
+                      <Text style={[styles.projectAvatarInitial, { color: theme.emerald }]}>
+                        {currentProject?.name?.trim().charAt(0).toUpperCase() || 'P'}
+                      </Text>
+                      <View style={[styles.projectSwitchBadge, { backgroundColor: theme.emerald }]}>
+                        <ArrowLeftRight size={8} color="#FFF" strokeWidth={3} />
+                      </View>
+                    </View>
+                  )}
+                </ScalePressable>
+                <ScalePressable
                   accessibilityRole="button"
                   accessibilityLabel="More options"
                   onPress={() => setIsMenuVisible(true)}
@@ -273,7 +373,7 @@ export function WorkspaceScreen({
                   hitSlop={8}
                 >
                   <MoreVertical size={20} color={theme.ink} strokeWidth={2.5} />
-                </Pressable>
+                </ScalePressable>
               </>
             )}
           </View>
@@ -281,77 +381,89 @@ export function WorkspaceScreen({
       )}
 
       <View style={styles.body}>
-        {!hasProject ? (
-          // ---- Limited mode: only Home / Wallet / Projects exist ----
-          page === 'wallet' ? (
-            <WalletScreen
-              session={apiSession}
-              balance={String(session.balance || '0')}
-              onBack={() => setPage('dashboard')}
-            />
-          ) : page === 'projects' ? (
-            <ProjectsScreen
-              session={apiSession}
-              projects={session.projects || []}
-              onSelect={onSelectProject}
-              onProjectCreated={async (proj) => { await onProjectCreated(proj); await onSelectProject(proj.id); }}
-              onRechargeWallet={() => setPage('wallet')}
-            />
+        <FadeInView key={hasProject ? page : `limited-${page}`} duration={220} distance={6} style={{ flex: 1 }}>
+          {!hasProject ? (
+            // ---- Limited mode: only Home / Wallet / Projects exist ----
+            page === 'wallet' ? (
+              <WalletScreen
+                session={apiSession}
+                balance={walletBalance ?? session.balance ?? 0}
+                onBack={() => {
+                  setPage('dashboard');
+                  refreshAccount();
+                }}
+                onBalanceUpdated={(bal) => setWalletBalance(bal)}
+              />
+            ) : page === 'projects' ? (
+              <ProjectsScreen
+                session={apiSession}
+                projects={session.projects || []}
+                onSelect={onSelectProject}
+                onProjectCreated={async (proj) => { await onProjectCreated(proj); await onSelectProject(proj.id); }}
+                onRechargeWallet={() => setPage('wallet')}
+                onClose={() => setPage('dashboard')}
+              />
+            ) : (
+              <ScrollView contentContainerStyle={styles.noProjectPage} showsVerticalScrollIndicator={false}>
+                <View style={[styles.emptyIcon, { backgroundColor: theme.mint }]}>
+                  <Briefcase size={30} color={theme.emerald} strokeWidth={2} />
+                </View>
+                <Text style={[styles.emptyTitle, { color: theme.ink }]}>Welcome to 1Chatting</Text>
+                <Text style={[styles.emptyCopy, { color: theme.muted }]}>
+                  You don't have a workspace yet. Create one to start chatting with your customers on WhatsApp.
+                </Text>
+                <ScalePressable
+                  accessibilityRole="button"
+                  onPress={() => setPage('projects')}
+                  style={[styles.primaryButton, { backgroundColor: theme.emerald }]}
+                >
+                  <Text style={styles.primaryButtonText}>Create a project</Text>
+                </ScalePressable>
+                <ScalePressable onPress={() => setPage('wallet')} style={styles.secondaryLink} hitSlop={8}>
+                  <Text style={[styles.secondaryLinkText, { color: theme.emerald }]}>Add funds to wallet</Text>
+                </ScalePressable>
+                <Pressable
+                        accessibilityRole="button"
+                        onPress={onSignOut}
+                        style={[styles.logoutButton, { backgroundColor: theme.isDark ? theme.danger : theme.dangerBg, borderColor: theme.isDark ? theme.danger : theme.dangerBorder }]}
+                      >
+                        <Text style={[styles.logoutButtonText, { color: '#FFFFFF' }]}>Log Out</Text>
+                      </Pressable>
+              </ScrollView>
+            )
           ) : (
-            <ScrollView contentContainerStyle={styles.noProjectPage} showsVerticalScrollIndicator={false}>
-              <View style={[styles.emptyIcon, { backgroundColor: theme.mint }]}>
-                <Briefcase size={30} color={theme.emerald} strokeWidth={2} />
-              </View>
-              <Text style={[styles.emptyTitle, { color: theme.ink }]}>Welcome to 1Chatting</Text>
-              <Text style={[styles.emptyCopy, { color: theme.muted }]}>
-                You don't have a workspace yet. Create one to start chatting with your customers on WhatsApp.
-              </Text>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => setPage('projects')}
-                style={[styles.primaryButton, { backgroundColor: theme.emerald }]}
-              >
-                <Text style={styles.primaryButtonText}>Create a project</Text>
-              </Pressable>
-              <Pressable onPress={() => setPage('wallet')} style={styles.secondaryLink} hitSlop={8}>
-                <Text style={[styles.secondaryLinkText, { color: theme.emerald }]}>Add funds to wallet</Text>
-              </Pressable>
-              <Pressable onPress={onSignOut} style={styles.secondaryLink} hitSlop={8}>
-                <Text style={[styles.secondaryLinkText, { color: theme.muted }]}>Sign out</Text>
-              </Pressable>
-            </ScrollView>
-          )
-        ) : (
-          // ---- Full mode: normal workspace experience ----
-          page === 'dashboard' ? (
-            <DashboardScreen
-              session={apiSession}
-              projectId={projectId}
-              balance={String(session.balance || '0')}
-              projectCount={session.projects?.length || session.projectCount || 0}
-              onOpenInbox={() => setPage('inbox')}
-              onOpenProfile={() => setPage('profile')}
-              onOpenProjectsHub={() => setProjectsTarget(true)}
-              onOpenWallet={() => setWalletTarget(true)}
-              onOpenWaba={() => setWabaTarget(true)}
-              onOpenSupport={() => setSupportTarget(true)}
-            />
-          ) : page === 'inbox' ? (
-            <LiveChatScreen
-              projectId={projectId}
-              session={apiSession}
-              onOpenChat={(contactNumber, contactName) => setChatTarget({ number: contactNumber, name: contactName })}
-            />
-          ) : page === 'campaigns' ? (
-            <CampaignsScreen
-              projectId={projectId}
-              session={apiSession}
-              onOpenCampaign={(campaignId, name) => setCampaignTarget({ id: campaignId, name })}
-            />
-          ) : (
-            <ProfileScreen session={session} apiSession={apiSession} onSignOut={onSignOut} />
-          )
-        )}
+            // ---- Full mode: normal workspace experience ----
+            page === 'dashboard' ? (
+              <DashboardScreen
+                session={apiSession}
+                projectId={projectId}
+                balance={walletBalance ?? session.balance ?? 0}
+                projectCount={projectCount || session.projects?.length || session.projectCount || 0}
+                onBalanceUpdated={(bal) => setWalletBalance(bal)}
+                onOpenInbox={() => setPage('inbox')}
+                onOpenProfile={() => setPage('profile')}
+                onOpenProjectsHub={() => setProjectsTarget(true)}
+                onOpenWallet={() => setWalletTarget(true)}
+                onOpenSupport={() => setSupportTarget(true)}
+              />
+            ) : page === 'inbox' ? (
+              <LiveChatScreen
+                projectId={projectId}
+                session={apiSession}
+                onOpenChat={(contactNumber, contactName) => setChatTarget({ number: contactNumber, name: contactName })}
+              />
+            ) : page === 'campaigns' ? (
+              <CampaignsScreen
+                projectId={projectId}
+                session={apiSession}
+                onOpenCampaign={(campaignId, name) => setCampaignTarget({ id: campaignId, name })}
+                onCreateCampaign={() => setCreateCampaignTarget(true)}
+              />
+            ) : (
+              <ProfileScreen session={session} apiSession={apiSession} onSignOut={onSignOut} />
+            )
+          )}
+        </FadeInView>
       </View>
 
       <View style={[styles.tabBar, { backgroundColor: theme.header, borderTopColor: theme.border }]}>
@@ -393,56 +505,55 @@ export function WorkspaceScreen({
                 ],
               },
             ]}>
-              <Pressable
-                style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: theme.cardHover }]}
+              <ScalePressable
+                style={[styles.menuItem]}
                 onPress={() => { setIsMenuVisible(false); setProjectsTarget(true); }}
               >
                 <Briefcase size={18} color={theme.ink} />
                 <Text style={[styles.menuItemText, { color: theme.ink }]}>Projects</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: theme.cardHover }]}
+              </ScalePressable>
+              <ScalePressable
+                style={[styles.menuItem]}
                 onPress={() => { setIsMenuVisible(false); setWabaTarget(true); }}
               >
                 <Info size={18} color={theme.ink} />
                 <Text style={[styles.menuItemText, { color: theme.ink }]}>WABA Info</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: theme.cardHover }]}
+              </ScalePressable>
+              <ScalePressable
+                style={[styles.menuItem]}
                 onPress={() => { setIsMenuVisible(false); setSupportTarget(true); }}
               >
                 <HelpCircle size={18} color={theme.ink} />
                 <Text style={[styles.menuItemText, { color: theme.ink }]}>Support</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: theme.cardHover }]}
+              </ScalePressable>
+              <ScalePressable
+                style={[styles.menuItem]}
                 onPress={() => { setIsMenuVisible(false); setProjectConfigTarget(true); }}
               >
                 <Settings size={18} color={theme.ink} />
                 <Text style={[styles.menuItemText, { color: theme.ink }]}>Configuration</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: theme.cardHover }]}
+              </ScalePressable>
+              <ScalePressable
+                style={[styles.menuItem]}
                 onPress={() => { setIsMenuVisible(false); setTransactionsTarget(true); }}
               >
                 <ReceiptText size={18} color={theme.ink} />
                 <Text style={[styles.menuItemText, { color: theme.ink }]}>Transactions</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: theme.cardHover }]}
+              </ScalePressable>
+              <ScalePressable
+                style={[styles.menuItem]}
                 onPress={() => { setIsMenuVisible(false); setContextConfigTarget(true); }}
               >
                 <Brain size={18} color={theme.ink} />
                 <Text style={[styles.menuItemText, { color: theme.ink }]}>AI Context</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [styles.menuItem, pressed && { backgroundColor: theme.cardHover }]}
+              </ScalePressable>
+              <ScalePressable
+                style={[styles.menuItem]}
                 onPress={() => { setIsMenuVisible(false); setAiBillsTarget(true); }}
               >
                 <ReceiptText size={18} color={theme.ink} />
                 <Text style={[styles.menuItemText, { color: theme.ink }]}>AI Bills</Text>
-              </Pressable>
-
+              </ScalePressable>
             </Animated.View>
           </Pressable>
         </Modal>
@@ -466,8 +577,49 @@ const styles = StyleSheet.create({
   headerTitleGroup: { justifyContent: 'center' },
   greeting: { fontSize: 11, fontWeight: '600', letterSpacing: 0.5 },
   headerName: { fontSize: 24, fontWeight: '900', letterSpacing: -0.3 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   actionBtn: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  projectSwitchBtn: {
+    padding: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  projectAvatarContainer: {
+    position: 'relative',
+    width: 36,
+    height: 36,
+  },
+  projectAvatarImage: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1.5,
+  },
+  projectAvatarFallback: {
+    position: 'relative',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  projectAvatarInitial: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  projectSwitchBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 15,
+    height: 15,
+    borderRadius: 7.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFF',
+  },
   body: { flex: 1 },
   tabBar: {
     flexDirection: 'row',
@@ -526,4 +678,17 @@ const styles = StyleSheet.create({
   },
   menuItem: { paddingVertical: 12, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
   menuItemText: { fontSize: 15, fontWeight: '600' },
+  logoutButton: {
+    height: 52,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    borderWidth: 1,
+    paddingHorizontal:130,
+  },
+  logoutButtonText: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
 });

@@ -8,20 +8,24 @@ import {
   View,
   TextInput,
 } from 'react-native';
-import { Search } from 'lucide-react-native';
+import { Search, Plus, Megaphone } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { getCampaigns, ListItem, unwrapList } from '../api/workspace';
 import { LoadState } from '../components/LoadState';
 import { useTheme } from '../theme/theme';
 
+import { ScalePressable, FadeInView } from '../components/animations';
+
 export function CampaignsScreen({
   projectId,
   session,
   onOpenCampaign,
+  onCreateCampaign,
 }: {
   projectId: string;
   session: ApiSession;
   onOpenCampaign: (campaignId: string, name: string) => void;
+  onCreateCampaign?: () => void;
 }) {
   const theme = useTheme();
   const [items, setItems] = useState<ListItem[]>([]);
@@ -60,23 +64,39 @@ export function CampaignsScreen({
       setLoading(false);
     }
   }, [projectId, session]);
+
   useEffect(() => {
     load();
   }, [load]);
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.canvas }}>
-      <View style={styles.heading}>
-        <View style={[styles.searchContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-          <Search size={18} color={theme.muted} />
-          <TextInput
-            style={[styles.searchInput, { color: theme.ink }]}
-            placeholder="Search campaigns..."
-            placeholderTextColor={theme.muted}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            returnKeyType="search"
-          />
+      <FadeInView direction="down" distance={10} duration={300} style={styles.heading}>
+        {/* Search Bar + Create Button */}
+        <View style={styles.topRow}>
+          <View style={[styles.searchContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <Search size={18} color={theme.muted} />
+            <TextInput
+              style={[styles.searchInput, { color: theme.ink }]}
+              placeholder="Search campaigns..."
+              placeholderTextColor={theme.muted}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              returnKeyType="search"
+            />
+          </View>
+          {onCreateCampaign && (
+            <ScalePressable
+              accessibilityRole="button"
+              onPress={onCreateCampaign}
+              style={[styles.createBtn, { backgroundColor: theme.emerald }]}
+            >
+              <Plus size={18} color="#FFF" />
+              <Text style={styles.createBtnText}>New</Text>
+            </ScalePressable>
+          )}
         </View>
+
         <View style={[styles.segmented, { backgroundColor: theme.cardHover }]}>
           <Pressable
             accessibilityRole="button"
@@ -114,33 +134,35 @@ export function CampaignsScreen({
           </Pressable>
         </View>
         <View style={[styles.rule, { backgroundColor: theme.border }]} />
-      </View>
+      </FadeInView>
 
       <FlatList
         data={filteredItems}
-      keyExtractor={(item, index) =>
-        String(item.campaign_id || item.id || item._id || index)
-      }
-      contentContainerStyle={items.length ? styles.list : styles.emptyList}
-      refreshControl={
-        <RefreshControl
-          refreshing={loading}
-          onRefresh={load}
-          tintColor={theme.emerald}
-        />
-      }
-      ListEmptyComponent={
-        <LoadState
-          loading={false}
-          error={error}
-          empty={!loading && !error}
-          onRetry={load}
-        />
-      }
-      renderItem={({ item }) => (
-        <CampaignCard item={item} onPress={onOpenCampaign} />
-      )}
-    />
+        keyExtractor={(item, index) =>
+          String(item.campaign_id || item.id || item._id || index)
+        }
+        contentContainerStyle={items.length ? styles.list : styles.emptyList}
+        refreshControl={
+          <RefreshControl
+            refreshing={loading}
+            onRefresh={load}
+            tintColor={theme.emerald}
+          />
+        }
+        ListEmptyComponent={
+          <LoadState
+            loading={false}
+            error={error}
+            empty={!loading && !error}
+            onRetry={load}
+          />
+        }
+        renderItem={({ item, index }) => (
+          <FadeInView delay={Math.min(index * 35, 250)} distance={10}>
+            <CampaignCard item={item} onPress={onOpenCampaign} />
+          </FadeInView>
+        )}
+      />
     </View>
   );
 }
@@ -159,7 +181,7 @@ function CampaignCard({
   );
   const status = String(item.status || 'Active');
   return (
-    <Pressable
+    <ScalePressable
       accessibilityRole="button"
       onPress={() => onPress(campaignId, name)}
       style={[
@@ -181,19 +203,39 @@ function CampaignCard({
         <Text style={[styles.cardMeta, { color: theme.emerald }]}>{status}</Text>
       </View>
       <Text style={[styles.arrow, { color: theme.muted }]}>›</Text>
-    </Pressable>
+    </ScalePressable>
   );
 }
 const styles = StyleSheet.create({
   heading: { paddingTop: 12, paddingBottom: 0, paddingHorizontal: 10 },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
   searchContainer: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     height: 44,
     borderRadius: 12,
     borderWidth: 1,
     paddingHorizontal: 12,
-    marginBottom: 8,
+  },
+  createBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 44,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    gap: 4,
+  },
+  createBtnText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '800',
   },
   searchInput: {
     flex: 1,

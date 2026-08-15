@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { X, Download, ExternalLink, FileText } from 'lucide-react-native';
 import ReactNativeBlobUtil from 'react-native-blob-util';
+import { ScalePressable, FadeInView } from './animations';
 
 type MediaViewerProps = {
   visible: boolean;
@@ -157,30 +158,32 @@ export function MediaViewerModal({
       <StatusBar backgroundColor="#000" barStyle="light-content" />
       <View style={styles.container}>
         {/* Top bar */}
-        <View style={styles.topBar}>
-          <Pressable onPress={onClose} hitSlop={12} style={styles.closeBtn}>
+        <FadeInView direction="down" distance={20} duration={300} style={styles.topBar}>
+          <ScalePressable onPress={onClose} hitSlop={12} style={styles.closeBtn}>
             <X size={26} color="#FFF" />
-          </Pressable>
+          </ScalePressable>
           <Text style={styles.topTitle} numberOfLines={1}>
             {fileName}
           </Text>
           <View style={{ width: 36 }} />
-        </View>
+        </FadeInView>
 
         {/* Content */}
-        <View style={styles.body}>{renderContent()}</View>
+        <FadeInView scale={true} startScale={0.92} duration={350} style={styles.body}>
+          {renderContent()}
+        </FadeInView>
 
         {/* Bottom action bar */}
-        <View style={styles.bottomBar}>
-          <Pressable
+        <FadeInView direction="up" distance={20} duration={300} style={styles.bottomBar}>
+          <ScalePressable
             style={[styles.actionBtn, styles.openBtn]}
             onPress={handleOpenExternal}
           >
             <ExternalLink size={20} color="#FFF" />
             <Text style={styles.actionBtnText}>Open</Text>
-          </Pressable>
+          </ScalePressable>
 
-          <Pressable
+          <ScalePressable
             style={[styles.actionBtn, styles.saveBtn]}
             onPress={handleSave}
             disabled={downloading}
@@ -193,8 +196,8 @@ export function MediaViewerModal({
             <Text style={styles.actionBtnText}>
               {downloading ? 'Saving...' : 'Save'}
             </Text>
-          </Pressable>
-        </View>
+          </ScalePressable>
+        </FadeInView>
       </View>
     </Modal>
   );

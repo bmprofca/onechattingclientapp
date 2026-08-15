@@ -1,19 +1,70 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { ArrowLeft, ChevronLeft, ChevronRight, FileText, RefreshCw, X } from 'lucide-react-native';
+import {
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import {
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  RefreshCw,
+  X,
+} from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { getTransactionHistory } from '../api/payment';
 import { useTheme } from '../theme/theme';
+import {
+  ScalePressable,
+  FadeInView,
+  SlideUpModal,
+} from '../components/animations';
 
-type Transaction = { transaction_id?: string; create_date?: string; type?: boolean | number; transaction_type?: string; amount?: string | number; remark?: string; create_by?: { username?: string }; payment_details?: Record<string, unknown>; message_details?: Record<string, unknown> };
+type Transaction = {
+  transaction_id?: string;
+  create_date?: string;
+  type?: boolean | number;
+  transaction_type?: string;
+  amount?: string | number;
+  remark?: string;
+  create_by?: { username?: string };
+  payment_details?: Record<string, unknown>;
+  message_details?: Record<string, unknown>;
+};
+
 type Filter = 'all' | 'credit' | 'debit';
-const startDate = () => { const date = new Date(); date.setDate(date.getDate() - 30); return date.toISOString().slice(0, 10); };
+
+const startDate = () => {
+  const date = new Date();
+  date.setDate(date.getDate() - 30);
+  return date.toISOString().slice(0, 10);
+};
 const today = () => new Date().toISOString().slice(0, 10);
-const dateLabel = (value?: string) => value ? new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : 'N/A';
-const title = (value?: string) => (value || 'Transaction').split(' ').map(word => word[0]?.toUpperCase() + word.slice(1)).join(' ');
+const dateLabel = (value?: string) =>
+  value
+    ? new Date(value).toLocaleString(undefined, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      })
+    : 'N/A';
+const title = (value?: string) =>
+  (value || 'Transaction')
+    .split(' ')
+    .map(word => word[0]?.toUpperCase() + word.slice(1))
+    .join(' ');
 const amount = (value?: string | number) => `₹${Number(value || 0).toFixed(2)}`;
 
-export function TransactionsScreen({ session, onBack }: { session: ApiSession; onBack: () => void }) {
+export function TransactionsScreen({
+  session,
+  onBack,
+}: {
+  session: ApiSession;
+  onBack: () => void;
+}) {
   const theme = useTheme();
   const [items, setItems] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,23 +79,582 @@ export function TransactionsScreen({ session, onBack }: { session: ApiSession; o
   const [transactionType, setTransactionType] = useState('all');
   const [selected, setSelected] = useState<Transaction | null>(null);
 
-  const load = useCallback(async (requestedPage = page, isRefresh = false) => {
-    isRefresh ? setRefreshing(true) : setLoading(true); setError('');
-    try {
-      const response = await getTransactionHistory(session, { page_no: requestedPage, limit: 20, project_ids: [], from_date: startDate(), to_date: today(), ...(transactionType !== 'all' ? { transaction_type: transactionType } : {}), ...(filter === 'all' ? {} : { type: filter === 'credit' ? '1' : '0' }) });
-      const data = response.data || response;
-      setItems(Array.isArray(data.data) ? data.data : []); setCredit(Number(data.total_credit || 0)); setDebit(Number(data.total_debit || 0));
-      setPage(data.meta?.page_no || requestedPage); setPages(data.meta?.total_pages || 1); setTotal(data.meta?.total_records || data.data?.length || 0);
-    } catch (e) { setError(e instanceof Error ? e.message : 'Failed to load transactions.'); }
-    finally { setLoading(false); setRefreshing(false); }
-  }, [filter, page, session, transactionType]);
-  useEffect(() => { load(1); }, [filter, transactionType]);
+  const load = useCallback(
+    async (requestedPage = page, isRefresh = false) => {
+      isRefresh ? setRefreshing(true) : setLoading(true);
+      setError('');
+      try {
+        const response = await getTransactionHistory(session, {
+          page_no: requestedPage,
+          limit: 20,
+          project_ids: [],
+          from_date: startDate(),
+          to_date: today(),
+          ...(transactionType !== 'all'
+            ? { transaction_type: transactionType }
+            : {}),
+          ...(filter === 'all'
+            ? {}
+            : { type: filter === 'credit' ? '1' : '0' }),
+        });
+        const data = response.data || response;
+        setItems(Array.isArray(data.data) ? data.data : []);
+        setCredit(Number(data.total_credit || 0));
+        setDebit(Number(data.total_debit || 0));
+        setPage(data.meta?.page_no || requestedPage);
+        setPages(data.meta?.total_pages || 1);
+        setTotal(data.meta?.total_records || data.data?.length || 0);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load transactions.');
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [filter, page, session, transactionType],
+  );
 
-  const chip = (label: string, active: boolean, onPress: () => void) => <Pressable key={label} onPress={onPress} style={[styles.chip, { borderColor: active ? theme.emerald : theme.border, backgroundColor: active ? theme.mint : theme.surface }]}><Text style={{ color: active ? theme.emerald : theme.muted, fontWeight: '700', fontSize: 13 }}>{label}</Text></Pressable>;
-  return <View style={[styles.safe, { backgroundColor: theme.canvas }]}><View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}><Pressable onPress={onBack} style={styles.iconBtn}><ArrowLeft size={24} color={theme.ink} /></Pressable><Text style={[styles.headerTitle, { color: theme.ink }]}>Transactions</Text><Pressable onPress={() => load(1, true)} style={styles.iconBtn} disabled={refreshing}><RefreshCw size={20} color={theme.ink} /></Pressable></View><ScrollView contentContainerStyle={styles.page} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(1, true)} />}><Text style={[styles.title, { color: theme.ink }]}>Transaction History</Text><Text style={[styles.copy, { color: theme.muted }]}>Your transactions for the last 30 days.</Text><View style={styles.summary}>{<Summary label="Records" value={String(total)} color={theme.ink} theme={theme} />}{<Summary label="Credit" value={amount(credit)} color={theme.emerald} theme={theme} />}{<Summary label="Debit" value={amount(debit)} color={theme.danger} theme={theme} />}</View><Text style={[styles.filterLabel, { color: theme.muted }]}>ENTRY TYPE</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>{chip('All', filter === 'all', () => setFilter('all'))}{chip('Credit', filter === 'credit', () => setFilter('credit'))}{chip('Debit', filter === 'debit', () => setFilter('debit'))}</ScrollView><Text style={[styles.filterLabel, { color: theme.muted }]}>TRANSACTION TYPE</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>{['all', 'template send', 'wallet topup', 'project renewal', 'project create'].map(value => chip(value === 'all' ? 'All types' : title(value), transactionType === value, () => setTransactionType(value)))}</ScrollView>{loading ? <View style={styles.center}><ActivityIndicator color={theme.emerald} size="large" /></View> : error ? <View style={[styles.empty, { backgroundColor: theme.surface, borderColor: theme.border }]}><FileText size={34} color={theme.danger} /><Text style={[styles.emptyTitle, { color: theme.ink }]}>Unable to load transactions</Text><Text style={[styles.copy, { color: theme.muted }]}>{error}</Text><Pressable onPress={() => load(1)} style={[styles.retry, { backgroundColor: theme.emerald }]}><Text style={styles.retryText}>Try again</Text></Pressable></View> : items.length === 0 ? <View style={[styles.empty, { backgroundColor: theme.surface, borderColor: theme.border }]}><FileText size={34} color={theme.muted} /><Text style={[styles.emptyTitle, { color: theme.ink }]}>No transactions found</Text></View> : <View style={styles.list}>{items.map((item, index) => { const isCredit = Boolean(item.type); return <Pressable key={item.transaction_id || String(index)} onPress={() => setSelected(item)} style={[styles.transaction, { backgroundColor: theme.surface, borderColor: theme.border }]}><View style={{ flex: 1 }}><Text style={[styles.transactionTitle, { color: theme.ink }]}>{title(item.transaction_type)}</Text><Text style={[styles.date, { color: theme.muted }]}>{dateLabel(item.create_date)}</Text><Text style={[styles.id, { color: theme.muted }]} numberOfLines={1}>{item.transaction_id || 'N/A'}</Text></View><View style={styles.amountColumn}><Text style={[styles.amount, { color: isCredit ? theme.emerald : theme.danger }]}>{isCredit ? '+' : '-'}{amount(item.amount)}</Text><Text style={[styles.badge, { color: isCredit ? theme.emerald : theme.danger, backgroundColor: isCredit ? theme.mint : theme.dangerBg }]}>{isCredit ? 'Credit' : 'Debit'}</Text></View></Pressable>; })}</View>}{!loading && !error && pages > 1 && <View style={styles.pagination}><Pressable disabled={page <= 1} onPress={() => load(page - 1)} style={[styles.pageButton, { borderColor: theme.border }, page <= 1 && styles.disabled]}><ChevronLeft color={theme.ink} size={20} /></Pressable><Text style={{ color: theme.muted, fontSize: 13 }}>Page {page} of {pages}</Text><Pressable disabled={page >= pages} onPress={() => load(page + 1)} style={[styles.pageButton, { borderColor: theme.border }, page >= pages && styles.disabled]}><ChevronRight color={theme.ink} size={20} /></Pressable></View>}</ScrollView><TransactionModal transaction={selected} onClose={() => setSelected(null)} theme={theme} /></View>;
+  useEffect(() => {
+    load(1);
+  }, [filter, transactionType]);
+
+  const chip = (label: string, active: boolean, onPress: () => void) => (
+    <ScalePressable
+      key={label}
+      onPress={onPress}
+      style={[
+        styles.chip,
+        {
+          borderColor: active ? theme.emerald : theme.border,
+          backgroundColor: active ? theme.mint : theme.surface,
+        },
+      ]}
+    >
+      <Text
+        style={{
+          color: active ? theme.emerald : theme.muted,
+          fontWeight: '700',
+          fontSize: 13,
+        }}
+      >
+        {label}
+      </Text>
+    </ScalePressable>
+  );
+
+  return (
+    <View style={[styles.safe, { backgroundColor: theme.canvas }]}>
+      <View
+        style={[
+          styles.header,
+          { backgroundColor: theme.header, borderBottomColor: theme.border },
+        ]}
+      >
+        <ScalePressable onPress={onBack} style={styles.iconBtn}>
+          <ArrowLeft size={24} color={theme.ink} />
+        </ScalePressable>
+        <Text style={[styles.headerTitle, { color: theme.ink }]}>
+          Transactions
+        </Text>
+        <ScalePressable
+          onPress={() => load(1, true)}
+          style={styles.iconBtn}
+          disabled={refreshing}
+        >
+          <RefreshCw size={20} color={theme.ink} />
+        </ScalePressable>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={styles.page}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => load(1, true)}
+            tintColor={theme.emerald}
+          />
+        }
+      >
+        <FadeInView direction="down" distance={10} duration={350}>
+          <Text style={[styles.title, { color: theme.ink }]}>
+            Transaction History
+          </Text>
+          <Text style={[styles.copy, { color: theme.muted }]}>
+            Your transactions for the last 30 days.
+          </Text>
+        </FadeInView>
+
+        <FadeInView delay={100} duration={400}>
+          <View style={styles.summary}>
+            <Summary
+              label="Records"
+              value={String(total)}
+              color={theme.ink}
+              theme={theme}
+            />
+            <Summary
+              label="Credit"
+              value={amount(credit)}
+              color={theme.emerald}
+              theme={theme}
+            />
+            <Summary
+              label="Debit"
+              value={amount(debit)}
+              color={theme.danger}
+              theme={theme}
+            />
+          </View>
+        </FadeInView>
+
+        <Text style={[styles.filterLabel, { color: theme.muted }]}>
+          ENTRY TYPE
+        </Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chips}
+        >
+          {chip('All', filter === 'all', () => setFilter('all'))}
+          {chip('Credit', filter === 'credit', () => setFilter('credit'))}
+          {chip('Debit', filter === 'debit', () => setFilter('debit'))}
+        </ScrollView>
+
+        <Text style={[styles.filterLabel, { color: theme.muted }]}>
+          TRANSACTION TYPE
+        </Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chips}
+        >
+          {[
+            'all',
+            'template send',
+            'wallet topup',
+            'project renewal',
+            'project create',
+          ].map(value =>
+            chip(
+              value === 'all' ? 'All types' : title(value),
+              transactionType === value,
+              () => setTransactionType(value),
+            ),
+          )}
+        </ScrollView>
+
+        {loading ? (
+          <View style={styles.center}>
+            <ActivityIndicator color={theme.emerald} size="large" />
+          </View>
+        ) : error ? (
+          <View
+            style={[
+              styles.empty,
+              { backgroundColor: theme.surface, borderColor: theme.border },
+            ]}
+          >
+            <FileText size={34} color={theme.danger} />
+            <Text style={[styles.emptyTitle, { color: theme.ink }]}>
+              Unable to load transactions
+            </Text>
+            <Text style={[styles.copy, { color: theme.muted }]}>{error}</Text>
+            <ScalePressable
+              onPress={() => load(1)}
+              style={[styles.retry, { backgroundColor: theme.emerald }]}
+            >
+              <Text style={styles.retryText}>Try again</Text>
+            </ScalePressable>
+          </View>
+        ) : items.length === 0 ? (
+          <View
+            style={[
+              styles.empty,
+              { backgroundColor: theme.surface, borderColor: theme.border },
+            ]}
+          >
+            <FileText size={34} color={theme.muted} />
+            <Text style={[styles.emptyTitle, { color: theme.ink }]}>
+              No transactions found
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.list}>
+            {items.map((item, index) => {
+              const isCredit = Boolean(item.type);
+              return (
+                <FadeInView
+                  key={item.transaction_id || String(index)}
+                  delay={Math.min(index * 30, 200)}
+                  distance={10}
+                >
+                  <ScalePressable
+                    onPress={() => setSelected(item)}
+                    style={[
+                      styles.transaction,
+                      {
+                        backgroundColor: theme.surface,
+                        borderColor: theme.border,
+                      },
+                    ]}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={[
+                          styles.transactionTitle,
+                          { color: theme.ink },
+                        ]}
+                      >
+                        {title(item.transaction_type)}
+                      </Text>
+                      <Text style={[styles.date, { color: theme.muted }]}>
+                        {dateLabel(item.create_date)}
+                      </Text>
+                      <Text
+                        style={[styles.id, { color: theme.muted }]}
+                        numberOfLines={1}
+                      >
+                        {item.transaction_id || 'N/A'}
+                      </Text>
+                    </View>
+                    <View style={styles.amountColumn}>
+                      <Text
+                        style={[
+                          styles.amount,
+                          {
+                            color: isCredit ? theme.emerald : theme.danger,
+                          },
+                        ]}
+                      >
+                        {isCredit ? '+' : '-'}
+                        {amount(item.amount)}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.badge,
+                          {
+                            color: isCredit ? theme.emerald : theme.danger,
+                            backgroundColor: isCredit
+                              ? theme.mint
+                              : theme.dangerBg,
+                          },
+                        ]}
+                      >
+                        {isCredit ? 'Credit' : 'Debit'}
+                      </Text>
+                    </View>
+                  </ScalePressable>
+                </FadeInView>
+              );
+            })}
+          </View>
+        )}
+
+        {!loading && !error && pages > 1 && (
+          <View style={styles.pagination}>
+            <ScalePressable
+              disabled={page <= 1}
+              onPress={() => load(page - 1)}
+              style={[
+                styles.pageButton,
+                { borderColor: theme.border },
+                page <= 1 && styles.disabled,
+              ]}
+            >
+              <ChevronLeft color={theme.ink} size={20} />
+            </ScalePressable>
+            <Text style={{ color: theme.muted, fontSize: 13 }}>
+              Page {page} of {pages}
+            </Text>
+            <ScalePressable
+              disabled={page >= pages}
+              onPress={() => load(page + 1)}
+              style={[
+                styles.pageButton,
+                { borderColor: theme.border },
+                page >= pages && styles.disabled,
+              ]}
+            >
+              <ChevronRight color={theme.ink} size={20} />
+            </ScalePressable>
+          </View>
+        )}
+      </ScrollView>
+
+      <TransactionModal
+        transaction={selected}
+        onClose={() => setSelected(null)}
+        theme={theme}
+      />
+    </View>
+  );
 }
-function Summary({ label, value, color, theme }: { label: string; value: string; color: string; theme: any }) { return <View style={[styles.summaryCard, { backgroundColor: theme.surface, borderColor: theme.border }]}><Text style={[styles.summaryLabel, { color: theme.muted }]}>{label}</Text><Text style={[styles.summaryValue, { color }]}>{value}</Text></View>; }
-function TransactionModal({ transaction, onClose, theme }: { transaction: Transaction | null; onClose: () => void; theme: any }) { if (!transaction) return null; const payment = transaction.payment_details || {}; const message = transaction.message_details || {}; const isCredit = Boolean(transaction.type); return <Modal visible transparent animationType="slide" onRequestClose={onClose}><View style={styles.modalBackdrop}><View style={[styles.modal, { backgroundColor: theme.surface }]}><View style={[styles.modalHeader, { borderBottomColor: theme.border }]}><Text style={[styles.modalTitle, { color: theme.ink }]}>Transaction Details</Text><Pressable onPress={onClose}><X size={23} color={theme.ink} /></Pressable></View><ScrollView contentContainerStyle={styles.modalContent}><Detail label="Transaction ID" value={transaction.transaction_id} theme={theme} selectable /><Detail label="Date & Time" value={dateLabel(transaction.create_date)} theme={theme} /><Detail label="Type" value={isCredit ? 'Credit' : 'Debit'} theme={theme} /><Detail label="Amount" value={`${isCredit ? '+' : '-'}${amount(transaction.amount)}`} theme={theme} /><Detail label="Transaction Type" value={title(transaction.transaction_type)} theme={theme} />{transaction.remark ? <Detail label="Remark" value={transaction.remark} theme={theme} /> : null}{Object.keys(payment).length > 0 && <DetailsGroup title="Payment Details" data={payment} theme={theme} />}{Object.keys(message).length > 0 && <DetailsGroup title="Message Details" data={message} theme={theme} />}</ScrollView></View></View></Modal>; }
-function Detail({ label, value, theme, selectable }: { label: string; value?: string; theme: any; selectable?: boolean }) { return <View style={[styles.detail, { borderBottomColor: theme.border }]}><Text style={[styles.detailLabel, { color: theme.muted }]}>{label}</Text><Text selectable={selectable} style={[styles.detailValue, { color: theme.ink }]}>{value || 'N/A'}</Text></View>; }
-function DetailsGroup({ title, data, theme }: { title: string; data: Record<string, unknown>; theme: any }) { const labels: Record<string, string> = { payment_id: 'Payment ID', utr: 'UTR', name: 'Name', email: 'Email', mobile: 'Mobile', create_date: 'Date', template_name: 'Template Name', number: 'Number', category: 'Category', language_code: 'Language', message_by: 'Message By', wamid: 'WAMID' }; return <View style={styles.group}><Text style={[styles.groupTitle, { color: theme.ink }]}>{title}</Text>{Object.entries(data).filter(([key, value]) => labels[key] && value != null && value !== '').map(([key, value]) => <Detail key={key} label={labels[key]} value={String(value)} theme={theme} selectable={key === 'utr' || key === 'wamid' || key === 'payment_id'} />)}</View>; }
-const styles = StyleSheet.create({ safe: { flex: 1 }, header: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, iconBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' }, headerTitle: { fontSize: 18, fontWeight: '800' }, page: { padding: 16, paddingBottom: 40 }, title: { fontSize: 22, fontWeight: '800' }, copy: { fontSize: 13, lineHeight: 19, marginTop: 3 }, summary: { flexDirection: 'row', gap: 8, marginVertical: 18 }, summaryCard: { flex: 1, borderWidth: 1, borderRadius: 12, padding: 11 }, summaryLabel: { fontSize: 11, fontWeight: '700' }, summaryValue: { fontSize: 15, fontWeight: '800', marginTop: 5 }, filterLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1, marginTop: 9, marginBottom: 7 }, chips: { gap: 8, paddingBottom: 4 }, chip: { borderWidth: 1, borderRadius: 18, paddingVertical: 8, paddingHorizontal: 13 }, center: { paddingVertical: 60 }, list: { marginTop: 18, gap: 9 }, transaction: { borderWidth: 1, borderRadius: 14, padding: 14, flexDirection: 'row' }, transactionTitle: { fontSize: 15, fontWeight: '800' }, date: { fontSize: 12, marginTop: 4 }, id: { fontSize: 11, marginTop: 6, maxWidth: 200 }, amountColumn: { alignItems: 'flex-end', marginLeft: 10 }, amount: { fontSize: 14, fontWeight: '800' }, badge: { overflow: 'hidden', marginTop: 7, borderRadius: 10, fontSize: 11, fontWeight: '700', paddingVertical: 3, paddingHorizontal: 8 }, empty: { borderWidth: 1, borderRadius: 15, alignItems: 'center', padding: 28, marginTop: 20 }, emptyTitle: { fontSize: 16, fontWeight: '800', marginTop: 10 }, retry: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 10, marginTop: 15 }, retryText: { color: '#FFF', fontWeight: '800' }, pagination: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, marginTop: 20 }, pageButton: { borderWidth: 1, borderRadius: 10, padding: 8 }, disabled: { opacity: 0.4 }, modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' }, modal: { maxHeight: '85%', borderTopLeftRadius: 22, borderTopRightRadius: 22 }, modalHeader: { flexDirection: 'row', justifyContent: 'space-between', padding: 18, borderBottomWidth: 1 }, modalTitle: { fontSize: 18, fontWeight: '800' }, modalContent: { padding: 18, paddingBottom: 35 }, detail: { paddingVertical: 11, borderBottomWidth: 1 }, detailLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.4 }, detailValue: { fontSize: 14, marginTop: 4 }, group: { marginTop: 20 }, groupTitle: { fontSize: 16, fontWeight: '800', marginBottom: 5 } });
+
+function Summary({
+  label,
+  value,
+  color,
+  theme,
+}: {
+  label: string;
+  value: string;
+  color: string;
+  theme: any;
+}) {
+  return (
+    <View
+      style={[
+        styles.summaryCard,
+        { backgroundColor: theme.surface, borderColor: theme.border },
+      ]}
+    >
+      <Text style={[styles.summaryLabel, { color: theme.muted }]}>
+        {label}
+      </Text>
+      <Text style={[styles.summaryValue, { color }]}>{value}</Text>
+    </View>
+  );
+}
+
+function TransactionModal({
+  transaction,
+  onClose,
+  theme,
+}: {
+  transaction: Transaction | null;
+  onClose: () => void;
+  theme: any;
+}) {
+  if (!transaction) return null;
+  const payment = transaction.payment_details || {};
+  const message = transaction.message_details || {};
+  const isCredit = Boolean(transaction.type);
+
+  return (
+    <SlideUpModal
+      visible={Boolean(transaction)}
+      onClose={onClose}
+      maxHeight="85%"
+    >
+      <View style={[styles.modal, { backgroundColor: theme.surface }]}>
+        <View
+          style={[styles.modalHeader, { borderBottomColor: theme.border }]}
+        >
+          <Text style={[styles.modalTitle, { color: theme.ink }]}>
+            Transaction Details
+          </Text>
+          <ScalePressable onPress={onClose} hitSlop={8}>
+            <X size={23} color={theme.ink} />
+          </ScalePressable>
+        </View>
+        <ScrollView contentContainerStyle={styles.modalContent}>
+          <Detail
+            label="Transaction ID"
+            value={transaction.transaction_id}
+            theme={theme}
+            selectable
+          />
+          <Detail
+            label="Date & Time"
+            value={dateLabel(transaction.create_date)}
+            theme={theme}
+          />
+          <Detail
+            label="Type"
+            value={isCredit ? 'Credit' : 'Debit'}
+            theme={theme}
+          />
+          <Detail
+            label="Amount"
+            value={`${isCredit ? '+' : '-'}${amount(transaction.amount)}`}
+            theme={theme}
+          />
+          <Detail
+            label="Transaction Type"
+            value={title(transaction.transaction_type)}
+            theme={theme}
+          />
+          {transaction.remark ? (
+            <Detail
+              label="Remark"
+              value={transaction.remark}
+              theme={theme}
+            />
+          ) : null}
+          {Object.keys(payment).length > 0 && (
+            <DetailsGroup
+              title="Payment Details"
+              data={payment}
+              theme={theme}
+            />
+          )}
+          {Object.keys(message).length > 0 && (
+            <DetailsGroup
+              title="Message Details"
+              data={message}
+              theme={theme}
+            />
+          )}
+        </ScrollView>
+      </View>
+    </SlideUpModal>
+  );
+}
+
+function Detail({
+  label,
+  value,
+  theme,
+  selectable,
+}: {
+  label: string;
+  value?: string;
+  theme: any;
+  selectable?: boolean;
+}) {
+  return (
+    <View style={[styles.detail, { borderBottomColor: theme.border }]}>
+      <Text style={[styles.detailLabel, { color: theme.muted }]}>
+        {label}
+      </Text>
+      <Text
+        selectable={selectable}
+        style={[styles.detailValue, { color: theme.ink }]}
+      >
+        {value || 'N/A'}
+      </Text>
+    </View>
+  );
+}
+
+function DetailsGroup({
+  title,
+  data,
+  theme,
+}: {
+  title: string;
+  data: Record<string, unknown>;
+  theme: any;
+}) {
+  const labels: Record<string, string> = {
+    payment_id: 'Payment ID',
+    utr: 'UTR',
+    name: 'Name',
+    email: 'Email',
+    mobile: 'Mobile',
+    create_date: 'Date',
+    template_name: 'Template Name',
+    number: 'Number',
+    category: 'Category',
+    language_code: 'Language',
+    message_by: 'Message By',
+    wamid: 'WAMID',
+  };
+  return (
+    <View style={styles.group}>
+      <Text style={[styles.groupTitle, { color: theme.ink }]}>{title}</Text>
+      {Object.entries(data)
+        .filter(([key, value]) => labels[key] && value != null && value !== '')
+        .map(([key, value]) => (
+          <Detail
+            key={key}
+            label={labels[key]}
+            value={String(value)}
+            theme={theme}
+            selectable={
+              key === 'utr' || key === 'wamid' || key === 'payment_id'
+            }
+          />
+        ))}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  safe: { flex: 1 },
+  header: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  iconBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+  headerTitle: { fontSize: 18, fontWeight: '800' },
+  page: { padding: 16, paddingBottom: 40 },
+  title: { fontSize: 22, fontWeight: '800' },
+  copy: { fontSize: 13, lineHeight: 19, marginTop: 3 },
+  summary: { flexDirection: 'row', gap: 8, marginVertical: 18 },
+  summaryCard: { flex: 1, borderWidth: 1, borderRadius: 12, padding: 11 },
+  summaryLabel: { fontSize: 11, fontWeight: '700' },
+  summaryValue: { fontSize: 15, fontWeight: '800', marginTop: 5 },
+  filterLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
+    marginTop: 9,
+    marginBottom: 7,
+  },
+  chips: { gap: 8, paddingBottom: 4 },
+  chip: { borderWidth: 1, borderRadius: 18, paddingVertical: 8, paddingHorizontal: 13 },
+  center: { paddingVertical: 60 },
+  list: { marginTop: 18, gap: 9 },
+  transaction: { borderWidth: 1, borderRadius: 14, padding: 14, flexDirection: 'row' },
+  transactionTitle: { fontSize: 15, fontWeight: '800' },
+  date: { fontSize: 12, marginTop: 4 },
+  id: { fontSize: 11, marginTop: 6, maxWidth: 200 },
+  amountColumn: { alignItems: 'flex-end', marginLeft: 10 },
+  amount: { fontSize: 14, fontWeight: '800' },
+  badge: {
+    overflow: 'hidden',
+    marginTop: 7,
+    borderRadius: 10,
+    fontSize: 11,
+    fontWeight: '700',
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+  },
+  empty: {
+    borderWidth: 1,
+    borderRadius: 15,
+    alignItems: 'center',
+    padding: 28,
+    marginTop: 20,
+  },
+  emptyTitle: { fontSize: 16, fontWeight: '800', marginTop: 10 },
+  retry: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    marginTop: 15,
+  },
+  retryText: { color: '#FFF', fontWeight: '800' },
+  pagination: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    marginTop: 20,
+  },
+  pageButton: { borderWidth: 1, borderRadius: 10, padding: 8 },
+  disabled: { opacity: 0.4 },
+  modal: {
+    maxHeight: '100%',
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 18,
+    borderBottomWidth: 1,
+  },
+  modalTitle: { fontSize: 18, fontWeight: '800' },
+  modalContent: { padding: 18, paddingBottom: 35 },
+  detail: { paddingVertical: 11, borderBottomWidth: 1 },
+  detailLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.4 },
+  detailValue: { fontSize: 14, marginTop: 4 },
+  group: { marginTop: 20 },
+  groupTitle: { fontSize: 16, fontWeight: '800', marginBottom: 5 },
+});

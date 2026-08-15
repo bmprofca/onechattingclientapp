@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -8,10 +7,19 @@ import {
   View,
 } from 'react-native';
 import { ApiSession } from '../api/client';
-import { getProjectMeta, getProjectDashboard, getUnreadCount } from '../api/workspace';
+import { getAccountProfile } from '../api/auth';
+import {
+  getProjectDashboard,
+  getUnreadCount,
+} from '../api/workspace';
 import { LoadState } from '../components/LoadState';
 import { useTheme } from '../theme/theme';
 import { socketManager } from '../services/socketManager';
+import {
+  ScalePressable,
+  FadeInView,
+  PulseView,
+} from '../components/animations';
 
 const numericValue = (value: any) =>
   value?.data?.count ??
@@ -27,42 +35,65 @@ export function DashboardScreen({
   session,
   balance,
   projectCount,
+  onBalanceUpdated,
   onOpenProfile,
   onOpenProjectsHub,
   onOpenInbox,
   onOpenWallet,
-  onOpenWaba,
   onOpenSupport,
 }: {
   projectId: string;
   session: ApiSession;
-  balance: string;
-  projectCount: number;
+  balance?: string | number;
+  projectCount?: number;
+  onBalanceUpdated?: (balance: number) => void;
   onOpenProfile?: () => void;
   onOpenProjectsHub?: () => void;
   onOpenInbox?: () => void;
   onOpenWallet?: () => void;
-  onOpenWaba?: () => void;
   onOpenSupport?: () => void;
 }) {
   const theme = useTheme();
-  const [info, setInfo] = useState<any>(null);
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [unread, setUnread] = useState(0);
+  const [liveBalance, setLiveBalance] = useState<string | number | undefined>(balance);
+  const [liveProjectCount, setLiveProjectCount] = useState<number | undefined>(projectCount);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (balance !== undefined) {
+      setLiveBalance(balance);
+    }
+  }, [balance]);
+
+  useEffect(() => {
+    if (projectCount !== undefined) {
+      setLiveProjectCount(projectCount);
+    }
+  }, [projectCount]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const [projectInfo, dashData, unreadResult] = await Promise.all([
-        getProjectMeta(session, projectId),
+      const [dashData, unreadResult, accountProfile] = await Promise.all([
         getProjectDashboard(session, projectId),
         getUnreadCount(session, projectId),
+        getAccountProfile(session).catch(() => null),
       ]);
-      setInfo(projectInfo);
       setDashboardData(dashData?.data || dashData);
       setUnread(Number(numericValue(unreadResult)) || 0);
+
+      if (accountProfile) {
+        if (accountProfile.balance !== undefined) {
+          setLiveBalance(accountProfile.balance);
+          onBalanceUpdated?.(accountProfile.balance);
+        }
+        if (accountProfile.projectCount !== undefined) {
+          setLiveProjectCount(accountProfile.projectCount);
+        }
+      }
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -72,7 +103,8 @@ export function DashboardScreen({
     } finally {
       setLoading(false);
     }
-  }, [projectId, session]);
+  }, [projectId, session, onBalanceUpdated]);
+
   useEffect(() => {
     load();
   }, [load]);
@@ -86,14 +118,22 @@ export function DashboardScreen({
     return () => unsub();
   }, []);
 
-  const value = info?.data || info || {};
-  
+  const rawBalance = liveBalance !== undefined ? liveBalance : (balance ?? 0);
+  const parsedNum = typeof rawBalance === 'number'
+    ? rawBalance
+    : Number(String(rawBalance || '0').replace(/[^0-9.-]+/g, '')) || 0;
+  const formattedBalance = parsedNum.toLocaleString('en-IN', {
+    maximumFractionDigits: 2,
+  });
+
+  const effectiveProjectCount = liveProjectCount ?? projectCount ?? 0;
+
   const metricsData = [
-    { label: 'Unread chats', value: String(unread), tone: 'emerald' as const },
-    { label: 'Projects', value: String(projectCount), tone: 'blue' as const },
+    { label: 'Unread chats', value: String(unread), tone: 'emerald' as const, isUnread: unread > 0, onPress: onOpenInbox },
+    { label: 'Projects', value: String(effectiveProjectCount), tone: 'blue' as const, onPress: onOpenProjectsHub },
     { label: 'Contacts', value: String(dashboardData?.contact?.total || '0'), tone: 'emerald' as const },
     { label: 'Campaigns', value: String(dashboardData?.campaign?.total || '0'), tone: 'blue' as const },
-    { label: 'Chats', value: String(dashboardData?.chat?.total || '0'), tone: 'emerald' as const },
+    { label: 'Chats', value: String(dashboardData?.chat?.total || '0'), tone: 'emerald' as const, onPress: onOpenInbox },
     { label: 'Templates', value: String(dashboardData?.template?.total || '0'), tone: 'blue' as const },
     { label: 'Sent Today', value: String(dashboardData?.message?.today_sent || '0'), tone: 'emerald' as const },
     { label: 'Total Msgs', value: String(dashboardData?.message?.total || '0'), tone: 'blue' as const },
@@ -105,6 +145,7 @@ export function DashboardScreen({
     { title: 'Profile', note: 'Account details', onPress: onOpenProfile },
     { title: 'Support', note: 'Help center', onPress: onOpenSupport },
   ];
+
   return (
     <ScrollView
       contentContainerStyle={styles.page}
@@ -119,123 +160,114 @@ export function DashboardScreen({
       <LoadState loading={false} error={error} empty={false} onRetry={load} />
       {!loading && !error && (
         <>
-          <View style={[
-            styles.overview, 
-            { 
-              backgroundColor: theme.emerald,
-              borderColor: theme.border,
-              borderWidth: 1,
-            }
-          ]}>
-            <Text style={[styles.overviewLabel, { color: '#FFF' }]}>AVAILABLE WALLET BALANCE</Text>
-            <Text style={[styles.balance, { color: '#FFFFFF' }]}>₹{balance}</Text>
-            <Text style={[styles.overviewHint, { color: '#ffffff' }]}>
-              Use wallet credit for messages and campaigns
-            </Text>
-          </View>
-          <View style={styles.metrics}>
-            {metricsData.map((metric, index) => (
-              <Metric
-                key={metric.label}
-                value={metric.value}
-                label={metric.label}
-                tone={metric.tone}
-                theme={theme}
-                style={[
-                  styles.metricCard,
-                  index % 2 === 0 ? { marginRight: '3%' } : {}
-                ]}
-              />
-            ))}
-          </View>
-          <Text style={[styles.sectionTitle, { color: theme.ink }]}>Manage workspace</Text>
-          <View style={styles.actionGrid}>
-            {actions.map(action => (
-              <Pressable
-                key={action.title}
-                onPress={action.onPress}
-                disabled={!action.onPress}
-                style={[
-                  styles.actionCard,
-                  { backgroundColor: theme.surface, borderColor: theme.border },
-                ]}
-              >
-                <Text style={[styles.actionTitle, { color: theme.ink }]}>{action.title}</Text>
-                <Text style={[styles.actionNote, { color: theme.muted }]}>{action.note}</Text>
-                <Text style={[styles.actionArrow, { color: theme.emerald }]}>›</Text>
-              </Pressable>
-            ))}
-          </View>
-          <View style={[styles.projectCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <View>
-                <Text style={[styles.projectCardLabel, { color: theme.muted }]}>
-                  CURRENT WHATSAPP ACCOUNT
-                </Text>
-                <Text style={[styles.projectCardTitle, { color: theme.ink }]}>
-                  {String(
-                    value.waba_name || value.project_name || 'WhatsApp account',
-                  )}
-                </Text>
-              </View>
-              <Text style={[{ color: value.waba_id ? theme.emerald : theme.warning, fontSize: 12, fontWeight: '700', backgroundColor: value.waba_id ? theme.mint : 'rgba(245, 158, 11, 0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }]}>
-                {value.waba_id ? 'CONNECTED' : 'NOT CONNECTED'}
-              </Text>
-            </View>
-            <Text style={[styles.projectCardDetail, { color: theme.muted }]}>
-              {String(
-                value.waba_id ||
-                  'Connect your business profile and messaging settings.',
-              )}
-            </Text>
-            <Pressable
-              onPress={onOpenWaba}
+          <FadeInView direction="down" distance={12} duration={350}>
+            <ScalePressable
+              onPress={onOpenWallet}
+              disabled={!onOpenWallet}
               style={[
-                styles.wabaButton,
-                { backgroundColor: value.waba_id ? theme.surface : theme.emerald, borderColor: value.waba_id ? theme.border : theme.emerald }
+                styles.overview,
+                {
+                  backgroundColor: theme.emerald,
+                  borderColor: theme.border,
+                  borderWidth: 1,
+                },
               ]}
             >
-              <Text style={[
-                styles.wabaButtonText,
-                { color: value.waba_id ? theme.ink : '#FFF' }
-              ]}>
-                {value.waba_id ? 'Manage WhatsApp Account' : 'Connect Meta Account'}
+              <Text style={[styles.overviewLabel, { color: '#FFF' }]}>
+                AVAILABLE WALLET BALANCE
               </Text>
-            </Pressable>
+              <Text style={[styles.balance, { color: '#FFFFFF' }]}>
+                ₹{formattedBalance}
+              </Text>
+              <Text style={[styles.overviewHint, { color: '#ffffff' }]}>
+                Use wallet credit for messages and campaigns • Tap to top up
+              </Text>
+            </ScalePressable>
+          </FadeInView>
+
+          <View style={styles.metrics}>
+            {metricsData.map((metric, index) => (
+              <FadeInView
+                key={metric.label}
+                delay={60 + index * 30}
+                distance={10}
+                style={[
+                  styles.metricCardWrap,
+                  index % 2 === 0 ? { marginRight: '3%' } : {},
+                ]}
+              >
+                <ScalePressable
+                  onPress={metric.onPress}
+                  disabled={!metric.onPress}
+                  style={[
+                    styles.metric,
+                    {
+                      backgroundColor: theme.surface,
+                      borderColor: theme.border,
+                      borderWidth: 1,
+                    },
+                  ]}
+                >
+                  {metric.isUnread ? (
+                    <PulseView duration={1200} maxScale={1.08} minScale={0.96}>
+                      <Text style={[styles.metricValue, { color: theme.emerald }]}>
+                        {metric.value}
+                      </Text>
+                    </PulseView>
+                  ) : (
+                    <Text style={[styles.metricValue, { color: theme.ink }]}>
+                      {metric.value}
+                    </Text>
+                  )}
+                  <Text style={[styles.metricLabel, { color: theme.muted }]}>
+                    {metric.label}
+                  </Text>
+                </ScalePressable>
+              </FadeInView>
+            ))}
+          </View>
+
+          <FadeInView delay={250} duration={350}>
+            <Text style={[styles.sectionTitle, { color: theme.ink }]}>
+              Manage workspace
+            </Text>
+          </FadeInView>
+
+          <View style={styles.actionGrid}>
+            {actions.map((action, index) => (
+              <FadeInView
+                key={action.title}
+                delay={280 + index * 35}
+                distance={10}
+                style={styles.actionCardWrap}
+              >
+                <ScalePressable
+                  onPress={action.onPress}
+                  disabled={!action.onPress}
+                  style={[
+                    styles.actionCard,
+                    { backgroundColor: theme.surface, borderColor: theme.border },
+                  ]}
+                >
+                  <Text style={[styles.actionTitle, { color: theme.ink }]}>
+                    {action.title}
+                  </Text>
+                  <Text style={[styles.actionNote, { color: theme.muted }]}>
+                    {action.note}
+                  </Text>
+                  <Text style={[styles.actionArrow, { color: theme.emerald }]}>
+                    ›
+                  </Text>
+                </ScalePressable>
+              </FadeInView>
+            ))}
           </View>
         </>
       )}
     </ScrollView>
   );
 }
-function Metric({
-  value,
-  label,
-  tone,
-  theme,
-  style,
-}: {
-  value: string;
-  label: string;
-  tone: 'emerald' | 'blue';
-  theme: any;
-  style?: any;
-}) {
-  return (
-    <View style={[
-      styles.metric,
-      { 
-        backgroundColor: theme.surface,
-        borderColor: theme.border,
-        borderWidth: 1,
-      },
-      style,
-    ]}>
-      <Text style={[styles.metricValue, { color: theme.ink }]}>{value}</Text>
-      <Text style={[styles.metricLabel, { color: theme.muted }]}>{label}</Text>
-    </View>
-  );
-}
+
 const styles = StyleSheet.create({
   page: { padding: 10, paddingBottom: 28 },
   overview: {
@@ -251,18 +283,18 @@ const styles = StyleSheet.create({
   },
   balance: { fontSize: 31, fontWeight: '800', color: '#FFF', marginTop: 7 },
   overviewHint: { fontSize: 12, color: '#d9dedcff', marginTop: 6 },
-  metrics: { 
-    flexDirection: 'row', 
+  metrics: {
+    flexDirection: 'row',
     marginTop: 12,
     flexWrap: 'wrap',
+  },
+  metricCardWrap: {
+    width: '48.5%',
+    marginBottom: 10,
   },
   metric: {
     borderRadius: 17,
     padding: 15,
-  },
-  metricCard: {
-    width: '48.5%',
-    marginBottom: 10,
   },
   metricValue: { fontSize: 23, fontWeight: '800' },
   metricLabel: { fontSize: 11, marginTop: 3 },
@@ -277,13 +309,15 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
-  actionCard: {
+  actionCardWrap: {
     width: '48.5%',
+    marginTop: 10,
+  },
+  actionCard: {
     minHeight: 102,
     borderWidth: 1,
     borderRadius: 17,
     padding: 14,
-    marginTop: 10,
   },
   actionTitle: { fontSize: 14, fontWeight: '800' },
   actionNote: {
@@ -297,38 +331,5 @@ const styles = StyleSheet.create({
     right: 13,
     bottom: 10,
     fontSize: 21,
-  },
-  projectCard: {
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 17,
-    marginTop: 23,
-  },
-  projectCardLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-  projectCardTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    marginTop: 8,
-  },
-  projectCardDetail: {
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 5,
-    marginBottom: 16,
-  },
-  wabaButton: {
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  wabaButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
   },
 });

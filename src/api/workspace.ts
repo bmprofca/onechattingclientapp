@@ -157,16 +157,75 @@ export async function createProject(
   }, session);
 }
 
+export type EditProjectPayload = {
+  project_id?: string;
+  company_name: string;
+  project_name: string;
+  profile_image?: string;
+  logo?: string;
+  image?: string;
+  description?: string;
+  website?: string;
+  email?: string;
+  mobile?: string;
+  [key: string]: any;
+};
+
 export async function editProject(
   session: ApiSession,
-  companyName: string,
-  projectName: string,
+  data: EditProjectPayload | string,
+  projectName?: string,
 ) {
-  return post<any>('/project/edit-project', {
-    company_name: companyName,
-    project_name: projectName,
-  }, session);
+  const payload = typeof data === 'string'
+    ? { company_name: data, project_name: projectName || '' }
+    : {
+        ...data,
+        company_name: data.company_name,
+        project_name: data.project_name,
+        profile_image: data.profile_image || data.logo || data.image,
+      };
+  return post<any>('/project/edit-project', payload, session);
 }
+
+export type CreateCampaignPayload = {
+  project_id: string;
+  campaign_name: string;
+  template_id: string;
+  component?: any[];
+  numbers?: string[];
+  contact_list?: string[];
+  schedule_time?: string;
+  is_scheduled?: boolean;
+  file_url?: string;
+  [key: string]: any;
+};
+
+export async function createCampaign(
+  session: ApiSession,
+  payload: CreateCampaignPayload,
+) {
+  try {
+    return await post<any>('/campaign/create-campaign', payload, session);
+  } catch (error: any) {
+    if (error?.message?.includes('404') || error?.message?.includes('Cannot POST')) {
+      return await post<any>('/campaign/create', payload, session);
+    }
+    throw error;
+  }
+}
+
+export const getContactList = (
+  session: ApiSession,
+  projectId: string,
+  page = 1,
+  limit = 50,
+  search = '',
+) =>
+  post<any>(
+    '/contact/contact-list',
+    { project_id: projectId, page, limit, search },
+    session,
+  );
 
 export async function embedSignup(session: ApiSession, projectId: string) {
   return post<any>('/project/embed-signup', {

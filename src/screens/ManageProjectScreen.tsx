@@ -1,32 +1,67 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, BackHandler, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  BackHandler,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import Toast from 'react-native-toast-message';
-import { Briefcase, FolderEdit, CheckCircle2, AlertCircle, ArrowLeft } from 'lucide-react-native';
+import {
+  Briefcase,
+  FolderEdit,
+  CheckCircle2,
+  AlertCircle,
+  ArrowLeft,
+  Camera,
+  Mail,
+  Phone,
+  Globe,
+  FileText,
+  Sparkles,
+} from 'lucide-react-native';
+import { launchImageLibrary } from 'react-native-image-picker';
 import { ApiSession } from '../api/client';
 import { editProject, getProjectMeta } from '../api/workspace';
+import { uploadFile } from '../api/upload';
 import { LoadState } from '../components/LoadState';
 import { useTheme } from '../theme/theme';
+import { ScalePressable, FadeInView } from '../components/animations';
 
 export function ManageProjectScreen({
   session,
   projectId,
   onBack,
+  onUpdated,
 }: {
   session: ApiSession;
   projectId: string;
   onBack: () => void;
+  onUpdated?: () => void;
 }) {
   const theme = useTheme();
-  
+
   // Data loading
   const [loadingMeta, setLoadingMeta] = useState(true);
   const [errorMeta, setErrorMeta] = useState('');
   const [metaDetails, setMetaDetails] = useState<any>(null);
 
   // Form states
-  const [companyName, setCompanyName] = useState('');
   const [projectName, setProjectName] = useState('');
+  const [companyName, setCompanyName] = useState('');
+  const [profileImage, setProfileImage] = useState('');
+  const [description, setDescription] = useState('');
+  const [website, setWebsite] = useState('');
+  const [email, setEmail] = useState('');
+  const [mobile, setMobile] = useState('');
   const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const loadMeta = useCallback(async () => {
     setLoadingMeta(true);
@@ -36,11 +71,17 @@ export function ManageProjectScreen({
       // Backend returns `{ data: { is_waba_connected, project, charges, profile } }`
       const data = res.data || {};
       setMetaDetails(data);
-      // Initialize form if we have existing names in profile or project
-      // Often the API doesn't return company_name directly in meta-details, 
-      // but we populate what we can. 
-      setProjectName(data.project?.name || '');
-      setCompanyName(data.profile?.firm_name || data.profile?.company_name || '');
+
+      const proj = data.project || {};
+      const prof = data.profile || {};
+
+      setProjectName(proj.name || proj.project_name || '');
+      setCompanyName(prof.firm_name || prof.company_name || proj.company_name || '');
+      setProfileImage(proj.profile_image || proj.logo || proj.image || '');
+      setDescription(proj.description || prof.description || '');
+      setWebsite(proj.website || prof.website || '');
+      setEmail(proj.email || prof.email || '');
+      setMobile(proj.mobile || prof.mobile || '');
     } catch (err) {
       setErrorMeta(err instanceof Error ? err.message : 'Could not load project details.');
     } finally {
@@ -60,20 +101,73 @@ export function ManageProjectScreen({
     return () => subscription.remove();
   }, [onBack]);
 
-  const handleSave = async () => {
-    if (!companyName.trim()) {
-      Toast.show({ type: 'error', text1: 'Company Name Required' });
-      return;
+  const handlePickImage = async () => {
+    try {
+      const result = await launchImageLibrary({
+        mediaType: 'photo',
+        selectionLimit: 1,
+      });
+
+      if (result.didCancel || !result.assets?.[0]?.uri) return;
+      const asset = result.assets[0];
+
+      setUploadingImage(true);
+      const uploaded = await uploadFile({
+        uri: asset.uri!,
+        name: asset.fileName || `project-logo-${Date.now()}.jpg`,
+        type: asset.type || 'image/jpeg',
+      });
+
+      if (uploaded.success && uploaded.url) {
+        setProfileImage(uploaded.url);
+        Toast.show({
+          type: 'success',
+          text1: 'Photo Uploaded',
+          text2: 'Photo uploaded. Save changes to update project.',
+        });
+      }
+    } catch (err: any) {
+      Toast.show({
+        type: 'error',
+        text1: 'Upload Failed',
+        text2: err.message || 'Could not upload image.',
+      });
+    } finally {
+      setUploadingImage(false);
     }
+  };
+
+  const handleSave = async () => {
     if (!projectName.trim()) {
       Toast.show({ type: 'error', text1: 'Project Name Required' });
+      return;
+    }
+    if (!companyName.trim()) {
+      Toast.show({ type: 'error', text1: 'Company Name Required' });
       return;
     }
 
     setSaving(true);
     try {
-      await editProject(session, companyName.trim(), projectName.trim());
-      Toast.show({ type: 'success', text1: 'Changes Saved', text2: 'Project details updated successfully.' });
+      await editProject(session, {
+        project_id: projectId,
+        project_name: projectName.trim(),
+        company_name: companyName.trim(),
+        profile_image: profileImage,
+        logo: profileImage,
+        image: profileImage,
+        description: description.trim(),
+        website: website.trim(),
+        email: email.trim(),
+        mobile: mobile.trim(),
+      });
+
+      Toast.show({
+        type: 'success',
+        text1: 'Changes Saved',
+        text2: 'Project details updated successfully.',
+      });
+      onUpdated?.();
       loadMeta(); // Reload to reflect changes
     } catch (error) {
       Toast.show({
@@ -110,84 +204,193 @@ export function ManageProjectScreen({
 
       {!loadingMeta && !errorMeta && metaDetails && (
         <KeyboardAvoidingView style={styles.keyboardArea} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-            
+          <ScrollView
+            contentContainerStyle={styles.page}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
             {/* Meta Information Cards */}
-            <View style={styles.statusCardsRow}>
-              <View style={[styles.statusCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                <Text style={[styles.statusLabel, { color: theme.muted }]}>STATUS</Text>
-                <Text style={[styles.statusValue, { color: proj.status === 'active' ? theme.emerald : theme.ink }]}>
-                  {proj.status ? proj.status.charAt(0).toUpperCase() + proj.status.slice(1) : 'Unknown'}
-                </Text>
-              </View>
-              <View style={[styles.statusCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                <Text style={[styles.statusLabel, { color: theme.muted }]}>WA VERIFIED</Text>
-                <View style={styles.verifiedRow}>
-                  {isVerified ? (
-                    <CheckCircle2 size={16} color={theme.emerald} />
-                  ) : (
-                    <AlertCircle size={16} color={theme.danger} />
-                  )}
-                  <Text style={[styles.statusValue, { color: theme.ink, marginLeft: 6 }]}>
-                    {isVerified ? 'Yes' : 'No'}
+            <FadeInView distance={8} duration={300}>
+              <View style={styles.statusCardsRow}>
+                <View style={[styles.statusCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                  <Text style={[styles.statusLabel, { color: theme.muted }]}>STATUS</Text>
+                  <Text style={[styles.statusValue, { color: proj.status === 'active' ? theme.emerald : theme.ink }]}>
+                    {proj.status ? proj.status.charAt(0).toUpperCase() + proj.status.slice(1) : 'Active'}
                   </Text>
                 </View>
-              </View>
-            </View>
-
-            <View style={[styles.infoBox, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-              <InfoRow label="Messaging Tier" value={proj.wa_messaging_tier || 'N/A'} theme={theme} />
-              <InfoRow label="Daily Template Limit" value={String(proj.daily_template_limit || 0)} theme={theme} />
-              <InfoRow label="Billing Currency" value={proj.billing_currency || 'N/A'} theme={theme} />
-              <View style={styles.divider} />
-              <Text style={[styles.sectionSubtitle, { color: theme.muted }]}>MESSAGE CHARGES</Text>
-              <InfoRow label="Marketing" value={`₹${charges.marketing || 0}`} theme={theme} />
-              <InfoRow label="Utility" value={`₹${charges.utility || 0}`} theme={theme} />
-              <InfoRow label="Authentication" value={`₹${charges.authentication || 0}`} theme={theme} />
-            </View>
-
-            <Text style={[styles.sectionTitle, { color: theme.ink }]}>Edit Details</Text>
-            
-            <View style={[styles.form, { backgroundColor: theme.surface, borderColor: theme.border, shadowColor: theme.shadow }]}>
-              <View style={styles.field}>
-                <Text style={[styles.label, { color: theme.muted }]}>COMPANY NAME</Text>
-                <View style={[styles.inputRow, fieldStyle]}>
-                  <Briefcase size={17} color={theme.muted} strokeWidth={2.25} />
-                  <TextInput
-                    value={companyName}
-                    onChangeText={setCompanyName}
-                    autoCapitalize="words"
-                    placeholder="Acme Corp"
-                    placeholderTextColor={theme.muted}
-                    style={[styles.input, { color: theme.ink }]}
-                  />
+                <View style={[styles.statusCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                  <Text style={[styles.statusLabel, { color: theme.muted }]}>WA VERIFIED</Text>
+                  <View style={styles.verifiedRow}>
+                    {isVerified ? (
+                      <CheckCircle2 size={16} color={theme.emerald} />
+                    ) : (
+                      <AlertCircle size={16} color={theme.danger} />
+                    )}
+                    <Text style={[styles.statusValue, { color: theme.ink, marginLeft: 6 }]}>
+                      {isVerified ? 'Yes' : 'No'}
+                    </Text>
+                  </View>
                 </View>
               </View>
 
+              <View style={[styles.infoBox, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <InfoRow label="Messaging Tier" value={proj.wa_messaging_tier || 'TIER_1'} theme={theme} />
+                <InfoRow label="Daily Template Limit" value={String(proj.daily_template_limit || '1,000')} theme={theme} />
+                <InfoRow label="Billing Currency" value={proj.billing_currency || 'INR'} theme={theme} />
+                <View style={[styles.divider, { backgroundColor: theme.border }]} />
+                <Text style={[styles.sectionSubtitle, { color: theme.muted }]}>MESSAGE CHARGES</Text>
+                <InfoRow label="Marketing" value={`₹${charges.marketing || 0.85}`} theme={theme} />
+                <InfoRow label="Utility" value={`₹${charges.utility || 0.35}`} theme={theme} />
+                <InfoRow label="Authentication" value={`₹${charges.authentication || 0.35}`} theme={theme} />
+              </View>
+            </FadeInView>
+
+            {/* Edit Project Section */}
+            <Text style={[styles.sectionTitle, { color: theme.ink }]}>Edit Project Details</Text>
+
+            <View style={[styles.form, { backgroundColor: theme.surface, borderColor: theme.border, shadowColor: theme.shadow }]}>
+              {/* Profile Image / Logo Picker */}
+              <View style={styles.avatarSection}>
+                <ScalePressable
+                  onPress={handlePickImage}
+                  disabled={uploadingImage}
+                  style={[styles.avatarWrapper, { borderColor: theme.emerald }]}
+                >
+                  {profileImage ? (
+                    <Image source={{ uri: profileImage }} style={styles.avatarImage} />
+                  ) : (
+                    <View style={[styles.avatarPlaceholder, { backgroundColor: theme.mint }]}>
+                      <Text style={[styles.avatarInitial, { color: theme.emerald }]}>
+                        {projectName.trim().charAt(0).toUpperCase() || 'P'}
+                      </Text>
+                    </View>
+                  )}
+                  <View style={[styles.cameraBadge, { backgroundColor: theme.emerald }]}>
+                    {uploadingImage ? (
+                      <ActivityIndicator size="small" color="#FFF" />
+                    ) : (
+                      <Camera size={14} color="#FFF" />
+                    )}
+                  </View>
+                </ScalePressable>
+                <View style={styles.avatarMeta}>
+                  <Text style={[styles.avatarTitle, { color: theme.ink }]}>Project Profile Image</Text>
+                  <ScalePressable onPress={handlePickImage} disabled={uploadingImage}>
+                    <Text style={[styles.changePhotoText, { color: theme.emerald }]}>
+                      {uploadingImage ? 'Uploading...' : profileImage ? 'Change Image' : 'Upload Image'}
+                    </Text>
+                  </ScalePressable>
+                </View>
+              </View>
+
+              {/* Project Name */}
               <View style={styles.field}>
-                <Text style={[styles.label, { color: theme.muted }]}>PROJECT NAME</Text>
+                <Text style={[styles.label, { color: theme.muted }]}>PROJECT NAME *</Text>
                 <View style={[styles.inputRow, fieldStyle]}>
                   <FolderEdit size={17} color={theme.muted} strokeWidth={2.25} />
                   <TextInput
                     value={projectName}
                     onChangeText={setProjectName}
                     autoCapitalize="words"
-                    placeholder="Main Workspace"
+                    placeholder="e.g. Main Workspace"
                     placeholderTextColor={theme.muted}
                     style={[styles.input, { color: theme.ink }]}
                   />
                 </View>
               </View>
 
-              <Pressable
+              {/* Company / Firm Name */}
+              <View style={styles.field}>
+                <Text style={[styles.label, { color: theme.muted }]}>COMPANY / FIRM NAME *</Text>
+                <View style={[styles.inputRow, fieldStyle]}>
+                  <Briefcase size={17} color={theme.muted} strokeWidth={2.25} />
+                  <TextInput
+                    value={companyName}
+                    onChangeText={setCompanyName}
+                    autoCapitalize="words"
+                    placeholder="e.g. Acme Corp"
+                    placeholderTextColor={theme.muted}
+                    style={[styles.input, { color: theme.ink }]}
+                  />
+                </View>
+              </View>
+
+              {/* Email */}
+              <View style={styles.field}>
+                <Text style={[styles.label, { color: theme.muted }]}>BUSINESS EMAIL</Text>
+                <View style={[styles.inputRow, fieldStyle]}>
+                  <Mail size={17} color={theme.muted} strokeWidth={2.25} />
+                  <TextInput
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    placeholder="contact@company.com"
+                    placeholderTextColor={theme.muted}
+                    style={[styles.input, { color: theme.ink }]}
+                  />
+                </View>
+              </View>
+
+              {/* Mobile Phone */}
+              <View style={styles.field}>
+                <Text style={[styles.label, { color: theme.muted }]}>CONTACT PHONE</Text>
+                <View style={[styles.inputRow, fieldStyle]}>
+                  <Phone size={17} color={theme.muted} strokeWidth={2.25} />
+                  <TextInput
+                    value={mobile}
+                    onChangeText={setMobile}
+                    keyboardType="phone-pad"
+                    placeholder="+91 9876543210"
+                    placeholderTextColor={theme.muted}
+                    style={[styles.input, { color: theme.ink }]}
+                  />
+                </View>
+              </View>
+
+              {/* Website */}
+              <View style={styles.field}>
+                <Text style={[styles.label, { color: theme.muted }]}>WEBSITE</Text>
+                <View style={[styles.inputRow, fieldStyle]}>
+                  <Globe size={17} color={theme.muted} strokeWidth={2.25} />
+                  <TextInput
+                    value={website}
+                    onChangeText={setWebsite}
+                    keyboardType="url"
+                    autoCapitalize="none"
+                    placeholder="https://example.com"
+                    placeholderTextColor={theme.muted}
+                    style={[styles.input, { color: theme.ink }]}
+                  />
+                </View>
+              </View>
+
+              {/* Description */}
+              <View style={styles.field}>
+                <Text style={[styles.label, { color: theme.muted }]}>DESCRIPTION</Text>
+                <View style={[styles.inputRow, styles.textAreaRow, fieldStyle]}>
+                  <FileText size={17} color={theme.muted} strokeWidth={2.25} style={{ marginTop: 12 }} />
+                  <TextInput
+                    value={description}
+                    onChangeText={setDescription}
+                    multiline
+                    numberOfLines={3}
+                    placeholder="Brief description about this workspace..."
+                    placeholderTextColor={theme.muted}
+                    style={[styles.input, styles.textArea, { color: theme.ink }]}
+                  />
+                </View>
+              </View>
+
+              {/* Save Button */}
+              <ScalePressable
                 accessibilityRole="button"
-                disabled={saving || (!companyName.trim() && !projectName.trim())}
+                disabled={saving || uploadingImage || (!companyName.trim() && !projectName.trim())}
                 onPress={handleSave}
-                style={({ pressed }) => [
+                style={[
                   styles.button,
                   { backgroundColor: theme.emerald, shadowColor: theme.emeraldDark },
-                  pressed && !saving && styles.buttonPressed,
-                  (saving || (!companyName.trim() && !projectName.trim())) && styles.disabled,
+                  (saving || uploadingImage || (!companyName.trim() && !projectName.trim())) && styles.disabled,
                 ]}
               >
                 {saving ? (
@@ -195,7 +398,7 @@ export function ManageProjectScreen({
                 ) : (
                   <Text style={styles.buttonText}>Save Changes</Text>
                 )}
-              </Pressable>
+              </ScalePressable>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -275,7 +478,6 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: '#E2EBE7', // Generic, could use theme.border 
     marginVertical: 12,
     opacity: 0.5,
   },
@@ -309,6 +511,59 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginHorizontal: 4,
   },
+  avatarSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    gap: 16,
+  },
+  avatarWrapper: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    borderWidth: 2,
+    position: 'relative',
+  },
+  avatarImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+  },
+  avatarPlaceholder: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitial: {
+    fontSize: 26,
+    fontWeight: '800',
+  },
+  cameraBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFF',
+  },
+  avatarMeta: {
+    flex: 1,
+  },
+  avatarTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  changePhotoText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
   field: { marginBottom: 16 },
   label: { fontSize: 10, fontWeight: '800', letterSpacing: 1.1, marginBottom: 7 },
   inputRow: {
@@ -320,7 +575,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     gap: 10,
   },
+  textAreaRow: {
+    height: 86,
+    alignItems: 'flex-start',
+  },
   input: { flex: 1, fontSize: 15, height: '100%' },
+  textArea: {
+    height: '100%',
+    paddingTop: 10,
+    textAlignVertical: 'top',
+  },
   button: {
     height: 54,
     marginTop: 10,
@@ -331,7 +595,6 @@ const styles = StyleSheet.create({
     shadowRadius: 9,
     elevation: 4,
   },
-  buttonPressed: { opacity: 0.9, transform: [{ scale: 0.99 }] },
   buttonText: { color: '#FFF', fontSize: 15, fontWeight: '800' },
   disabled: { opacity: 0.65 },
 });

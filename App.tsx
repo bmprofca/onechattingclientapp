@@ -113,8 +113,21 @@ export default function App() {
           <AuthScreen
             onAuthenticated={async authenticated => {
               let sessionToSave = authenticated;
-              if (authenticated.projects && authenticated.projects.length === 1) {
-                sessionToSave = { ...authenticated, selectedProjectId: authenticated.projects[0].id };
+              try {
+                const account = await getAccountProfile({
+                  token: authenticated.token,
+                  username: authenticated.username,
+                });
+                sessionToSave = {
+                  ...sessionToSave,
+                  ...account,
+                  username: account.username || sessionToSave.username,
+                };
+              } catch {
+                // ignore
+              }
+              if (!sessionToSave.selectedProjectId && sessionToSave.projects && sessionToSave.projects.length === 1) {
+                sessionToSave = { ...sessionToSave, selectedProjectId: sessionToSave.projects[0].id };
               }
               await saveSession(sessionToSave);
               setSession(sessionToSave);

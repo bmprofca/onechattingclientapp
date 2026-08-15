@@ -23,6 +23,7 @@ import {
 import { ApiError, ApiSession } from '../api/client';
 import { createProject, getPlans, PlanPackages } from '../api/workspace';
 import { useTheme } from '../theme/theme';
+import { ScalePressable, FadeInView, FadeScaleModal } from '../components/animations';
 
 export function CreateProjectScreen({
   session,
@@ -145,168 +146,163 @@ export function CreateProjectScreen({
       <KeyboardAvoidingView style={styles.keyboardArea} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
-          <View style={[styles.heroIcon, { backgroundColor: theme.mint }]}>
-            <FolderPlus size={32} color={theme.emerald} strokeWidth={2} />
-          </View>
-
-          <Text style={[styles.title, { color: theme.ink }]}>Create a workspace</Text>
-          <Text style={[styles.copy, { color: theme.muted }]}>Set up a new WhatsApp Business account for your company.</Text>
-
-          <View style={[styles.form, { backgroundColor: theme.surface, borderColor: theme.border, shadowColor: theme.shadow }]}>
-
-            <View style={styles.field}>
-              <Text style={[styles.label, { color: theme.muted }]}>COMPANY NAME</Text>
-              <View style={[styles.inputRow, fieldStyle]}>
-                <Briefcase size={17} color={theme.muted} strokeWidth={2.25} />
-                <TextInput
-                  value={companyName}
-                  onChangeText={setCompanyName}
-                  autoCapitalize="words"
-                  placeholder="Acme Corp"
-                  placeholderTextColor={theme.muted}
-                  style={[styles.input, { color: theme.ink }]}
-                />
-              </View>
+            <View style={[styles.heroIcon, { backgroundColor: theme.mint }]}>
+              <FolderPlus size={32} color={theme.emerald} strokeWidth={2} />
             </View>
 
-            <View style={styles.field}>
-              <Text style={[styles.label, { color: theme.muted }]}>PROJECT NAME</Text>
-              <View style={[styles.inputRow, fieldStyle]}>
-                <FolderPlus size={17} color={theme.muted} strokeWidth={2.25} />
-                <TextInput
-                  value={projectName}
-                  onChangeText={setProjectName}
-                  autoCapitalize="words"
-                  placeholder="Main Workspace"
-                  placeholderTextColor={theme.muted}
-                  style={[styles.input, { color: theme.ink }]}
-                />
-              </View>
-            </View>
+            <Text style={[styles.title, { color: theme.ink }]}>Create a workspace</Text>
+            <Text style={[styles.copy, { color: theme.muted }]}>Set up a new WhatsApp Business account for your company.</Text>
 
-            <View style={styles.field}>
-              <Text style={[styles.label, { color: theme.muted }]}>PACKAGE</Text>
+            <View style={[styles.form, { backgroundColor: theme.surface, borderColor: theme.border, shadowColor: theme.shadow }]}>
 
-              {plansLoading ? (
-                <View style={styles.packageLoading}>
-                  <ActivityIndicator color={theme.emerald} />
+              <View style={styles.field}>
+                <Text style={[styles.label, { color: theme.muted }]}>COMPANY NAME</Text>
+                <View style={[styles.inputRow, fieldStyle]}>
+                  <Briefcase size={17} color={theme.muted} strokeWidth={2.25} />
+                  <TextInput
+                    value={companyName}
+                    onChangeText={setCompanyName}
+                    autoCapitalize="words"
+                    placeholder="Acme Corp"
+                    placeholderTextColor={theme.muted}
+                    style={[styles.input, { color: theme.ink }]}
+                  />
                 </View>
-              ) : plans ? (
-                <>
-                  <View style={[styles.segmentWrap, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
-                    <Pressable
-                      onPress={() => setBillingCycle('monthly')}
-                      style={[
-                        styles.segment,
-                        billingCycle === 'monthly' && {
-                          backgroundColor: theme.surface,
-                          borderColor: theme.emerald,
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.segmentText,
-                          { color: billingCycle === 'monthly' ? theme.emerald : theme.muted },
-                        ]}
-                      >
-                        Monthly — {formatAmount(plans.monthly.amount)}
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => setBillingCycle('yearly')}
-                      style={[
-                        styles.segment,
-                        billingCycle === 'yearly' && {
-                          backgroundColor: theme.surface,
-                          borderColor: theme.emerald,
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.segmentText,
-                          { color: billingCycle === 'yearly' ? theme.emerald : theme.muted },
-                        ]}
-                      >
-                        Yearly — {formatAmount(plans.yearly.amount)}
-                      </Text>
-                    </Pressable>
+              </View>
+
+              <View style={styles.field}>
+                <Text style={[styles.label, { color: theme.muted }]}>PROJECT NAME</Text>
+                <View style={[styles.inputRow, fieldStyle]}>
+                  <FolderPlus size={17} color={theme.muted} strokeWidth={2.25} />
+                  <TextInput
+                    value={projectName}
+                    onChangeText={setProjectName}
+                    autoCapitalize="words"
+                    placeholder="Main Workspace"
+                    placeholderTextColor={theme.muted}
+                    style={[styles.input, { color: theme.ink }]}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.field}>
+                <Text style={[styles.label, { color: theme.muted }]}>PACKAGE</Text>
+
+                {plansLoading ? (
+                  <View style={styles.packageLoading}>
+                    <ActivityIndicator color={theme.emerald} />
                   </View>
-                  <Text style={[styles.segmentCaption, { color: theme.muted }]}>
-                    Billed per {billingCycle === 'monthly' ? 'month' : 'year'} per project.
+                ) : plans ? (
+                  <>
+                    <View style={[styles.segmentWrap, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
+                    <Pressable
+                        onPress={() => setBillingCycle('monthly')}
+                        style={[
+                          styles.segment,
+                          billingCycle === 'monthly' && {
+                            backgroundColor: theme.surface,
+                            borderColor: theme.emerald,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.segmentText,
+                            { color: billingCycle === 'monthly' ? theme.emerald : theme.muted },
+                          ]}
+                        >
+                          Monthly — {formatAmount(plans.monthly.amount)}
+                        </Text>
+                    </Pressable>
+                    <Pressable
+                        onPress={() => setBillingCycle('yearly')}
+                        style={[
+                          styles.segment,
+                          billingCycle === 'yearly' && {
+                            backgroundColor: theme.surface,
+                            borderColor: theme.emerald,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.segmentText,
+                            { color: billingCycle === 'yearly' ? theme.emerald : theme.muted },
+                          ]}
+                        >
+                          Yearly — {formatAmount(plans.yearly.amount)}
+                        </Text>
+                    </Pressable>
+                    </View>
+                    <Text style={[styles.segmentCaption, { color: theme.muted }]}>
+                      Billed per {billingCycle === 'monthly' ? 'month' : 'year'} per project.
+                    </Text>
+                  </>
+                ) : (
+                  <Text style={[styles.copy, { color: theme.muted, marginTop: 0, marginBottom: 0 }]}>
+                    Unable to load packages. Pull to retry.
                   </Text>
-                </>
-              ) : (
-                <Text style={[styles.copy, { color: theme.muted, marginTop: 0, marginBottom: 0 }]}>
-                  Unable to load packages. Pull to retry.
-                </Text>
-              )}
+                )}
+              </View>
+
+              <ScalePressable
+                accessibilityRole="button"
+                disabled={loading || plansLoading || !plans}
+                onPress={handleCreate}
+                style={[
+                  styles.button,
+                  { backgroundColor: theme.emerald, shadowColor: theme.emeraldDark },
+                  (loading || plansLoading || !plans) && styles.disabled,
+                ]}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <Text style={styles.buttonText}>Create Project</Text>
+                )}
+              </ScalePressable>
+
             </View>
-
-            <Pressable
-              accessibilityRole="button"
-              disabled={loading || plansLoading || !plans}
-              onPress={handleCreate}
-              style={({ pressed }) => [
-                styles.button,
-                { backgroundColor: theme.emerald, shadowColor: theme.emeraldDark },
-                pressed && !loading && styles.buttonPressed,
-                (loading || plansLoading || !plans) && styles.disabled,
-              ]}
-            >
-              {loading ? (
-                <ActivityIndicator color="#FFF" />
-              ) : (
-                <Text style={styles.buttonText}>Create Project</Text>
-              )}
-            </Pressable>
-
-          </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <Modal
+      <FadeScaleModal
         visible={showInsufficientModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowInsufficientModal(false)}
+        onClose={() => setShowInsufficientModal(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { backgroundColor: theme.surface }]}>
-            <View style={styles.modalIconCircle}>
-              <DollarSign size={28} color="#D97706" strokeWidth={2.25} />
-            </View>
-            <Text style={[styles.modalTitle, { color: theme.ink }]}>Insufficient wallet balance</Text>
-            <Text style={[styles.modalDesc, { color: theme.muted }]}>
-              Your wallet balance is not enough to complete this action. Please recharge your wallet to continue.
-            </Text>
-            <Text style={styles.modalAmount}>Amount due: {formatAmount(insufficientAmount)}</Text>
-            <View style={styles.modalActions}>
-              <Pressable
-                onPress={() => setShowInsufficientModal(false)}
-                style={[styles.modalButton, styles.modalCancelButton]}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  setShowInsufficientModal(false);
-                  if (onRechargeWallet) {
-                    onRechargeWallet();
-                  } else {
-                    Toast.show({ type: 'info', text1: 'Wallet recharge coming soon' });
-                  }
-                }}
-                style={[styles.modalButton, styles.modalRechargeButton]}
-              >
-                <CreditCard size={16} color="#FFF" strokeWidth={2.25} />
-                <Text style={styles.modalRechargeText}>Recharge wallet</Text>
-              </Pressable>
-            </View>
+        <View style={[styles.modalCard, { backgroundColor: theme.surface }]}>
+          <View style={styles.modalIconCircle}>
+            <DollarSign size={28} color="#D97706" strokeWidth={2.25} />
+          </View>
+          <Text style={[styles.modalTitle, { color: theme.ink }]}>Insufficient wallet balance</Text>
+          <Text style={[styles.modalDesc, { color: theme.muted }]}>
+            Your wallet balance is not enough to complete this action. Please recharge your wallet to continue.
+          </Text>
+          <Text style={styles.modalAmount}>Amount due: {formatAmount(insufficientAmount)}</Text>
+          <View style={styles.modalActions}>
+            <ScalePressable
+              onPress={() => setShowInsufficientModal(false)}
+              style={[styles.modalButton, styles.modalCancelButton]}
+            >
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </ScalePressable>
+            <ScalePressable
+              onPress={() => {
+                setShowInsufficientModal(false);
+                if (onRechargeWallet) {
+                  onRechargeWallet();
+                } else {
+                  Toast.show({ type: 'info', text1: 'Wallet recharge coming soon' });
+                }
+              }}
+              style={[styles.modalButton, styles.modalRechargeButton]}
+            >
+              <CreditCard size={16} color="#FFF" strokeWidth={2.25} />
+              <Text style={styles.modalRechargeText}>Recharge wallet</Text>
+            </ScalePressable>
           </View>
         </View>
-      </Modal>
+      </FadeScaleModal>
     </View>
   );
 }
