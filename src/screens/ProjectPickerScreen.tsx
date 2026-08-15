@@ -1,5 +1,5 @@
 import React from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Project } from '../api/auth';
 import { useTheme } from '../theme/theme';
 
@@ -40,32 +40,39 @@ export function ProjectPickerScreen({
             </Text>
           </>
         }
-        renderItem={({ item }) => (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => onSelect(item.id)}
-            style={({ pressed }) => [
-              styles.card,
-              { backgroundColor: theme.surface, borderColor: theme.border, shadowColor: theme.shadow },
-              pressed && { backgroundColor: theme.cardHover },
-            ]}
-          >
-            <View style={[styles.icon, { backgroundColor: theme.mint }]}>
-              <Text style={[styles.iconText, { color: theme.mintText }]}>
-                {item.name.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-            <View style={styles.cardText}>
-              <Text numberOfLines={1} style={[styles.name, { color: theme.ink }]}>
-                {item.name}
-              </Text>
-              <Text style={[styles.meta, { color: theme.muted }]}>
-                {item.owned ? 'Owned by you' : item.ownerName || 'Shared workspace'}
-              </Text>
-            </View>
-            <Text style={[styles.arrow, { color: theme.mintText }]}>›</Text>
-          </Pressable>
-        )}
+        renderItem={({ item }) => {
+          const profileImg = (item as any).profile_image || (item as any).profile_picture || (item as any).logo || (item as any).image;
+          return (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => onSelect(item.id)}
+              style={({ pressed }) => [
+                styles.card,
+                { backgroundColor: theme.surface, borderColor: theme.border, shadowColor: theme.shadow },
+                pressed && { backgroundColor: theme.cardHover },
+              ]}
+            >
+              <View style={[styles.icon, { backgroundColor: theme.mint }]}>
+                {profileImg ? (
+                  <Image source={{ uri: profileImg }} style={{ width: 45, height: 45, borderRadius: 14 }} />
+                ) : (
+                  <Text style={[styles.iconText, { color: theme.mintText }]}>
+                    {item.name.charAt(0).toUpperCase()}
+                  </Text>
+                )}
+              </View>
+              <View style={styles.cardText}>
+                <Text numberOfLines={1} style={[styles.name, { color: theme.ink }]}>
+                  {item.name}
+                </Text>
+                <Text style={[styles.meta, { color: theme.muted }]}>
+                  {item.owned ? 'Owned by you' : item.ownerName || 'Shared workspace'}
+                </Text>
+              </View>
+              <Text style={[styles.arrow, { color: theme.mintText }]}>›</Text>
+            </Pressable>
+          );
+        }}
       />
     </View>
   );

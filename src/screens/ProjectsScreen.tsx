@@ -232,7 +232,7 @@ export function ProjectsScreen({
           </View>
         }
         renderItem={({ item }) => {
-          const profileImg = (item as any).profile_image || (item as any).logo || (item as any).image;
+          const profileImg = (item as any).profile_image || (item as any).profile_picture || (item as any).logo || (item as any).image;
           return (
             <Pressable
               accessibilityRole="button"

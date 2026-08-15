@@ -77,7 +77,19 @@ export function ManageProjectScreen({
 
       setProjectName(proj.name || proj.project_name || '');
       setCompanyName(prof.firm_name || prof.company_name || proj.company_name || '');
-      setProfileImage(proj.profile_image || proj.logo || proj.image || '');
+      setProfileImage(
+        proj.profile_image ||
+        proj.profile_picture ||
+        proj.profile_picture_url ||
+        proj.logo ||
+        proj.image ||
+        prof.profile_picture_url ||
+        prof.profile_image ||
+        prof.profile_picture ||
+        prof.image ||
+        data.profile_picture ||
+        ''
+      );
       setDescription(proj.description || prof.description || '');
       setWebsite(proj.website || prof.website || '');
       setEmail(proj.email || prof.email || '');

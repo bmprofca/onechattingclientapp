@@ -92,14 +92,31 @@ export function WorkspaceScreen({
       return;
     }
     // Set initial from project if available
-    const initialImg = (currentProject as any)?.profile_image || (currentProject as any)?.logo || '';
+    const initialImg =
+      (currentProject as any)?.profile_image ||
+      (currentProject as any)?.profile_picture ||
+      (currentProject as any)?.logo ||
+      (currentProject as any)?.image ||
+      '';
     if (initialImg) {
       setProjectProfileImage(initialImg);
     }
     getProjectMeta(apiSession, projectId)
       .then((res) => {
         const proj = res?.data?.project || res?.project || {};
-        const img = proj.profile_image || proj.logo || proj.image || '';
+        const prof = res?.data?.profile || res?.profile || {};
+        const img =
+          proj.profile_image ||
+          proj.profile_picture ||
+          proj.profile_picture_url ||
+          proj.logo ||
+          proj.image ||
+          prof.profile_picture_url ||
+          prof.profile_image ||
+          prof.profile_picture ||
+          prof.image ||
+          res?.data?.profile_picture ||
+          '';
         if (img) {
           setProjectProfileImage(img);
         }

@@ -1,12 +1,35 @@
 import { ApiSession, post } from './client';
 
-export type Project = { id: string; name: string; owned?: boolean; ownerName?: string };
+export type Project = {
+  id: string;
+  name: string;
+  owned?: boolean;
+  ownerName?: string;
+  profile_image?: string;
+  profile_picture?: string;
+  logo?: string;
+  image?: string;
+};
 export type Profile = { name?: string; email?: string; mobile?: string; country_code?: string; gender?: string; firm_name?: string; business_name?: string; business_type?: string };
 export type LoginResponse = { token: string; username: string; profile?: Profile; balance?: number; projectCount?: number; projects?: Project[] };
 
 const normalizeProjects = (value: any): Project[] => {
   const list = Array.isArray(value) ? value : value?.list || [];
-  return list.map((project: any) => ({id: String(project.id || project.project_id), name: String(project.name || project.project_name || 'Untitled project'), owned: Boolean(project.owned), ownerName: project.owner_name})).filter((project: Project) => project.id);
+  return list
+    .map((project: any) => {
+      const img = project.profile_image || project.profile_picture || project.logo || project.image || project.profile_picture_url || '';
+      return {
+        id: String(project.id || project.project_id),
+        name: String(project.name || project.project_name || 'Untitled project'),
+        owned: Boolean(project.owned),
+        ownerName: project.owner_name,
+        profile_image: img,
+        profile_picture: img,
+        logo: img,
+        image: img,
+      };
+    })
+    .filter((project: Project) => project.id);
 };
 
 export async function sendOtp(mobile: string): Promise<void> {
