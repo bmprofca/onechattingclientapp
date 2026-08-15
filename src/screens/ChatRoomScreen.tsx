@@ -457,6 +457,54 @@ export function ChatRoomScreen({
     }
   };
 
+  // Parses WhatsApp-style markup: *bold*, _italic_, ~strikethrough~
+  function renderWhatsAppText(text: string, baseStyle: any): React.ReactNode {
+    // Split on *...*, _..._, ~...~ markers
+    const parts: Array<{ text: string; bold?: boolean; italic?: boolean; strike?: boolean }> = [];
+    const regex = /(\*[^*]+\*)|(_[^_]+_)|(~[^~]+~)/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push({ text: text.slice(lastIndex, match.index) });
+      }
+      const raw = match[0];
+      if (raw.startsWith('*') && raw.endsWith('*')) {
+        parts.push({ text: raw.slice(1, -1), bold: true });
+      } else if (raw.startsWith('_') && raw.endsWith('_')) {
+        parts.push({ text: raw.slice(1, -1), italic: true });
+      } else if (raw.startsWith('~') && raw.endsWith('~')) {
+        parts.push({ text: raw.slice(1, -1), strike: true });
+      }
+      lastIndex = match.index + raw.length;
+    }
+    if (lastIndex < text.length) {
+      parts.push({ text: text.slice(lastIndex) });
+    }
+
+    // If no special markup found, return plain text
+    if (parts.length === 1 && !parts[0].bold && !parts[0].italic && !parts[0].strike) {
+      return <Text style={baseStyle}>{text}</Text>;
+    }
+
+    return (
+      <Text style={baseStyle}>
+        {parts.map((part, i) => {
+          const extra: any = {};
+          if (part.bold) extra.fontWeight = '700';
+          if (part.italic) extra.fontStyle = 'italic';
+          if (part.strike) extra.textDecorationLine = 'line-through';
+          return (
+            <Text key={i} style={extra}>
+              {part.text}
+            </Text>
+          );
+        })}
+      </Text>
+    );
+  }
+
   const renderMessage = ({ item }: { item: any }) => {
     const isOut = item.type === 'out';
     const isRead = item.status === 'read';
@@ -480,50 +528,60 @@ export function ChatRoomScreen({
             delayLongPress={400}
             style={[styles.messageRow, isOut ? styles.messageRowOut : styles.messageRowIn]}
           >
-          <View style={[
-            styles.messageBubble,
-            isOut
-              ? { backgroundColor: theme.bubbleOut, borderTopRightRadius: 2 }
-              : { backgroundColor: theme.bubbleIn, borderTopLeftRadius: 2 },
-          ]}>
-            {renderReplyContext(item)}
-            {renderMessageBody(item, messageType, isOut)}
-            <View style={styles.messageFooter}>
-              <Text style={[
-                styles.messageTime,
-                { color: isOut ? theme.bubbleOutText + 'A0' : theme.muted },
+          {(() => {
+            const templateMedia = getTemplateHeaderMedia(item);
+            const isMediaMsg = (
+              ((messageType === 'image' || messageType === 'video') && Boolean((item as any).media_url)) ||
+              (templateMedia?.type === 'image' && Boolean(templateMedia?.url))
+            );
+            return (
+              <View style={[
+                styles.messageBubble,
+                isOut
+                  ? { backgroundColor: theme.bubbleOut, borderTopRightRadius: 2 }
+                  : { backgroundColor: theme.bubbleIn, borderTopLeftRadius: 2 },
+                isMediaMsg && styles.messageBubbleMedia,
               ]}>
-                {new Date(item.create_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </Text>
-              {isOut && (
-                <View style={{ marginLeft: 4, flexDirection: 'row', alignItems: 'center' }}>
-                  {item.status === 'pending' && <Clock size={14} color={theme.muted} />}
-                  {item.status === 'sent' && <Check size={16} color={theme.muted} />}
-                  {item.status === 'delivered' && <CheckCheck size={16} color={theme.muted} />}
-                  {item.status === 'read' && <CheckCheck size={16} color="#34B7F1" />}
-                  {item.status === 'failed' && (
+                {renderReplyContext(item)}
+                {renderMessageBody(item, messageType, isOut)}
+                <View style={[styles.messageFooter, isMediaMsg && styles.messageFooterMedia]}>
+                  <Text style={[
+                    styles.messageTime,
+                    { color: isOut ? theme.bubbleOutText + 'A0' : theme.muted },
+                  ]}>
+                    {new Date(item.create_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                  {isOut && (
+                    <View style={{ marginLeft: 4, flexDirection: 'row', alignItems: 'center' }}>
+                      {item.status === 'pending' && <Clock size={14} color={theme.muted} />}
+                      {item.status === 'sent' && <Check size={16} color={theme.muted} />}
+                      {item.status === 'delivered' && <CheckCheck size={16} color={theme.muted} />}
+                      {item.status === 'read' && <CheckCheck size={16} color="#34B7F1" />}
+                      {item.status === 'failed' && (
+                        <ScalePressable
+                          onPress={() => Alert.alert('Message Failed', item.failed_reason || 'Unknown error')}
+                          hitSlop={8}
+                          style={{ marginLeft: 4, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                        >
+                          <AlertCircle size={14} color="#EF4444" />
+                          <Info size={14} color={theme.muted} />
+                        </ScalePressable>
+                      )}
+                    </View>
+                  )}
+                  {canReply && (
                     <ScalePressable
-                      onPress={() => Alert.alert('Message Failed', item.failed_reason || 'Unknown error')}
-                      hitSlop={8}
-                      style={{ marginLeft: 4, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                      onPress={() => setReplyingTo(item)}
+                      hitSlop={12}
+                      style={{ marginLeft: 6, opacity: 0.8 }}
                     >
-                      <AlertCircle size={14} color="#EF4444" />
-                      <Info size={14} color={theme.muted} />
+                      <CornerUpLeft size={13} color={isOut ? theme.bubbleOutText + 'A0' : theme.muted} />
                     </ScalePressable>
                   )}
                 </View>
-              )}
-              {canReply && (
-                <ScalePressable
-                  onPress={() => setReplyingTo(item)}
-                  hitSlop={12}
-                  style={{ marginLeft: 6, opacity: 0.8 }}
-                >
-                  <CornerUpLeft size={13} color={isOut ? theme.bubbleOutText + 'A0' : theme.muted} />
-                </ScalePressable>
-              )}
-            </View>
-          </View>
+              </View>
+            );
+          })()}
         </Pressable>
       </SwipeableMessageWrapper>
     </FadeInView>
@@ -562,10 +620,12 @@ export function ChatRoomScreen({
         ? resolveTemplateBodyText(msg)
         : (msg.message || '');
 
+      const baseTextStyle = [styles.messageText, { color: textColor }];
+
       const caption = textContent ? (
-        <Text style={[styles.messageText, { color: textColor, marginTop: templateMedia || (type !== 'text' && type !== 'template') ? 6 : 0 }]}>
-          {textContent}
-        </Text>
+        <View style={styles.captionPad}>
+          {renderWhatsAppText(textContent, [styles.messageText, { color: textColor, marginTop: templateMedia || (type !== 'text' && type !== 'template') ? 6 : 0 }])}
+        </View>
       ) : null;
 
       const isDoc = type === 'document' || templateMedia?.type === 'document';
@@ -581,7 +641,11 @@ export function ChatRoomScreen({
             <Pressable onPress={() => openMediaViewer(mediaUrl, 'image', mediaName)}>
               <Image source={{ uri: mediaUrl }} style={styles.mediaImage} resizeMode="cover" />
             </Pressable>
-            {caption}
+            {textContent ? (
+              <View style={styles.captionPad}>
+                {renderWhatsAppText(textContent, [styles.messageText, { color: textColor, marginTop: 4 }])}
+              </View>
+            ) : null}
           </>
         );
       }
@@ -593,7 +657,11 @@ export function ChatRoomScreen({
               <Text style={styles.mediaPlaceholderIcon}>▶</Text>
               <Text style={[styles.mediaPlaceholderLabel, { color: textColor }]}>Video</Text>
             </Pressable>
-            {caption}
+            {textContent ? (
+              <View style={styles.captionPad}>
+                {renderWhatsAppText(textContent, [styles.messageText, { color: textColor, marginTop: 4 }])}
+              </View>
+            ) : null}
           </>
         );
       }
@@ -623,7 +691,11 @@ export function ChatRoomScreen({
         );
       }
 
-      return caption || (
+      if (textContent) {
+        return renderWhatsAppText(textContent, baseTextStyle);
+      }
+
+      return (
         <Text style={[styles.messageText, { color: textColor }]}>
           (Unsupported message type)
         </Text>
@@ -1002,6 +1074,21 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 1.5,
     elevation: 1,
+    overflow: 'hidden',
+  },
+  messageBubbleMedia: {
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+  },
+  captionPad: {
+    paddingHorizontal: 10,
+    paddingTop: 5,
+    paddingBottom: 2,
+  },
+  messageFooterMedia: {
+    paddingHorizontal: 8,
+    paddingBottom: 4,
   },
   messageText: {
     fontSize: 15,
@@ -1025,9 +1112,9 @@ const styles = StyleSheet.create({
     color: '#34B7F1',
   },
   mediaImage: {
-    width: 220,
-    height: 220,
-    borderRadius: 8,
+    width: '100%',
+    aspectRatio: 1.2,
+    borderRadius: 0,
   },
   mediaPlaceholder: {
     width: 220,

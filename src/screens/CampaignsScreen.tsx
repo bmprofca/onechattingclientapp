@@ -72,29 +72,17 @@ export function CampaignsScreen({
   return (
     <View style={{ flex: 1, backgroundColor: theme.canvas }}>
       <FadeInView direction="down" distance={10} duration={300} style={styles.heading}>
-        {/* Search Bar + Create Button */}
-        <View style={styles.topRow}>
-          <View style={[styles.searchContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <Search size={18} color={theme.muted} />
-            <TextInput
-              style={[styles.searchInput, { color: theme.ink }]}
-              placeholder="Search campaigns..."
-              placeholderTextColor={theme.muted}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              returnKeyType="search"
-            />
-          </View>
-          {onCreateCampaign && (
-            <ScalePressable
-              accessibilityRole="button"
-              onPress={onCreateCampaign}
-              style={[styles.createBtn, { backgroundColor: theme.emerald }]}
-            >
-              <Plus size={18} color="#FFF" />
-              <Text style={styles.createBtnText}>New</Text>
-            </ScalePressable>
-          )}
+        {/* Search Bar */}
+        <View style={[styles.searchContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <Search size={18} color={theme.muted} />
+          <TextInput
+            style={[styles.searchInput, { color: theme.ink }]}
+            placeholder="Search campaigns..."
+            placeholderTextColor={theme.muted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            returnKeyType="search"
+          />
         </View>
 
         <View style={[styles.segmented, { backgroundColor: theme.cardHover }]}>
@@ -163,6 +151,17 @@ export function CampaignsScreen({
           </FadeInView>
         )}
       />
+
+      {/* FAB */}
+      {onCreateCampaign && (
+        <ScalePressable
+          accessibilityRole="button"
+          onPress={onCreateCampaign}
+          style={[styles.fab, { backgroundColor: theme.emerald }]}
+        >
+          <Plus size={24} color="#FFF" />
+        </ScalePressable>
+      )}
     </View>
   );
 }
@@ -208,34 +207,29 @@ function CampaignCard({
 }
 const styles = StyleSheet.create({
   heading: { paddingTop: 12, paddingBottom: 0, paddingHorizontal: 10 },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
   searchContainer: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     height: 44,
     borderRadius: 12,
     borderWidth: 1,
     paddingHorizontal: 12,
+    marginBottom: 8,
   },
-  createBtn: {
-    flexDirection: 'row',
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    height: 44,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    gap: 4,
-  },
-  createBtnText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '800',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
   },
   searchInput: {
     flex: 1,
