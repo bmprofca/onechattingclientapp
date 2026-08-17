@@ -106,7 +106,7 @@ export function ManageProjectScreen({
     } finally {
       setLoadingMeta(false);
     }
-  }, [projectId, session]);
+  }, [projectId, session.token, session.username]);
 
   useEffect(() => {
     loadMeta();

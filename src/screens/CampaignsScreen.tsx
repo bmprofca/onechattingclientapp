@@ -63,7 +63,7 @@ export function CampaignsScreen({
     } finally {
       setLoading(false);
     }
-  }, [projectId, session]);
+  }, [projectId, session.token, session.username]);
 
   useEffect(() => {
     load();

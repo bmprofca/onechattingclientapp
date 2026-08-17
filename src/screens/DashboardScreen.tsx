@@ -61,6 +61,9 @@ export function DashboardScreen({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const balanceUpdatedRef = React.useRef(onBalanceUpdated);
+  balanceUpdatedRef.current = onBalanceUpdated;
+
   useEffect(() => {
     if (balance !== undefined) {
       setLiveBalance(balance);
@@ -88,7 +91,7 @@ export function DashboardScreen({
       if (accountProfile) {
         if (accountProfile.balance !== undefined) {
           setLiveBalance(accountProfile.balance);
-          onBalanceUpdated?.(accountProfile.balance);
+          balanceUpdatedRef.current?.(accountProfile.balance);
         }
         if (accountProfile.projectCount !== undefined) {
           setLiveProjectCount(accountProfile.projectCount);
@@ -103,7 +106,7 @@ export function DashboardScreen({
     } finally {
       setLoading(false);
     }
-  }, [projectId, session, onBalanceUpdated]);
+  }, [projectId, session.token, session.username]);
 
   useEffect(() => {
     load();

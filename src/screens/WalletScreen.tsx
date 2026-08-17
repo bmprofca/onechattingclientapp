@@ -75,17 +75,20 @@ export function WalletScreen({
   const [liveBalance, setLiveBalance] = useState<string | number | undefined>(balance);
   const [paymentResult, setPaymentResult] = useState<PaymentStatusResponse | null>(null);
 
+  const balanceUpdatedRef = React.useRef(onBalanceUpdated);
+  balanceUpdatedRef.current = onBalanceUpdated;
+
   const fetchLatestBalance = useCallback(async () => {
     try {
       const profile = await getAccountProfile(session);
       if (profile.balance !== undefined) {
         setLiveBalance(profile.balance);
-        onBalanceUpdated?.(profile.balance);
+        balanceUpdatedRef.current?.(profile.balance);
       }
     } catch {
       // ignore
     }
-  }, [session, onBalanceUpdated]);
+  }, [session.token, session.username]);
 
   useEffect(() => {
     fetchLatestBalance();

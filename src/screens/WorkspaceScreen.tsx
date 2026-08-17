@@ -98,6 +98,10 @@ export function WorkspaceScreen({
     return projects.find((p) => p.id === projectId);
   }, [projects, projectId]);
 
+  const handleBalanceUpdated = useCallback((bal: number) => {
+    setWalletBalance(bal);
+  }, []);
+
   useEffect(() => {
     if (!projectId) {
       setProjectProfileImage('');
@@ -113,8 +117,10 @@ export function WorkspaceScreen({
     if (initialImg) {
       setProjectProfileImage(initialImg);
     }
+    let isMounted = true;
     getProjectMeta(apiSession, projectId)
       .then((res) => {
+        if (!isMounted) return;
         const proj = res?.data?.project || res?.project || {};
         const prof = res?.data?.profile || res?.profile || {};
         const rawImg =
@@ -135,17 +141,14 @@ export function WorkspaceScreen({
         const img = formatImageUrl(rawImg);
         if (img) {
           setProjectProfileImage(img);
-          setProjects((prev) =>
-            prev.map((p) =>
-              p.id === projectId
-                ? { ...p, profile_image: img, profile_picture: img, logo: img, image: img }
-                : p
-            )
-          );
         }
       })
       .catch(() => {});
-  }, [apiSession, projectId, currentProject]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [apiSession.token, apiSession.username, projectId]);
 
   const refreshAccount = useCallback(async () => {
     try {
@@ -171,11 +174,7 @@ export function WorkspaceScreen({
     } catch {
       // ignore
     }
-  }, [apiSession]);
-
-  useEffect(() => {
-    refreshAccount();
-  }, [refreshAccount]);
+  }, [apiSession.token, apiSession.username]);
 
   useEffect(() => {
     refreshAccount();

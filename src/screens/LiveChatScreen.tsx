@@ -69,7 +69,7 @@ export function LiveChatScreen({
     } finally {
       setLoading(false);
     }
-  }, [mode, projectId, session, debouncedSearchQuery]);
+  }, [mode, projectId, session.token, session.username, debouncedSearchQuery]);
   useEffect(() => {
     load();
   }, [load]);
