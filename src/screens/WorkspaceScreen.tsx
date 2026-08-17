@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { BackHandler, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View, Animated, Easing } from 'react-native';
-import { ArrowLeftRight, Home, MessageCircle, Megaphone, User, Wallet, MoreVertical, Briefcase, Info, HelpCircle, Brain, Settings, ReceiptText, QrCode } from 'lucide-react-native';
+import { ArrowLeftRight, Home, MessageCircle, Megaphone, User, Wallet, MoreVertical, Briefcase, Info, HelpCircle, Brain, Settings, ReceiptText, QrCode, Users } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { getAccountProfile } from '../api/auth';
 import { getProjectMeta } from '../api/workspace';
@@ -17,6 +17,7 @@ import { ProjectsScreen } from './ProjectsScreen';
 import { WalletScreen } from './WalletScreen';
 import { WabaOnboardingScreen } from './WabaOnboardingScreen';
 import { SupportScreen } from './SupportScreen';
+import { ScannedUsersScreen } from './ScannedUsersScreen';
 import { ContextConfigScreen } from './ContextConfigScreen';
 import { ProjectConfigScreen } from './ProjectConfigScreen';
 import { AgentConfigScreen } from './AgentConfigScreen';
@@ -77,7 +78,8 @@ export function WorkspaceScreen({
   const [agentConfigTarget, setAgentConfigTarget] = useState(false);
   const [transactionsTarget, setTransactionsTarget] = useState(false);
   const [aiBillsTarget, setAiBillsTarget] = useState(false);
-  const [projectsTarget, setProjectsTarget] = useState(false); // full-screen projects hub, used from full mode
+  const [projectsTarget, setProjectsTarget] = useState(false);
+  const [scannedUsersTarget, setScannedUsersTarget] = useState(false); // full-screen projects hub, used from full mode
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [projectQrModalOpen, setProjectQrModalOpen] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
@@ -213,7 +215,8 @@ export function WorkspaceScreen({
     if (createCampaignTarget) { setCreateCampaignTarget(false); return true; }
     if (walletTarget) { setWalletTarget(false); return true; }
     if (wabaTarget) { setWabaTarget(false); return true; }
-    if (supportTarget) { setSupportTarget(false); return true; }
+    if (scannedUsersTarget) { setScannedUsersTarget(false); return true; }
+  if (supportTarget) { setSupportTarget(false); return true; }
     if (contextConfigTarget) { setContextConfigTarget(false); return true; }
     if (agentConfigTarget) { setAgentConfigTarget(false); return true; }
     if (projectConfigTarget) { setProjectConfigTarget(false); return true; }
@@ -222,7 +225,7 @@ export function WorkspaceScreen({
     if (projectsTarget) { setProjectsTarget(false); return true; }
     if (page !== 'dashboard') { setPage('dashboard'); return true; }
     return false;
-  }, [chatTarget, campaignTarget, createCampaignTarget, walletTarget, wabaTarget, supportTarget, contextConfigTarget, agentConfigTarget, projectConfigTarget, transactionsTarget, projectsTarget, page]);
+  }, [chatTarget, campaignTarget, createCampaignTarget, walletTarget, wabaTarget, scannedUsersTarget, supportTarget, contextConfigTarget, agentConfigTarget, projectConfigTarget, transactionsTarget, projectsTarget, page]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
@@ -291,6 +294,10 @@ export function WorkspaceScreen({
         onBack={() => setWabaTarget(false)}
       />
     );
+  }
+
+  if (scannedUsersTarget) {
+    return <ScannedUsersScreen projectId={projectId} session={apiSession} onBack={() => setScannedUsersTarget(false)} />;
   }
 
   if (supportTarget) {
@@ -482,6 +489,7 @@ export function WorkspaceScreen({
                 onOpenProjectsHub={() => setProjectsTarget(true)}
                 onOpenWallet={() => setWalletTarget(true)}
                 onOpenSupport={() => setSupportTarget(true)}
+                onOpenScannedUsers={() => setScannedUsersTarget(true)}
               />
             ) : page === 'inbox' ? (
               <LiveChatScreen

@@ -41,6 +41,7 @@ export function DashboardScreen({
   onOpenInbox,
   onOpenWallet,
   onOpenSupport,
+  onOpenScannedUsers,
 }: {
   projectId: string;
   session: ApiSession;
@@ -52,6 +53,7 @@ export function DashboardScreen({
   onOpenInbox?: () => void;
   onOpenWallet?: () => void;
   onOpenSupport?: () => void;
+  onOpenScannedUsers?: () => void;
 }) {
   const theme = useTheme();
   const [dashboardData, setDashboardData] = useState<any>(null);
@@ -133,6 +135,7 @@ export function DashboardScreen({
 
   const metricsData = [
     { label: 'Unread chats', value: String(unread), tone: 'emerald' as const, isUnread: unread > 0, onPress: onOpenInbox },
+    { label: 'Scanned Users', value: String(dashboardData?.qr_scanned_users?.total || '0'), tone: 'emerald' as const, onPress: onOpenScannedUsers },
     { label: 'Projects', value: String(effectiveProjectCount), tone: 'blue' as const, onPress: onOpenProjectsHub },
     { label: 'Contacts', value: String(dashboardData?.contact?.total || '0'), tone: 'emerald' as const },
     { label: 'Campaigns', value: String(dashboardData?.campaign?.total || '0'), tone: 'blue' as const },
@@ -143,6 +146,7 @@ export function DashboardScreen({
   ];
 
   const actions = [
+    { title: 'Scanned Users', note: 'QR scan audience', onPress: onOpenScannedUsers },
     { title: 'Projects', note: 'Switch workspace', onPress: onOpenProjectsHub },
     { title: 'Wallet', note: 'Balance & top-up', onPress: onOpenWallet },
     { title: 'Profile', note: 'Account details', onPress: onOpenProfile },

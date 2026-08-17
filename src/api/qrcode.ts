@@ -15,12 +15,36 @@ export type QRCodeItem = {
   [key: string]: any;
 };
 
-export type ProjectQRCodesResponse = {
+export type ScannedUser = {
+  id?: number;
+  scan_id: string;
+  project_id: string;
+  qr_id?: string | null;
+  name: string;
+  mobile: string;
+  email?: string | null;
+  dob?: string | null;
+  anniversary?: string | null;
+  address?: string | null;
+  company?: string | null;
+  notes?: string | null;
+  tags?: string | null;
+  added_by?: string;
+  status?: string;
+  create_date?: string;
+  modify_date?: string;
+  qr_label?: string | null;
+};
+
+export type ScannedUsersListResponse = {
   error?: boolean | string;
-  message?: string;
-  qr_codes?: QRCodeItem[];
-  list?: QRCodeItem[];
-  data?: QRCodeItem[] | { qr_codes?: QRCodeItem[]; list?: QRCodeItem[] };
+  data?: ScannedUser[];
+  pagination?: {
+    total: number;
+    page: number;
+    limit: number;
+    total_pages: number;
+  };
 };
 
 /**
@@ -55,6 +79,95 @@ export async function getProjectQRCodes(
     console.error('Failed to get project QR codes:', error);
     return { qr_codes: [] };
   }
+}
+
+/**
+ * Fetch scanned users for a project (authenticated project owner).
+ */
+export async function getScannedUsers(
+  session: ApiSession,
+  projectId: string,
+  search: string = '',
+  page: number = 1,
+  limit: number = 20,
+): Promise<ScannedUsersListResponse> {
+  try {
+    const response = await post<ScannedUsersListResponse>(
+      '/qrcode/scanned-users/list',
+      { project_id: projectId, search, page, limit },
+      session,
+    );
+    return response;
+  } catch (error) {
+    console.error('Failed to get scanned users:', error);
+    return { error: 'Failed to fetch scanned users' };
+  }
+}
+
+/**
+ * Manually add a scanned user (authenticated project owner).
+ */
+export async function addScannedUser(
+  session: ApiSession,
+  payload: {
+    project_id: string;
+    qr_id?: string;
+    name: string;
+    mobile: string;
+    email?: string;
+    dob?: string;
+    anniversary?: string;
+    company?: string;
+    address?: string;
+    notes?: string;
+    tags?: string;
+  },
+): Promise<{ error: boolean | string; msg?: string; scan_id?: string }> {
+  return post('/qrcode/scanned-users/add', payload, session);
+}
+
+/**
+ * Update an existing scanned user record.
+ */
+export async function updateScannedUser(
+  session: ApiSession,
+  payload: {
+    scan_id: string;
+    project_id: string;
+    qr_id?: string;
+    name: string;
+    mobile: string;
+    email?: string;
+    dob?: string;
+    anniversary?: string;
+    company?: string;
+    address?: string;
+    notes?: string;
+    tags?: string;
+  },
+): Promise<{ error: boolean | string; msg?: string }> {
+  return post('/qrcode/scanned-users/update', payload, session);
+}
+
+/**
+ * Soft-delete a scanned user record.
+ */
+export async function deleteScannedUser(
+  session: ApiSession,
+  scanId: string,
+  projectId: string,
+): Promise<{ error: boolean | string; msg?: string }> {
+  return post('/qrcode/scanned-users/delete', { scan_id: scanId, project_id: projectId }, session);
+}
+
+/**
+ * Get total scanned users count for project.
+ */
+export async function getScannedUsersCount(
+  session: ApiSession,
+  projectId: string,
+): Promise<{ error: boolean | string; total?: number }> {
+  return post('/qrcode/scanned-users/count', { project_id: projectId }, session);
 }
 
 /**
