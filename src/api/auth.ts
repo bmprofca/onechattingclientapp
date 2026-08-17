@@ -1,5 +1,7 @@
 import { ApiSession, post } from './client';
 
+import { formatImageUrl } from '../utils/imageUrl';
+
 export type Project = {
   id: string;
   name: string;
@@ -7,8 +9,10 @@ export type Project = {
   ownerName?: string;
   profile_image?: string;
   profile_picture?: string;
+  profile_picture_url?: string;
   logo?: string;
   image?: string;
+  avatar?: string;
 };
 export type Profile = { name?: string; email?: string; mobile?: string; country_code?: string; gender?: string; firm_name?: string; business_name?: string; business_type?: string };
 export type LoginResponse = { token: string; username: string; profile?: Profile; balance?: number; projectCount?: number; projects?: Project[] };
@@ -17,7 +21,22 @@ const normalizeProjects = (value: any): Project[] => {
   const list = Array.isArray(value) ? value : value?.list || [];
   return list
     .map((project: any) => {
-      const img = project.profile_image || project.profile_picture || project.logo || project.image || project.profile_picture_url || '';
+      const rawImg =
+        project.profile_image ||
+        project.profile_picture ||
+        project.profile_picture_url ||
+        project.profile_photo ||
+        project.photo ||
+        project.logo ||
+        project.image ||
+        project.avatar ||
+        project.icon ||
+        project.project_icon ||
+        project.project_image ||
+        project.project_logo ||
+        project.url ||
+        '';
+      const img = formatImageUrl(rawImg);
       return {
         id: String(project.id || project.project_id),
         name: String(project.name || project.project_name || 'Untitled project'),
@@ -25,8 +44,10 @@ const normalizeProjects = (value: any): Project[] => {
         ownerName: project.owner_name,
         profile_image: img,
         profile_picture: img,
+        profile_picture_url: img,
         logo: img,
         image: img,
+        avatar: img,
       };
     })
     .filter((project: Project) => project.id);

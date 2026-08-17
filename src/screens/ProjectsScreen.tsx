@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { BackHandler, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Settings, Plus, ArrowLeft } from 'lucide-react-native';
+import { BackHandler, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Settings, Plus, ArrowLeft, QrCode } from 'lucide-react-native';
 import { Project } from '../api/auth';
 import { ApiSession } from '../api/client';
 import { getProjectMeta } from '../api/workspace';
 import { useTheme } from '../theme/theme';
 import { CreateProjectScreen } from './CreateProjectScreen';
 import { ManageProjectScreen } from './ManageProjectScreen';
+import { ProjectAvatar } from '../components/ProjectAvatar';
+import { ProjectQRModal } from '../components/Modals/ProjectQRModal';
 
 type Mode = 'list' | 'create' | 'manage';
 
@@ -32,6 +34,7 @@ export function ProjectsScreen({
   const theme = useTheme();
   const [mode, setMode] = useState<Mode>('list');
   const [manageProjectId, setManageProjectId] = useState<string | null>(null);
+  const [qrProject, setQrProject] = useState<Project | null>(null);
   const [wabaInfo, setWabaInfo] = useState<any>(null);
   const [wabaLoading, setWabaLoading] = useState(false);
 
@@ -232,7 +235,12 @@ export function ProjectsScreen({
           </View>
         }
         renderItem={({ item }) => {
-          const profileImg = (item as any).profile_image || (item as any).profile_picture || (item as any).logo || (item as any).image;
+          const profileImg =
+            (item as any).profile_image ||
+            (item as any).profile_picture ||
+            (item as any).profile_picture_url ||
+            (item as any).logo ||
+            (item as any).image;
           return (
             <Pressable
               accessibilityRole="button"
@@ -243,15 +251,12 @@ export function ProjectsScreen({
                 pressed && { backgroundColor: theme.cardHover },
               ]}
             >
-              <View style={[styles.icon, { backgroundColor: theme.mint }]}>
-                {profileImg ? (
-                  <Image source={{ uri: profileImg }} style={{ width: 44, height: 44, borderRadius: 14 }} />
-                ) : (
-                  <Text style={[styles.iconText, { color: theme.mintText }]}>
-                    {item.name.charAt(0).toUpperCase()}
-                  </Text>
-                )}
-              </View>
+              <ProjectAvatar
+                name={item.name}
+                image={profileImg}
+                size={45}
+                borderRadius={14}
+              />
               <View style={styles.cardText}>
                 <Text numberOfLines={1} style={[styles.name, { color: theme.ink }]}>
                   {item.name}
@@ -261,20 +266,53 @@ export function ProjectsScreen({
                 </Text>
               </View>
 
-              <Pressable
-                hitSlop={12}
-                style={styles.manageBtn}
-                onPress={() => {
-                  setManageProjectId(item.id);
-                  setMode('manage');
-                }}
-              >
-                <Settings size={20} color={theme.muted} />
-              </Pressable>
+              <View style={styles.cardActions}>
+                <Pressable
+                  hitSlop={8}
+                  style={[styles.actionBtn, { backgroundColor: theme.mint }]}
+                  onPress={(e) => {
+                    e.stopPropagation?.();
+                    setQrProject(item);
+                  }}
+                  accessibilityLabel={`View QR Code for ${item.name}`}
+                >
+                  <QrCode size={18} color={theme.emerald} strokeWidth={2.2} />
+                </Pressable>
+
+                <Pressable
+                  hitSlop={8}
+                  style={[styles.actionBtn, { backgroundColor: theme.canvas, borderColor: theme.border, borderWidth: 1 }]}
+                  onPress={(e) => {
+                    e.stopPropagation?.();
+                    setManageProjectId(item.id);
+                    setMode('manage');
+                  }}
+                  accessibilityLabel={`Manage settings for ${item.name}`}
+                >
+                  <Settings size={18} color={theme.muted} />
+                </Pressable>
+              </View>
             </Pressable>
           );
         }}
       />
+
+      {/* QR Code Modal */}
+      {qrProject && (
+        <ProjectQRModal
+          visible={!!qrProject}
+          onClose={() => setQrProject(null)}
+          session={session}
+          projectId={qrProject.id}
+          projectName={qrProject.name}
+          projectImage={
+            qrProject.profile_image ||
+            qrProject.profile_picture ||
+            qrProject.logo ||
+            qrProject.image
+          }
+        />
+      )}
     </View>
   );
 }
@@ -371,14 +409,21 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 3 },
   },
-  icon: { width: 45, height: 45, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  iconText: { fontWeight: '900', fontSize: 17 },
   cardText: { flex: 1, marginLeft: 12, marginRight: 8 },
   name: { fontSize: 15, fontWeight: '800' },
   meta: { fontSize: 12, marginTop: 4 },
 
-  manageBtn: {
-    padding: 8,
+  cardActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   emptyContainer: {

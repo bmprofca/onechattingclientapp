@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { BackHandler, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View, Animated, Easing } from 'react-native';
-import { ArrowLeftRight, Home, MessageCircle, Megaphone, User, Wallet, MoreVertical, Briefcase, Info, HelpCircle, Brain, Settings, ReceiptText } from 'lucide-react-native';
+import { ArrowLeftRight, Home, MessageCircle, Megaphone, User, Wallet, MoreVertical, Briefcase, Info, HelpCircle, Brain, Settings, ReceiptText, QrCode } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { getAccountProfile } from '../api/auth';
 import { getProjectMeta } from '../api/workspace';
@@ -24,6 +24,10 @@ import { TransactionsScreen } from './TransactionsScreen';
 import { AiBillsScreen } from './AiBillsScreen';
 import { socketManager, ConnectionStatus } from '../services/socketManager';
 import { ScalePressable, FadeInView } from '../components/animations';
+import { Project } from '../api/auth';
+import { ProjectAvatar } from '../components/ProjectAvatar';
+import { ProjectQRModal } from '../components/Modals/ProjectQRModal';
+import { formatImageUrl } from '../utils/imageUrl';
 
 type Page = 'dashboard' | 'inbox' | 'campaigns' | 'profile' | 'wallet' | 'projects';
 
@@ -61,6 +65,7 @@ export function WorkspaceScreen({
   const [page, setPage] = useState<Page>('dashboard');
   const [walletBalance, setWalletBalance] = useState<number | string>(session.balance ?? 0);
   const [projectCount, setProjectCount] = useState<number>(session.projectCount ?? session.projects?.length ?? 0);
+  const [projects, setProjects] = useState<Project[]>(session.projects || []);
   const [chatTarget, setChatTarget] = useState<{ number: string; name: string } | null>(null);
   const [campaignTarget, setCampaignTarget] = useState<{ id: string; name: string } | null>(null);
   const [createCampaignTarget, setCreateCampaignTarget] = useState(false);
@@ -74,8 +79,15 @@ export function WorkspaceScreen({
   const [aiBillsTarget, setAiBillsTarget] = useState(false);
   const [projectsTarget, setProjectsTarget] = useState(false); // full-screen projects hub, used from full mode
   const [isMenuVisible, setIsMenuVisible] = useState(false);
+  const [projectQrModalOpen, setProjectQrModalOpen] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [projectProfileImage, setProjectProfileImage] = useState<string>('');
+
+  useEffect(() => {
+    if (session.projects) {
+      setProjects(session.projects);
+    }
+  }, [session.projects]);
 
   const apiSession = useMemo<ApiSession>(
     () => ({ token: session.token, username: session.username }),
@@ -83,8 +95,8 @@ export function WorkspaceScreen({
   );
 
   const currentProject = useMemo(() => {
-    return session.projects?.find((p) => p.id === projectId);
-  }, [session.projects, projectId]);
+    return projects.find((p) => p.id === projectId);
+  }, [projects, projectId]);
 
   useEffect(() => {
     if (!projectId) {
@@ -105,20 +117,31 @@ export function WorkspaceScreen({
       .then((res) => {
         const proj = res?.data?.project || res?.project || {};
         const prof = res?.data?.profile || res?.profile || {};
-        const img =
+        const rawImg =
           proj.profile_image ||
           proj.profile_picture ||
           proj.profile_picture_url ||
+          proj.profile_photo ||
+          proj.photo ||
           proj.logo ||
           proj.image ||
+          proj.avatar ||
           prof.profile_picture_url ||
           prof.profile_image ||
           prof.profile_picture ||
           prof.image ||
           res?.data?.profile_picture ||
           '';
+        const img = formatImageUrl(rawImg);
         if (img) {
           setProjectProfileImage(img);
+          setProjects((prev) =>
+            prev.map((p) =>
+              p.id === projectId
+                ? { ...p, profile_image: img, profile_picture: img, logo: img, image: img }
+                : p
+            )
+          );
         }
       })
       .catch(() => {});
@@ -133,6 +156,9 @@ export function WorkspaceScreen({
       if (updated.projectCount !== undefined) {
         setProjectCount(updated.projectCount);
       }
+      if (updated.projects && Array.isArray(updated.projects)) {
+        setProjects(updated.projects);
+      }
       const stored = await loadSession();
       if (stored) {
         const refreshed: Session = {
@@ -146,6 +172,10 @@ export function WorkspaceScreen({
       // ignore
     }
   }, [apiSession]);
+
+  useEffect(() => {
+    refreshAccount();
+  }, [refreshAccount]);
 
   useEffect(() => {
     refreshAccount();
@@ -293,7 +323,7 @@ export function WorkspaceScreen({
     return (
       <ProjectsScreen
         session={apiSession}
-        projects={session.projects || []}
+        projects={projects}
         currentProjectId={projectId}
         onSelect={async (id) => { await onSelectProject(id); setProjectsTarget(false); }}
         onProjectCreated={async (proj) => { await onProjectCreated(proj); await onSelectProject(proj.id); setProjectsTarget(false); }}
@@ -361,26 +391,17 @@ export function WorkspaceScreen({
                   style={styles.projectSwitchBtn}
                   hitSlop={8}
                 >
-                  {projectProfileImage ? (
-                    <View style={styles.projectAvatarContainer}>
-                      <Image
-                        source={{ uri: projectProfileImage }}
-                        style={[styles.projectAvatarImage, { borderColor: theme.emerald }]}
-                      />
-                      <View style={[styles.projectSwitchBadge, { backgroundColor: theme.emerald }]}>
-                        <ArrowLeftRight size={8} color="#FFF" strokeWidth={3} />
-                      </View>
+                  <View style={[styles.projectAvatarContainer, { borderColor: theme.emerald }]}>
+                    <ProjectAvatar
+                      name={currentProject?.name || 'P'}
+                      image={projectProfileImage}
+                      size={34}
+                      borderRadius={17}
+                    />
+                    <View style={[styles.projectSwitchBadge, { backgroundColor: theme.emerald }]}>
+                      <ArrowLeftRight size={8} color="#FFF" strokeWidth={3} />
                     </View>
-                  ) : (
-                    <View style={[styles.projectAvatarFallback, { backgroundColor: theme.mint, borderColor: theme.border }]}>
-                      <Text style={[styles.projectAvatarInitial, { color: theme.emerald }]}>
-                        {currentProject?.name?.trim().charAt(0).toUpperCase() || 'P'}
-                      </Text>
-                      <View style={[styles.projectSwitchBadge, { backgroundColor: theme.emerald }]}>
-                        <ArrowLeftRight size={8} color="#FFF" strokeWidth={3} />
-                      </View>
-                    </View>
-                  )}
+                  </View>
                 </ScalePressable>
                 <ScalePressable
                   accessibilityRole="button"
@@ -414,7 +435,7 @@ export function WorkspaceScreen({
             ) : page === 'projects' ? (
               <ProjectsScreen
                 session={apiSession}
-                projects={session.projects || []}
+                projects={projects}
                 onSelect={onSelectProject}
                 onProjectCreated={async (proj) => { await onProjectCreated(proj); await onSelectProject(proj.id); }}
                 onRechargeWallet={() => setPage('wallet')}
@@ -524,6 +545,13 @@ export function WorkspaceScreen({
             ]}>
               <ScalePressable
                 style={[styles.menuItem]}
+                onPress={() => { setIsMenuVisible(false); setProjectQrModalOpen(true); }}
+              >
+                <QrCode size={18} color={theme.emerald} />
+                <Text style={[styles.menuItemText, { color: theme.ink }]}>Project QR Code</Text>
+              </ScalePressable>
+              <ScalePressable
+                style={[styles.menuItem]}
                 onPress={() => { setIsMenuVisible(false); setProjectsTarget(true); }}
               >
                 <Briefcase size={18} color={theme.ink} />
@@ -575,6 +603,18 @@ export function WorkspaceScreen({
           </Pressable>
         </Modal>
       )}
+
+      {/* Project QR Code Modal */}
+      {hasProject && projectId && projectQrModalOpen && (
+        <ProjectQRModal
+          visible={projectQrModalOpen}
+          onClose={() => setProjectQrModalOpen(false)}
+          session={apiSession}
+          projectId={projectId}
+          projectName={currentProject?.name || 'Current Project'}
+          projectImage={projectProfileImage}
+        />
+      )}
     </View>
   );
 }
@@ -605,12 +645,15 @@ const styles = StyleSheet.create({
     position: 'relative',
     width: 36,
     height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   projectAvatarImage: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1.5,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
   projectAvatarFallback: {
     position: 'relative',

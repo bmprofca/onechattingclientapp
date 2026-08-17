@@ -1,4 +1,5 @@
 import { ApiSession, post } from './client';
+import { formatImageUrl } from '../utils/imageUrl';
 
 export type ListItem = Record<string, unknown>;
 export const unwrapList = (response: any): ListItem[] => {
@@ -182,7 +183,7 @@ export async function editProject(
         ...data,
         company_name: data.company_name,
         project_name: data.project_name,
-        profile_image: data.profile_image || data.logo || data.image,
+        profile_image: formatImageUrl(data.profile_image || data.logo || data.image || data.profile_picture),
       };
   return post<any>('/project/edit-project', payload, session);
 }

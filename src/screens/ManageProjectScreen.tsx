@@ -25,14 +25,17 @@ import {
   Globe,
   FileText,
   Sparkles,
+  QrCode,
 } from 'lucide-react-native';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { ApiSession } from '../api/client';
 import { editProject, getProjectMeta } from '../api/workspace';
 import { uploadFile } from '../api/upload';
+import { formatImageUrl } from '../utils/imageUrl';
 import { LoadState } from '../components/LoadState';
 import { useTheme } from '../theme/theme';
 import { ScalePressable, FadeInView } from '../components/animations';
+import { ProjectQRModal } from '../components/Modals/ProjectQRModal';
 
 export function ManageProjectScreen({
   session,
@@ -62,6 +65,7 @@ export function ManageProjectScreen({
   const [mobile, setMobile] = useState('');
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [showQRModal, setShowQRModal] = useState(false);
 
   const loadMeta = useCallback(async () => {
     setLoadingMeta(true);
@@ -77,19 +81,22 @@ export function ManageProjectScreen({
 
       setProjectName(proj.name || proj.project_name || '');
       setCompanyName(prof.firm_name || prof.company_name || proj.company_name || '');
-      setProfileImage(
+      const rawImg =
         proj.profile_image ||
         proj.profile_picture ||
         proj.profile_picture_url ||
+        proj.profile_photo ||
+        proj.photo ||
         proj.logo ||
         proj.image ||
+        proj.avatar ||
         prof.profile_picture_url ||
         prof.profile_image ||
         prof.profile_picture ||
         prof.image ||
         data.profile_picture ||
-        ''
-      );
+        '';
+      setProfileImage(formatImageUrl(rawImg));
       setDescription(proj.description || prof.description || '');
       setWebsite(proj.website || prof.website || '');
       setEmail(proj.email || prof.email || '');
@@ -131,7 +138,8 @@ export function ManageProjectScreen({
       });
 
       if (uploaded.success && uploaded.url) {
-        setProfileImage(uploaded.url);
+        const formatted = formatImageUrl(uploaded.url);
+        setProfileImage(formatted);
         Toast.show({
           type: 'success',
           text1: 'Photo Uploaded',
@@ -255,6 +263,31 @@ export function ManageProjectScreen({
                 <InfoRow label="Utility" value={`₹${charges.utility || 0.35}`} theme={theme} />
                 <InfoRow label="Authentication" value={`₹${charges.authentication || 0.35}`} theme={theme} />
               </View>
+
+              {/* QR Code Action Banner */}
+              <Pressable
+                onPress={() => setShowQRModal(true)}
+                style={({ pressed }) => [
+                  styles.qrBanner,
+                  { backgroundColor: theme.surface, borderColor: theme.border },
+                  pressed && { backgroundColor: theme.cardHover },
+                ]}
+              >
+                <View style={[styles.qrBannerIcon, { backgroundColor: theme.mint }]}>
+                  <QrCode size={22} color={theme.emerald} />
+                </View>
+                <View style={styles.qrBannerText}>
+                  <Text style={[styles.qrBannerTitle, { color: theme.ink }]}>
+                    Project QR Code
+                  </Text>
+                  <Text style={[styles.qrBannerSubtitle, { color: theme.muted }]}>
+                    View, download & share your WhatsApp QR codes
+                  </Text>
+                </View>
+                <View style={[styles.qrBannerButton, { backgroundColor: theme.emerald }]}>
+                  <Text style={styles.qrBannerButtonText}>View QR</Text>
+                </View>
+              </Pressable>
             </FadeInView>
 
             {/* Edit Project Section */}
@@ -415,6 +448,18 @@ export function ManageProjectScreen({
           </ScrollView>
         </KeyboardAvoidingView>
       )}
+
+      {/* Project QR Modal */}
+      {showQRModal && (
+        <ProjectQRModal
+          visible={showQRModal}
+          onClose={() => setShowQRModal(false)}
+          session={session}
+          projectId={projectId}
+          projectName={projectName || 'Project'}
+          projectImage={profileImage}
+        />
+      )}
     </View>
   );
 }
@@ -485,7 +530,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 16,
     padding: 16,
-    marginBottom: 24,
+    marginBottom: 16,
     marginHorizontal: 4,
   },
   divider: {
@@ -510,6 +555,44 @@ const styles = StyleSheet.create({
   infoRowValue: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  qrBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 24,
+    marginHorizontal: 4,
+    gap: 12,
+  },
+  qrBannerIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qrBannerText: {
+    flex: 1,
+  },
+  qrBannerTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  qrBannerSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  qrBannerButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+  },
+  qrBannerButtonText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   sectionTitle: {
     fontSize: 18,

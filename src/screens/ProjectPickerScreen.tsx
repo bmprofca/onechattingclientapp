@@ -1,7 +1,8 @@
 import React from 'react';
-import { FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Project } from '../api/auth';
 import { useTheme } from '../theme/theme';
+import { ProjectAvatar } from '../components/ProjectAvatar';
 
 export function ProjectPickerScreen({
   projects,
@@ -52,15 +53,12 @@ export function ProjectPickerScreen({
                 pressed && { backgroundColor: theme.cardHover },
               ]}
             >
-              <View style={[styles.icon, { backgroundColor: theme.mint }]}>
-                {profileImg ? (
-                  <Image source={{ uri: profileImg }} style={{ width: 45, height: 45, borderRadius: 14 }} />
-                ) : (
-                  <Text style={[styles.iconText, { color: theme.mintText }]}>
-                    {item.name.charAt(0).toUpperCase()}
-                  </Text>
-                )}
-              </View>
+              <ProjectAvatar
+                name={item.name}
+                image={profileImg}
+                size={45}
+                borderRadius={14}
+              />
               <View style={styles.cardText}>
                 <Text numberOfLines={1} style={[styles.name, { color: theme.ink }]}>
                   {item.name}

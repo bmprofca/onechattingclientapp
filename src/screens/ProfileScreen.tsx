@@ -13,6 +13,9 @@ import { Session } from '../services/session';
 import { LoadState } from '../components/LoadState';
 import { useTheme } from '../theme/theme';
 
+import { formatImageUrl } from '../utils/imageUrl';
+import { Image } from 'react-native';
+
 export function ProfileScreen({
   session,
   apiSession,
@@ -26,6 +29,7 @@ export function ProfileScreen({
   const [profileData, setProfileData] = useState<any>(session);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [imgError, setImgError] = useState(false);
 
   const loadProfile = useCallback(async () => {
     setLoading(true);
@@ -50,6 +54,14 @@ export function ProfileScreen({
   }, []);
 
   const profile = profileData?.profile || session.profile || {};
+  const rawProfileImg =
+    profile.profile_picture_url ||
+    profile.profile_image ||
+    profile.profile_picture ||
+    profile.image ||
+    profile.photo ||
+    '';
+  const profileImgUrl = formatImageUrl(rawProfileImg);
   const name = profile.name || session.username || 'User';
   const email = profile.email || 'No email specified';
   const mobile = profile.mobile
@@ -85,9 +97,20 @@ export function ProfileScreen({
 
       {/* Profile Header Hero */}
       <View style={[styles.heroCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-        <View style={[styles.avatar, { backgroundColor: theme.mint, borderColor: theme.emerald }]}>
-          <Text style={[styles.avatarText, { color: theme.emerald }]}>{initial}</Text>
-        </View>
+        {profileImgUrl && !imgError ? (
+          <View style={[styles.avatar, { borderColor: theme.emerald, overflow: 'hidden' }]}>
+            <Image
+              source={{ uri: profileImgUrl }}
+              style={{ width: '100%', height: '100%' }}
+              resizeMode="cover"
+              onError={() => setImgError(true)}
+            />
+          </View>
+        ) : (
+          <View style={[styles.avatar, { backgroundColor: theme.mint, borderColor: theme.emerald }]}>
+            <Text style={[styles.avatarText, { color: theme.emerald }]}>{initial}</Text>
+          </View>
+        )}
         <Text style={[styles.userName, { color: theme.ink }]}>{name}</Text>
         <Text style={[styles.userEmail, { color: theme.muted }]}>{email}</Text>
         <Text style={[styles.userMobile, { color: theme.emerald }]}>{mobile}</Text>
