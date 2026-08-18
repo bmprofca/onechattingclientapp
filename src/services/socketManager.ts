@@ -164,6 +164,13 @@ class SocketManager {
     return 'disconnected';
   }
 
+  ensureConnected() {
+    if (this.socket && !this.isConnected) {
+      console.log('🔄 Reconnecting socket...');
+      this.socket.connect();
+    }
+  }
+
   private triggerNativeNotification(data: any) {
     try {
       const msg = data?.message || {};

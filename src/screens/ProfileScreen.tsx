@@ -7,6 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { ArrowLeft } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { getAccountProfile } from '../api/auth';
 import { Session } from '../services/session';
@@ -20,10 +21,12 @@ export function ProfileScreen({
   session,
   apiSession,
   onSignOut,
+  onBack,
 }: {
   session: Session;
   apiSession: ApiSession;
   onSignOut: () => void;
+  onBack?: () => void;
 }) {
   const theme = useTheme();
   const [profileData, setProfileData] = useState<any>(session);
@@ -82,21 +85,31 @@ export function ProfileScreen({
   const initial = name.trim().charAt(0).toUpperCase() || 'U';
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: theme.canvas }]}
-      contentContainerStyle={styles.scrollContent}
-      refreshControl={
-        <RefreshControl
-          refreshing={loading}
-          onRefresh={loadProfile}
-          tintColor={theme.emerald}
-        />
-      }
-    >
-      <LoadState loading={false} error={error} empty={false} onRetry={loadProfile} />
+    <View style={[styles.safe, { backgroundColor: theme.canvas }]}>
+      {onBack && (
+        <View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
+          <Pressable onPress={onBack} style={styles.backButton} hitSlop={8}>
+            <ArrowLeft size={22} color={theme.ink} />
+          </Pressable>
+          <Text style={[styles.headerTitle, { color: theme.ink }]}>Profile</Text>
+          <View style={{ width: 40 }} />
+        </View>
+      )}
+      <ScrollView
+        style={[styles.container, { backgroundColor: theme.canvas }]}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={loading}
+            onRefresh={loadProfile}
+            tintColor={theme.emerald}
+          />
+        }
+      >
+        <LoadState loading={false} error={error} empty={false} onRetry={loadProfile} />
 
-      {/* Profile Header Hero */}
-      <View style={[styles.heroCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+        {/* Profile Header Hero */}
+        <View style={[styles.heroCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
         {profileImgUrl && !imgError ? (
           <View style={[styles.avatar, { borderColor: theme.emerald, overflow: 'hidden' }]}>
             <Image
@@ -168,7 +181,8 @@ export function ProfileScreen({
       >
         <Text style={[styles.logoutButtonText, { color: '#FFFFFF' }]}>Log Out</Text>
       </Pressable>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -192,6 +206,29 @@ function DetailRow({
 }
 
 const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+  },
+  header: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
   container: {
     flex: 1,
   },

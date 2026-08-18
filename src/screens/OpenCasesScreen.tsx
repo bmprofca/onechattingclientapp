@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  BackHandler,
   FlatList,
   Modal,
   Pressable,
@@ -188,6 +189,27 @@ export function OpenCasesScreen({
     };
   }, [fetchOpenCases]);
 
+  // Back handler for screen/modals
+  useEffect(() => {
+    const onBackPress = () => {
+      if (showCaseEditModal) {
+        setShowCaseEditModal(false);
+        return true;
+      }
+      if (showCaseCreateModal) {
+        setShowCaseCreateModal(false);
+        return true;
+      }
+      if (showCaseListModal) {
+        setShowCaseListModal(false);
+        return true;
+      }
+      return false;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [showCaseEditModal, showCaseCreateModal, showCaseListModal]);
+
   // --- Fetch Cases for a Number (Modal) ---
   const fetchCaseListForNumber = useCallback(
     async (number: string, searchQuery?: string, statusFilter?: string) => {
@@ -369,9 +391,289 @@ export function OpenCasesScreen({
     }
   };
 
+  // Helper to render Edit Case modal (available in both main view and case list screen)
+  const renderEditCaseModal = () => (
+    <Modal
+      visible={showCaseEditModal}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setShowCaseEditModal(false)}
+    >
+      <KeyboardAvoidView style={styles.modalOverlay}>
+        <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+            <Text style={[styles.modalTitle, { color: theme.ink }]}>Edit Case</Text>
+            <Pressable hitSlop={8} onPress={() => setShowCaseEditModal(false)}>
+              <X size={22} color={theme.muted} />
+            </Pressable>
+          </View>
+
+          <View style={{ padding: 18, gap: 14 }}>
+            {caseEditError ? (
+              <View style={[styles.errorBox, { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' }]}>
+                <AlertCircle size={16} color="#DC2626" />
+                <Text style={[styles.errorBoxText, { color: '#B91C1C' }]}>{caseEditError}</Text>
+              </View>
+            ) : null}
+
+            <View>
+              <Text style={[styles.formLabel, { color: theme.muted }]}>CASE NAME *</Text>
+              <View style={[styles.inputRow, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
+                <FileText size={16} color={theme.muted} />
+                <TextInput
+                  value={caseEditName}
+                  onChangeText={setCaseEditName}
+                  placeholder="Case name"
+                  placeholderTextColor={theme.muted}
+                  style={[styles.input, { color: theme.ink }]}
+                />
+              </View>
+            </View>
+
+            <View>
+              <Text style={[styles.formLabel, { color: theme.muted }]}>REMARK</Text>
+              <View style={[styles.inputRow, styles.textAreaRow, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
+                <TextInput
+                  value={caseEditRemark}
+                  onChangeText={setCaseEditRemark}
+                  multiline
+                  numberOfLines={3}
+                  placeholder="Remark"
+                  placeholderTextColor={theme.muted}
+                  style={[styles.input, styles.textArea, { color: theme.ink }]}
+                />
+              </View>
+            </View>
+
+            <View>
+              <Text style={[styles.formLabel, { color: theme.muted }]}>STATUS</Text>
+              <View style={styles.statusToggleRow}>
+                <Pressable
+                  onPress={() => setCaseEditStatus('open')}
+                  style={[
+                    styles.statusToggleBtn,
+                    { borderColor: theme.border, backgroundColor: theme.canvas },
+                    caseEditStatus === 'open' && { backgroundColor: '#F59E0B', borderColor: '#F59E0B' },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.statusToggleBtnText,
+                      { color: caseEditStatus === 'open' ? '#FFF' : theme.muted },
+                    ]}
+                  >
+                    Open
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setCaseEditStatus('closed')}
+                  style={[
+                    styles.statusToggleBtn,
+                    { borderColor: theme.border, backgroundColor: theme.canvas },
+                    caseEditStatus === 'closed' && { backgroundColor: '#10B981', borderColor: '#10B981' },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.statusToggleBtnText,
+                      { color: caseEditStatus === 'closed' ? '#FFF' : theme.muted },
+                    ]}
+                  >
+                    Closed
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+
+            <ScalePressable
+              onPress={handleSaveEditCase}
+              disabled={caseEditLoading}
+              style={[styles.submitButton, { backgroundColor: theme.emerald }]}
+            >
+              {caseEditLoading ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <Text style={styles.submitButtonText}>Save Changes</Text>
+              )}
+            </ScalePressable>
+          </View>
+        </View>
+      </KeyboardAvoidView>
+    </Modal>
+  );
+
+  if (showCaseListModal) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.canvas }]}>
+        <View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
+          <View style={styles.headerLeft}>
+            <ScalePressable onPress={() => setShowCaseListModal(false)} style={styles.backBtn} hitSlop={8}>
+              <ArrowLeft size={22} color={theme.ink} strokeWidth={2.5} />
+            </ScalePressable>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.headerTitle, { color: theme.ink }]} numberOfLines={1}>
+                {caseModalContact?.name || caseModalNumber}
+              </Text>
+              <Text style={[styles.headerSubtitle, { color: theme.muted }]}>
+                {caseModalNumber} · Case History
+              </Text>
+            </View>
+          </View>
+
+          <ScalePressable
+            onPress={() => {
+              setShowCaseListModal(false);
+              onOpenChat(caseModalNumber, caseModalContact?.name || caseModalNumber);
+            }}
+            style={[styles.chatHeaderBtn, { backgroundColor: theme.mint }]}
+            hitSlop={6}
+          >
+            <MessageCircle size={16} color={theme.emerald} />
+            <Text style={[styles.chatHeaderBtnText, { color: theme.emerald }]}>Chat</Text>
+          </ScalePressable>
+        </View>
+
+        <View style={[styles.modalFiltersRow, { backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border, paddingBottom: 12 }]}>
+          <View style={[styles.modalSearchContainer, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
+            <Search size={15} color={theme.muted} />
+            <TextInput
+              value={caseListSearch}
+              onChangeText={(val) => {
+                setCaseListSearch(val);
+                fetchCaseListForNumber(caseModalNumber, val, caseListStatusFilter);
+              }}
+              placeholder="Filter cases by title, remark..."
+              placeholderTextColor={theme.muted}
+              style={[styles.modalSearchInput, { color: theme.ink }]}
+            />
+            {caseListSearch.length > 0 && (
+              <Pressable hitSlop={8} onPress={() => {
+                setCaseListSearch('');
+                fetchCaseListForNumber(caseModalNumber, '', caseListStatusFilter);
+              }}>
+                <Text style={{ color: theme.muted, fontSize: 14 }}>✕</Text>
+              </Pressable>
+            )}
+          </View>
+
+          <View style={styles.filterChipsRow}>
+            {(['', 'open', 'closed'] as const).map((st) => {
+              const active = caseListStatusFilter === st;
+              const label = st === '' ? 'All' : st === 'open' ? 'Open' : 'Closed';
+              return (
+                <Pressable
+                  key={st}
+                  onPress={() => {
+                    setCaseListStatusFilter(st);
+                    fetchCaseListForNumber(caseModalNumber, caseListSearch, st);
+                  }}
+                  style={[
+                    styles.filterChip,
+                    { borderColor: theme.border, backgroundColor: theme.canvas },
+                    active && { backgroundColor: theme.emerald, borderColor: theme.emerald },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      { color: active ? '#FFF' : theme.muted },
+                    ]}
+                  >
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        {caseListLoading && caseList.length === 0 ? (
+          <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+            <ActivityIndicator size="large" color={theme.emerald} />
+          </View>
+        ) : caseListError ? (
+          <View style={{ padding: 20, alignItems: 'center' }}>
+            <Text style={{ color: theme.danger }}>{caseListError}</Text>
+          </View>
+        ) : caseList.length === 0 ? (
+          <View style={{ paddingVertical: 50, alignItems: 'center' }}>
+            <FileText size={36} color={theme.muted} />
+            <Text style={[styles.emptyTitle, { color: theme.ink, marginTop: 12 }]}>No cases found</Text>
+            <Text style={[styles.emptyCopy, { color: theme.muted }]}>
+              No cases match the selected filter.
+            </Text>
+          </View>
+        ) : (
+          <ScrollView
+            contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 40 }}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={caseListLoading}
+                onRefresh={() => fetchCaseListForNumber(caseModalNumber, caseListSearch, caseListStatusFilter)}
+                tintColor={theme.emerald}
+              />
+            }
+          >
+            {caseList.map((row: any, idx: number) => {
+              const isOpen = row.status === true || row.status === '1' || row.status === 'open';
+              const createDate = row.created_at || row.create_date || row.createdAt || row.created_date;
+
+              return (
+                <View
+                  key={row.id || row.case_id || idx}
+                  style={[styles.modalCaseCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                >
+                  <View style={styles.modalCaseCardHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.modalCaseCardTitle, { color: theme.ink }]}>
+                        {row.name || 'Untitled Case'}
+                      </Text>
+                      <Text style={[styles.modalCaseDate, { color: theme.muted }]}>
+                        Created: {formatDateOnly(createDate)}
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <View
+                        style={[
+                          styles.statusPill,
+                          { backgroundColor: isOpen ? '#FEF3C7' : '#DCFCE7' },
+                        ]}
+                      >
+                        <Text style={[styles.statusPillText, { color: isOpen ? '#B45309' : '#15803D' }]}>
+                          {isOpen ? 'OPEN' : 'CLOSED'}
+                        </Text>
+                      </View>
+                      <ScalePressable
+                        onPress={() => openEditCase(row)}
+                        style={[styles.editCaseBtn, { backgroundColor: theme.canvas, borderColor: theme.border }]}
+                        hitSlop={6}
+                      >
+                        <Edit2 size={13} color={theme.emerald} />
+                      </ScalePressable>
+                    </View>
+                  </View>
+
+                  {row.remark ? (
+                    <View style={[styles.remarkBox, { backgroundColor: theme.canvas }]}>
+                      <Text style={[styles.remarkText, { color: theme.ink }]}>
+                        {row.remark}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              );
+            })}
+          </ScrollView>
+        )}
+
+        {renderEditCaseModal()}
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidView style={[styles.container, { backgroundColor: theme.canvas }]}>
-      {/* Top Header */}
       <View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
         <View style={styles.headerLeft}>
           {onBack && (
@@ -397,7 +699,6 @@ export function OpenCasesScreen({
         </ScalePressable>
       </View>
 
-      {/* Counter Pill Banner */}
       <View style={styles.counterBannerRow}>
         <View style={[styles.counterPill, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <PulseView duration={1600} maxScale={1.2} minScale={0.8}>
@@ -410,7 +711,6 @@ export function OpenCasesScreen({
         </View>
       </View>
 
-      {/* Search Input */}
       <View style={styles.searchSection}>
         <View style={[styles.searchContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <Search size={18} color={theme.muted} />
@@ -431,7 +731,6 @@ export function OpenCasesScreen({
         </View>
       </View>
 
-      {/* Main List */}
       <FlatList
         data={casesByNumber}
         keyExtractor={(item, index) => String(item.number || item.phone || index) + '-' + index}
@@ -448,39 +747,33 @@ export function OpenCasesScreen({
           <LoadState
             loading={loading}
             error={error}
-            empty={!loading && !error}
+            empty={!casesByNumber.length}
             emptyTitle="No open cases found"
             emptyCopy="There are no active open cases at the moment."
             onRetry={fetchOpenCases}
           />
         }
         renderItem={({ item, index }) => {
-          const contact = item.contact || {};
-          const contactNum = String(item.number || contact.number || item.phone || '');
-          const contactName = String(
-            contact.name || contact.firm_name || item.name || item.contact_name || contactNum,
-          );
-          const rawCases = Array.isArray(item.cases)
-            ? item.cases
-            : Array.isArray(item.case_list)
-            ? item.case_list
-            : item.case
-            ? [item.case]
-            : [];
-
-          // Sort open cases first
+          const contactNum = String(item.number || item.phone || '');
+          const contactName = item.contact?.name || item.name || contactNum;
+          const rawCases = Array.isArray(item.cases) ? item.cases : [];
           const sortedCases = [...rawCases].sort((a, b) => {
-            const aOpen = a.status === true || a.status === '1' || a.status === 'open';
-            const bOpen = b.status === true || b.status === '1' || b.status === 'open';
-            if (aOpen && !bOpen) return -1;
-            if (!aOpen && bOpen) return 1;
-            return 0;
+            const dateA = new Date(a?.create_date || a?.created_at || a?.createdAt || 0).getTime();
+            const dateB = new Date(b?.create_date || b?.created_at || b?.createdAt || 0).getTime();
+            return dateB - dateA;
           });
 
           return (
-            <FadeInView delay={Math.min(index * 40, 240)} distance={8}>
-              <View style={[styles.numberCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                {/* Number Card Header */}
+            <FadeInView delay={index * 40} duration={260} distance={10}>
+              <View
+                style={[
+                  styles.numberCard,
+                  {
+                    backgroundColor: theme.surface,
+                    borderColor: theme.border,
+                  },
+                ]}
+              >
                 <View style={styles.numberCardHeader}>
                   <View style={[styles.contactAvatar, { backgroundColor: theme.mint }]}>
                     <Text style={[styles.contactAvatarText, { color: theme.mintText }]}>
@@ -496,6 +789,8 @@ export function OpenCasesScreen({
                     </Text>
                   </View>
                   <ScalePressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Open Chat"
                     onPress={() => onOpenChat(contactNum, contactName)}
                     style={[styles.chatActionBtn, { backgroundColor: theme.mint }]}
                     hitSlop={6}
@@ -504,10 +799,8 @@ export function OpenCasesScreen({
                   </ScalePressable>
                 </View>
 
-                {/* Divider */}
                 <View style={[styles.cardDivider, { backgroundColor: theme.border }]} />
 
-                {/* Mini Cases Display */}
                 {sortedCases.length === 0 ? (
                   <Text style={[styles.noCasesText, { color: theme.muted }]}>No case details available</Text>
                 ) : (
@@ -571,7 +864,6 @@ export function OpenCasesScreen({
                   </View>
                 )}
 
-                {/* Footer Action */}
                 <View style={styles.numberCardFooter}>
                   <ScalePressable
                     onPress={() => openCaseModal(item)}
@@ -595,170 +887,8 @@ export function OpenCasesScreen({
         }}
       />
 
-      {/* =========================================================================
-          MODAL 1: VIEW ALL CASES FOR A NUMBER
-          ========================================================================= */}
-      <Modal
-        visible={showCaseListModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowCaseListModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { backgroundColor: theme.surface, maxHeight: '88%' }]}>
-            {/* Modal Header */}
-            <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <FileText size={18} color={theme.emerald} />
-                  <Text style={[styles.modalTitle, { color: theme.ink }]}>Case List</Text>
-                </View>
-                <Text style={[styles.modalSubtitle, { color: theme.muted }]}>
-                  Contact: <Text style={{ color: theme.ink, fontWeight: '700' }}>{caseModalContact?.name || caseModalNumber}</Text> ({caseModalNumber})
-                </Text>
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <ScalePressable
-                  onPress={() => {
-                    setShowCaseListModal(false);
-                    onOpenChat(caseModalNumber, caseModalContact?.name || caseModalNumber);
-                  }}
-                  style={[styles.chatHeaderBtn, { backgroundColor: theme.mint }]}
-                >
-                  <MessageCircle size={16} color={theme.emerald} />
-                  <Text style={[styles.chatHeaderBtnText, { color: theme.emerald }]}>Chat</Text>
-                </ScalePressable>
-                <Pressable hitSlop={8} onPress={() => setShowCaseListModal(false)}>
-                  <X size={22} color={theme.muted} />
-                </Pressable>
-              </View>
-            </View>
+      {renderEditCaseModal()}
 
-            {/* Modal Search & Filter */}
-            <View style={styles.modalFiltersRow}>
-              <View style={[styles.modalSearchContainer, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
-                <Search size={15} color={theme.muted} />
-                <TextInput
-                  value={caseListSearch}
-                  onChangeText={(val) => {
-                    setCaseListSearch(val);
-                    fetchCaseListForNumber(caseModalNumber, val, caseListStatusFilter);
-                  }}
-                  placeholder="Filter cases..."
-                  placeholderTextColor={theme.muted}
-                  style={[styles.modalSearchInput, { color: theme.ink }]}
-                />
-              </View>
-
-              {/* Status Filter Chips */}
-              <View style={styles.filterChipsRow}>
-                {(['', 'open', 'closed'] as const).map((st) => {
-                  const active = caseListStatusFilter === st;
-                  const label = st === '' ? 'All' : st === 'open' ? 'Open' : 'Closed';
-                  return (
-                    <Pressable
-                      key={st}
-                      onPress={() => {
-                        setCaseListStatusFilter(st);
-                        fetchCaseListForNumber(caseModalNumber, caseListSearch, st);
-                      }}
-                      style={[
-                        styles.filterChip,
-                        { borderColor: theme.border, backgroundColor: theme.canvas },
-                        active && { backgroundColor: theme.emerald, borderColor: theme.emerald },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.filterChipText,
-                          { color: active ? '#FFF' : theme.muted },
-                        ]}
-                      >
-                        {label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-
-            {/* Cases List Inside Modal */}
-            {caseListLoading ? (
-              <View style={{ paddingVertical: 40, alignItems: 'center' }}>
-                <ActivityIndicator size="large" color={theme.emerald} />
-              </View>
-            ) : caseListError ? (
-              <View style={{ padding: 20, alignItems: 'center' }}>
-                <Text style={{ color: theme.danger }}>{caseListError}</Text>
-              </View>
-            ) : caseList.length === 0 ? (
-              <View style={{ paddingVertical: 40, alignItems: 'center' }}>
-                <Text style={[styles.emptyTitle, { color: theme.ink }]}>No cases found</Text>
-                <Text style={[styles.emptyCopy, { color: theme.muted }]}>
-                  No cases match the selected filter.
-                </Text>
-              </View>
-            ) : (
-              <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }} showsVerticalScrollIndicator={false}>
-                {caseList.map((row: any, idx: number) => {
-                  const isOpen = row.status === true || row.status === '1' || row.status === 'open';
-                  const createDate = row.created_at || row.create_date || row.createdAt || row.created_date;
-
-                  return (
-                    <View
-                      key={row.id || row.case_id || idx}
-                      style={[styles.modalCaseCard, { backgroundColor: theme.canvas, borderColor: theme.border }]}
-                    >
-                      <View style={styles.modalCaseCardHeader}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.modalCaseCardTitle, { color: theme.ink }]}>
-                            {row.name || 'Untitled Case'}
-                          </Text>
-                          <Text style={[styles.modalCaseDate, { color: theme.muted }]}>
-                            Created: {formatDateOnly(createDate)}
-                          </Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                          <View
-                            style={[
-                              styles.statusPill,
-                              { backgroundColor: isOpen ? '#FEF3C7' : '#DCFCE7' },
-                            ]}
-                          >
-                            <Text style={[styles.statusPillText, { color: isOpen ? '#B45309' : '#15803D' }]}>
-                              {isOpen ? 'OPEN' : 'CLOSED'}
-                            </Text>
-                          </View>
-                          <ScalePressable
-                            onPress={() => openEditCase(row)}
-                            style={[styles.editCaseBtn, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                            hitSlop={6}
-                          >
-                            <Edit2 size={13} color={theme.emerald} />
-                          </ScalePressable>
-                        </View>
-                      </View>
-
-                      {/* Remark */}
-                      {row.remark ? (
-                        <View style={[styles.remarkBox, { backgroundColor: theme.surface }]}>
-                          <Text style={[styles.remarkText, { color: theme.ink }]}>
-                            {row.remark}
-                          </Text>
-                        </View>
-                      ) : null}
-                    </View>
-                  );
-                })}
-              </ScrollView>
-            )}
-          </View>
-        </View>
-      </Modal>
-
-      {/* =========================================================================
-          MODAL 2: CREATE CASE (CONTACT PICKER + DETAILS)
-          ========================================================================= */}
       <Modal
         visible={showCaseCreateModal}
         transparent
@@ -981,113 +1111,7 @@ export function OpenCasesScreen({
       {/* =========================================================================
           MODAL 3: EDIT CASE
           ========================================================================= */}
-      <Modal
-        visible={showCaseEditModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowCaseEditModal(false)}
-      >
-        <KeyboardAvoidView style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
-            <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
-              <Text style={[styles.modalTitle, { color: theme.ink }]}>Edit Case</Text>
-              <Pressable hitSlop={8} onPress={() => setShowCaseEditModal(false)}>
-                <X size={22} color={theme.muted} />
-              </Pressable>
-            </View>
-
-            <View style={{ padding: 18, gap: 14 }}>
-              {caseEditError ? (
-                <View style={[styles.errorBox, { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' }]}>
-                  <AlertCircle size={16} color="#DC2626" />
-                  <Text style={[styles.errorBoxText, { color: '#B91C1C' }]}>{caseEditError}</Text>
-                </View>
-              ) : null}
-
-              <View>
-                <Text style={[styles.formLabel, { color: theme.muted }]}>CASE NAME *</Text>
-                <View style={[styles.inputRow, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
-                  <FileText size={16} color={theme.muted} />
-                  <TextInput
-                    value={caseEditName}
-                    onChangeText={setCaseEditName}
-                    placeholder="Case name"
-                    placeholderTextColor={theme.muted}
-                    style={[styles.input, { color: theme.ink }]}
-                  />
-                </View>
-              </View>
-
-              <View>
-                <Text style={[styles.formLabel, { color: theme.muted }]}>REMARK</Text>
-                <View style={[styles.inputRow, styles.textAreaRow, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
-                  <TextInput
-                    value={caseEditRemark}
-                    onChangeText={setCaseEditRemark}
-                    multiline
-                    numberOfLines={3}
-                    placeholder="Remark"
-                    placeholderTextColor={theme.muted}
-                    style={[styles.input, styles.textArea, { color: theme.ink }]}
-                  />
-                </View>
-              </View>
-
-              <View>
-                <Text style={[styles.formLabel, { color: theme.muted }]}>STATUS</Text>
-                <View style={styles.statusToggleRow}>
-                  <Pressable
-                    onPress={() => setCaseEditStatus('open')}
-                    style={[
-                      styles.statusToggleBtn,
-                      { borderColor: theme.border, backgroundColor: theme.canvas },
-                      caseEditStatus === 'open' && { backgroundColor: '#F59E0B', borderColor: '#F59E0B' },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.statusToggleBtnText,
-                        { color: caseEditStatus === 'open' ? '#FFF' : theme.muted },
-                      ]}
-                    >
-                      Open
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => setCaseEditStatus('closed')}
-                    style={[
-                      styles.statusToggleBtn,
-                      { borderColor: theme.border, backgroundColor: theme.canvas },
-                      caseEditStatus === 'closed' && { backgroundColor: '#10B981', borderColor: '#10B981' },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.statusToggleBtnText,
-                        { color: caseEditStatus === 'closed' ? '#FFF' : theme.muted },
-                      ]}
-                    >
-                      Closed
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
-
-              <ScalePressable
-                onPress={handleSaveEditCase}
-                disabled={caseEditLoading}
-                style={[styles.submitButton, { backgroundColor: theme.emerald }]}
-              >
-                {caseEditLoading ? (
-                  <ActivityIndicator color="#FFF" />
-                ) : (
-                  <Text style={styles.submitButtonText}>Save Changes</Text>
-                )}
-              </ScalePressable>
-            </View>
-          </View>
-        </KeyboardAvoidView>
-      </Modal>
+      {renderEditCaseModal()}
     </KeyboardAvoidView>
   );
 }

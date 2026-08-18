@@ -6,8 +6,11 @@ import notifee, {
 } from '@notifee/react-native';
 import { AppState, Platform, PermissionsAndroid } from 'react-native';
 
-const CHANNEL_ID = 'onechat_messages';
-const CHANNEL_NAME = 'Chat Messages';
+const MESSAGE_CHANNEL_ID = 'onechat_messages';
+const MESSAGE_CHANNEL_NAME = 'Chat Messages';
+
+const SERVICE_CHANNEL_ID = 'onechat_service_channel';
+const SERVICE_CHANNEL_NAME = 'Background Connection';
 
 /**
  * Callback type for when user taps a notification.
@@ -20,16 +23,17 @@ export type NotificationTapHandler = (
 ) => void;
 
 class NotificationService {
-  private channelCreated = false;
+  private channelsCreated = false;
   private activeChatNumber: string | null = null;
   private tapHandler: NotificationTapHandler | null = null;
+  private isForegroundServiceRunning = false;
 
   /**
-   * Call once on app start. Creates the Android notification channel
+   * Call once on app start. Creates the Android notification channels
    * and sets up event listeners for notification taps.
    */
   async initialize() {
-    await this.createChannel();
+    await this.createChannels();
     this.setupEventListeners();
   }
 
@@ -41,16 +45,87 @@ class NotificationService {
     if (Platform.OS !== 'android') return true;
 
     try {
-      // Android 13+ (API 33) requires runtime permission
       if (Platform.Version >= 33) {
         const result = await PermissionsAndroid.request(
           PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
         );
         return result === PermissionsAndroid.RESULTS.GRANTED;
       }
-      return true; // Pre-Android 13 doesn't need runtime permission
+      return true;
     } catch {
       return false;
+    }
+  }
+
+  /**
+   * Check if battery optimization is enabled and prompt user to disable it
+   * so Android doesn't kill the background socket connection.
+   */
+  async requestBatteryOptimizationPrompt() {
+    if (Platform.OS !== 'android') return;
+    try {
+      const isOptimized = await notifee.isBatteryOptimizationEnabled();
+      if (isOptimized) {
+        await notifee.openBatteryOptimizationSettings();
+      }
+    } catch (e) {
+      console.warn('Battery optimization prompt failed:', e);
+    }
+  }
+
+  /**
+   * Start the Android Foreground Service to keep Socket.IO and the JS thread
+   * running when the app is in the background or the screen is locked.
+   */
+  async startForegroundService() {
+    if (Platform.OS !== 'android' || this.isForegroundServiceRunning) return;
+
+    if (!this.channelsCreated) {
+      await this.createChannels();
+    }
+
+    try {
+      await notifee.displayNotification({
+        id: 'onechat_foreground_service',
+        title: 'OneChat is active',
+        body: 'Listening for incoming messages in background',
+        android: {
+          channelId: SERVICE_CHANNEL_ID,
+          asForegroundService: true,
+          // Use built-in system icon as fallback — avoids "bad notification" crashes
+          // when ic_notification drawable isn't found at runtime
+          smallIcon: 'ic_notification',
+          color: '#25D366',
+          ongoing: true,
+          importance: AndroidImportance.LOW,
+          visibility: AndroidVisibility.SECRET,
+          pressAction: {
+            id: 'default',
+            launchActivity: 'default',
+          },
+        },
+      });
+      this.isForegroundServiceRunning = true;
+      console.log('✅ Foreground service started for background messages');
+    } catch (err) {
+      // Foreground service failed — log but do NOT crash the app
+      // The app still works; just no background socket keepalive
+      console.warn('Failed to start foreground service (non-fatal):', err);
+    }
+  }
+
+  /**
+   * Stop the Android Foreground Service (e.g. on user logout).
+   */
+  async stopForegroundService() {
+    if (Platform.OS !== 'android') return;
+    try {
+      await notifee.stopForegroundService();
+      await notifee.cancelNotification('onechat_foreground_service');
+      this.isForegroundServiceRunning = false;
+      console.log('🛑 Foreground service stopped');
+    } catch (err) {
+      console.warn('Failed to stop foreground service:', err);
     }
   }
 
@@ -96,8 +171,8 @@ class NotificationService {
       return;
     }
 
-    if (!this.channelCreated) {
-      await this.createChannel();
+    if (!this.channelsCreated) {
+      await this.createChannels();
     }
 
     // Build display text for media messages
@@ -123,16 +198,15 @@ class NotificationService {
           type: 'chat_message',
         },
         android: {
-          channelId: CHANNEL_ID,
-          smallIcon: 'ic_notification', // Uses our custom drawable
-          color: '#25D366', // WhatsApp green accent
+          channelId: MESSAGE_CHANNEL_ID,
+          smallIcon: 'ic_notification',
+          color: '#25D366',
           importance: AndroidImportance.HIGH,
           visibility: AndroidVisibility.PUBLIC,
           pressAction: {
             id: 'default',
             launchActivity: 'default',
           },
-          // Show timestamp
           showTimestamp: true,
           timestamp: Date.now(),
         },
@@ -167,24 +241,37 @@ class NotificationService {
 
   // ---- Private ----
 
-  private async createChannel() {
+  private async createChannels() {
     if (Platform.OS !== 'android') return;
     try {
+      // 1. High priority channel for message alerts (sound + vibration + heads-up)
       await notifee.createChannel({
-        id: CHANNEL_ID,
-        name: CHANNEL_NAME,
+        id: MESSAGE_CHANNEL_ID,
+        name: MESSAGE_CHANNEL_NAME,
         description: 'Notifications for incoming chat messages',
         importance: AndroidImportance.HIGH,
         visibility: AndroidVisibility.PUBLIC,
         vibration: true,
-        vibrationPattern: [0, 250, 250, 250],
+        vibrationPattern: [300, 500, 300, 500],
         lights: true,
         lightColor: '#25D366',
         sound: 'default',
       });
-      this.channelCreated = true;
+
+      // 2. Silent low-priority channel for persistent foreground service
+      await notifee.createChannel({
+        id: SERVICE_CHANNEL_ID,
+        name: SERVICE_CHANNEL_NAME,
+        description: 'Maintains live chat connection while app is in background',
+        importance: AndroidImportance.MIN,
+        visibility: AndroidVisibility.SECRET,
+        sound: undefined,
+        vibration: false,
+      });
+
+      this.channelsCreated = true;
     } catch (error) {
-      console.warn('Failed to create notification channel:', error);
+      console.warn('Failed to create notification channels:', error);
     }
   }
 

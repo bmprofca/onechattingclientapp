@@ -1,5 +1,5 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
-import {StatusBar, View} from 'react-native';
+import {AppState, StatusBar, View} from 'react-native';
 import {
   SafeAreaProvider,
   SafeAreaView,
@@ -45,6 +45,16 @@ export default function App() {
       });
     };
     init().catch(console.warn);
+
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        socketManager.ensureConnected();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
   }, []);
 
   useEffect(() => {
@@ -77,10 +87,12 @@ export default function App() {
         setSession(refreshed);
         socketManager.connect(refreshed.token, refreshed.username);
         socketManager.setProjectId(refreshed.selectedProjectId);
+        notificationService.startForegroundService();
       } catch {
         await clearSession();
         setSession(null);
         socketManager.disconnect();
+        notificationService.stopForegroundService();
       }
     };
 
@@ -153,6 +165,7 @@ export default function App() {
               setSession(sessionToSave);
               socketManager.connect(sessionToSave.token, sessionToSave.username);
               socketManager.setProjectId(sessionToSave.selectedProjectId);
+              notificationService.startForegroundService();
             }}
           />
         ) : !session.selectedProjectId && session.projects && session.projects.length > 1 ? (
@@ -170,6 +183,7 @@ export default function App() {
               await clearSession();
               setSession(null);
               socketManager.disconnect();
+              notificationService.stopForegroundService();
             }}
           />
         )}

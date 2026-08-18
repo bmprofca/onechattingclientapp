@@ -40,7 +40,6 @@ const FULL_TABS: { key: Page; label: string; icon: typeof Home }[] = [
   { key: 'inbox', label: 'Chats', icon: MessageCircle },
   { key: 'cases', label: 'Cases', icon: FolderOpen },
   { key: 'campaigns', label: 'Campaigns', icon: Megaphone },
-  { key: 'profile', label: 'Profile', icon: User },
 ];
 
 // Shown when the account has no workspace selected yet. Chats/Campaigns/
@@ -85,6 +84,7 @@ export function WorkspaceScreen({
   const [transactionsTarget, setTransactionsTarget] = useState(false);
   const [aiBillsTarget, setAiBillsTarget] = useState(false);
   const [projectsTarget, setProjectsTarget] = useState(false);
+  const [profileTarget, setProfileTarget] = useState(false);
   const [scannedUsersTarget, setScannedUsersTarget] = useState(false); // full-screen projects hub, used from full mode
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [projectQrModalOpen, setProjectQrModalOpen] = useState(false);
@@ -140,16 +140,15 @@ export function WorkspaceScreen({
       setProjectProfileImage('');
       return;
     }
-    // Set initial from project if available
+    // Set initial from project if available, or immediately clear previous project image
     const initialImg =
       (currentProject as any)?.profile_image ||
       (currentProject as any)?.profile_picture ||
       (currentProject as any)?.logo ||
       (currentProject as any)?.image ||
       '';
-    if (initialImg) {
-      setProjectProfileImage(initialImg);
-    }
+    setProjectProfileImage(initialImg || '');
+
     let isMounted = true;
     getProjectMeta(apiSession, projectId)
       .then((res) => {
@@ -172,16 +171,14 @@ export function WorkspaceScreen({
           res?.data?.profile_picture ||
           '';
         const img = formatImageUrl(rawImg);
-        if (img) {
-          setProjectProfileImage(img);
-        }
+        setProjectProfileImage(img || initialImg || '');
       })
       .catch(() => {});
 
     return () => {
       isMounted = false;
     };
-  }, [apiSession.token, apiSession.username, projectId]);
+  }, [apiSession.token, apiSession.username, projectId, currentProject?.id, (currentProject as any)?.profile_image, (currentProject as any)?.profile_picture, (currentProject as any)?.image, (currentProject as any)?.logo]);
 
   const refreshAccount = useCallback(async () => {
     try {
@@ -254,9 +251,10 @@ export function WorkspaceScreen({
     if (transactionsTarget) { setTransactionsTarget(false); return true; }
     if (aiBillsTarget) { setAiBillsTarget(false); return true; }
     if (projectsTarget) { setProjectsTarget(false); return true; }
+    if (profileTarget) { setProfileTarget(false); return true; }
     if (page !== 'dashboard') { setPage('dashboard'); return true; }
     return false;
-  }, [chatTarget, campaignTarget, createCampaignTarget, walletTarget, wabaTarget, scannedUsersTarget, supportTarget, contextConfigTarget, agentConfigTarget, projectConfigTarget, transactionsTarget, aiBillsTarget, projectsTarget, page]);
+  }, [chatTarget, campaignTarget, createCampaignTarget, walletTarget, wabaTarget, scannedUsersTarget, supportTarget, contextConfigTarget, agentConfigTarget, projectConfigTarget, transactionsTarget, aiBillsTarget, projectsTarget, profileTarget, page]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
@@ -373,6 +371,17 @@ export function WorkspaceScreen({
         onClose={() => setProjectsTarget(false)}
         onRechargeWallet={() => { setProjectsTarget(false); setWalletTarget(true); }}
         onOpenWaba={() => { setProjectsTarget(false); setWabaTarget(true); }}
+      />
+    );
+  }
+
+  if (profileTarget) {
+    return (
+      <ProfileScreen
+        session={session}
+        apiSession={apiSession}
+        onSignOut={onSignOut}
+        onBack={() => setProfileTarget(false)}
       />
     );
   }
@@ -547,9 +556,7 @@ export function WorkspaceScreen({
                 onOpenCampaign={(campaignId, name) => setCampaignTarget({ id: campaignId, name })}
                 onCreateCampaign={() => setCreateCampaignTarget(true)}
               />
-            ) : (
-              <ProfileScreen session={session} apiSession={apiSession} onSignOut={onSignOut} />
-            )
+            ) : null
           )}
         </FadeInView>
       </View>
@@ -648,6 +655,13 @@ export function WorkspaceScreen({
               >
                 <ReceiptText size={18} color={theme.ink} />
                 <Text style={[styles.menuItemText, { color: theme.ink }]}>AI Bills</Text>
+              </ScalePressable>
+              <ScalePressable
+                style={[styles.menuItem]}
+                onPress={() => { setIsMenuVisible(false); setProfileTarget(true); }}
+              >
+                <User size={18} color={theme.ink} />
+                <Text style={[styles.menuItemText, { color: theme.ink }]}>Profile</Text>
               </ScalePressable>
             </Animated.View>
           </Pressable>
