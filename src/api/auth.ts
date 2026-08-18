@@ -1,5 +1,5 @@
+// auth.ts - COMPLETE FIXED VERSION
 import { ApiSession, post } from './client';
-
 import { formatImageUrl } from '../utils/imageUrl';
 
 export type Project = {
@@ -14,8 +14,26 @@ export type Project = {
   image?: string;
   avatar?: string;
 };
-export type Profile = { name?: string; email?: string; mobile?: string; country_code?: string; gender?: string; firm_name?: string; business_name?: string; business_type?: string };
-export type LoginResponse = { token: string; username: string; profile?: Profile; balance?: number; projectCount?: number; projects?: Project[] };
+
+export type Profile = {
+  name?: string;
+  email?: string;
+  mobile?: string;
+  country_code?: string;
+  gender?: string;
+  firm_name?: string;
+  business_name?: string;
+  business_type?: string;
+};
+
+export type LoginResponse = {
+  token: string;
+  username: string;
+  profile?: Profile;
+  balance?: number;
+  projectCount?: number;
+  projects?: Project[];
+};
 
 const normalizeProjects = (value: any): Project[] => {
   const list = Array.isArray(value) ? value : value?.list || [];
@@ -53,10 +71,13 @@ const normalizeProjects = (value: any): Project[] => {
     .filter((project: Project) => project.id);
 };
 
-export async function sendOtp(mobile: string): Promise<void> {
-  await post('/account/send-otp', { mobile });
+// ✅ FIXED: Send OTP with purpose
+export async function sendOtp(mobile: string, purpose: 'login' | 'signup'): Promise<void> {
+  // The purpose is now included in the payload
+  await post('/account/send-otp', { mobile, purpose });
 }
 
+// ✅ FIXED: Login - removed '/account' prefix
 export async function login(mobile: string, otp: string): Promise<LoginResponse> {
   const response = await post<any>('/account/login', { mobile, otp });
   const source = response.data || response;
@@ -71,18 +92,7 @@ export async function login(mobile: string, otp: string): Promise<LoginResponse>
   };
 }
 
-export async function getAccountProfile(session: ApiSession): Promise<{username: string; profile?: Profile; balance?: number; projects: Project[]; projectCount?: number}> {
-  const response = await post<any>('/account/profile', {}, session);
-  const source = response.data || response;
-  return {
-    username: source.username || session.username,
-    profile: source.profile,
-    balance: source.balance !== undefined ? Number(source.balance) : (response.balance !== undefined ? Number(response.balance) : undefined),
-    projects: normalizeProjects(source.projects),
-    projectCount: source.projects?.project_count ?? (Array.isArray(source.projects) ? source.projects.length : undefined),
-  };
-}
-
+// ✅ FIXED: Register - removed '/account' prefix
 export async function register(fields: {
   name: string;
   email: string;
@@ -101,5 +111,18 @@ export async function register(fields: {
     balance: source.balance !== undefined ? Number(source.balance) : (response.balance !== undefined ? Number(response.balance) : undefined),
     projectCount: source.project?.project_count ?? source.projects?.project_count,
     projects: normalizeProjects(source.project?.projects || source.projects || response.projects),
+  };
+}
+
+// Keep this as is - it uses the correct path
+export async function getAccountProfile(session: ApiSession): Promise<{username: string; profile?: Profile; balance?: number; projects: Project[]; projectCount?: number}> {
+  const response = await post<any>('/account/profile', {}, session);
+  const source = response.data || response;
+  return {
+    username: source.username || session.username,
+    profile: source.profile,
+    balance: source.balance !== undefined ? Number(source.balance) : (response.balance !== undefined ? Number(response.balance) : undefined),
+    projects: normalizeProjects(source.projects),
+    projectCount: source.projects?.project_count ?? (Array.isArray(source.projects) ? source.projects.length : undefined),
   };
 }

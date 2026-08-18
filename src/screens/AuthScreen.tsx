@@ -55,7 +55,9 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: Ses
 
       setLoading(true);
       try {
-        await sendOtp(mobile.trim());
+        // ✅ FIX: Send purpose based on mode
+        const purpose = mode === 'login' ? 'login' : 'signup';
+        await sendOtp(mobile.trim(), purpose);
         setStep(2);
         Toast.show({ type: 'success', text1: 'OTP Sent', text2: 'Please check your mobile for the OTP.' });
       } catch (error) {
