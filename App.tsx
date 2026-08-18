@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {StatusBar, View} from 'react-native';
 import {
   SafeAreaProvider,
@@ -20,12 +20,32 @@ import {
 } from './src/services/session';
 import {useTheme} from './src/theme/theme';
 import {socketManager} from './src/services/socketManager';
+import {notificationService} from './src/services/notificationService';
 
 export default function App() {
   const theme = useTheme();
   const [session, setSession] = useState<Session | null | undefined>(
     undefined,
   );
+
+  // Ref for notification tap → navigate to chat
+  const notificationNavRef = useRef<((contactNumber: string, contactName: string) => void) | null>(null);
+
+  // Initialize notification service once
+  useEffect(() => {
+    const init = async () => {
+      await notificationService.initialize();
+      await notificationService.requestPermission();
+
+      // Register tap handler — navigates to the chat when user taps notification
+      notificationService.onNotificationTap((contactNumber, contactName) => {
+        if (notificationNavRef.current) {
+          notificationNavRef.current(contactNumber, contactName);
+        }
+      });
+    };
+    init().catch(console.warn);
+  }, []);
 
   useEffect(() => {
     const restoreSession = async () => {
@@ -145,6 +165,7 @@ export default function App() {
             session={session}
             onSelectProject={selectProject}
             onProjectCreated={handleProjectCreated}
+            notificationNavRef={notificationNavRef}
             onSignOut={async () => {
               await clearSession();
               setSession(null);

@@ -25,6 +25,7 @@ import { AgentConfigScreen } from './AgentConfigScreen';
 import { TransactionsScreen } from './TransactionsScreen';
 import { AiBillsScreen } from './AiBillsScreen';
 import { socketManager, ConnectionStatus } from '../services/socketManager';
+import { notificationService } from '../services/notificationService';
 import { ScalePressable, FadeInView } from '../components/animations';
 import { Project } from '../api/auth';
 import { ProjectAvatar } from '../components/ProjectAvatar';
@@ -55,11 +56,13 @@ export function WorkspaceScreen({
   session,
   onSelectProject,
   onProjectCreated,
+  notificationNavRef,
   onSignOut,
 }: {
   session: Session;
   onSelectProject: (projectId: string) => void | Promise<void>;
   onProjectCreated: (newProject: { id: string; name: string }) => void | Promise<void>;
+  notificationNavRef?: React.MutableRefObject<((contactNumber: string, contactName: string) => void) | null>;
   onSignOut: () => void;
 }) {
   const theme = useTheme();
@@ -93,6 +96,31 @@ export function WorkspaceScreen({
       setProjects(session.projects);
     }
   }, [session.projects]);
+
+  // Wire notification tap → navigate to chat
+  useEffect(() => {
+    if (notificationNavRef) {
+      notificationNavRef.current = (contactNumber: string, contactName: string) => {
+        setChatTarget({ number: contactNumber, name: contactName });
+      };
+    }
+    return () => {
+      if (notificationNavRef) {
+        notificationNavRef.current = null;
+      }
+    };
+  }, [notificationNavRef]);
+
+  // Track active chat for notification suppression
+  useEffect(() => {
+    if (chatTarget) {
+      notificationService.setActiveChat(chatTarget.number);
+      // Cancel any existing notification for this contact
+      notificationService.cancelNotificationsForContact(chatTarget.number);
+    } else {
+      notificationService.clearActiveChat();
+    }
+  }, [chatTarget]);
 
   const apiSession = useMemo<ApiSession>(
     () => ({ token: session.token, username: session.username }),
