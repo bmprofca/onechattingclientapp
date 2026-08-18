@@ -6,11 +6,15 @@ export function LoadState({
   loading,
   error,
   empty,
+  emptyTitle,
+  emptyCopy,
   onRetry,
 }: {
   loading: boolean;
   error?: string;
   empty: boolean;
+  emptyTitle?: string;
+  emptyCopy?: string;
   onRetry: () => void;
 }) {
   const theme = useTheme();
@@ -41,8 +45,13 @@ export function LoadState({
   if (empty)
     return (
       <View style={styles.empty}>
-        <Text style={[styles.emptyText, { color: theme.muted }]}>
-          There is nothing to show yet.
+        {emptyTitle ? (
+          <Text style={[styles.emptyTitle, { color: theme.ink }]}>
+            {emptyTitle}
+          </Text>
+        ) : null}
+        <Text style={[styles.emptyText, { color: theme.muted, marginTop: emptyTitle ? 6 : 0 }]}>
+          {emptyCopy || 'There is nothing to show yet.'}
         </Text>
       </View>
     );
@@ -55,6 +64,11 @@ const styles = StyleSheet.create({
     padding: 32,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    textAlign: 'center',
   },
   emptyText: {
     textAlign: 'center',

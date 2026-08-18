@@ -14,18 +14,92 @@ export const unwrapList = (response: any): ListItem[] => {
 export const unwrapItem = (response: any): Record<string, unknown> | null => {
   return response?.item || response?.data || response || null;
 };
-export const getInbox = (session: ApiSession, projectId: string, search?: string) =>
+export const getInbox = (
+  session: ApiSession,
+  projectId: string,
+  search?: string,
+  filter: string = 'all',
+  page = 1,
+  limit = 30,
+) =>
   post<any>(
     '/message/chat-list',
-    { project_id: projectId, page: 1, limit: 30, search: search || '' },
+    {
+      project_id: projectId,
+      page,
+      limit,
+      search: search || '',
+      filter: filter,
+      filter_type: filter,
+      type: filter !== 'all' ? filter : undefined,
+    },
     session,
   );
-export const getOpenCases = (session: ApiSession, projectId: string, search?: string) =>
+export const getOpenCases = (
+  session: ApiSession,
+  projectId: string,
+  search?: string,
+  page = 1,
+  limit = 30,
+) =>
   post<any>(
     '/message/open-case-list',
-    { project_id: projectId, page: 1, limit: 30, search: search || '' },
+    {
+      project_id: projectId,
+      page_no: page,
+      page,
+      limit,
+      search: search || '',
+    },
     session,
   );
+
+export const getCaseList = (
+  session: ApiSession,
+  projectId: string,
+  contactNumber: string,
+  search?: string,
+  status?: string,
+  page = 1,
+  limit = 20,
+) =>
+  post<any>(
+    '/message/case-list',
+    {
+      project_id: projectId,
+      number: contactNumber,
+      page_no: page,
+      page,
+      limit,
+      ...(search ? { search } : {}),
+      ...(status ? { status } : {}),
+    },
+    session,
+  );
+
+export const createCase = (
+  session: ApiSession,
+  payload: {
+    project_id: string;
+    number: string;
+    name: string;
+    remark?: string;
+    status: 'open' | 'closed';
+  },
+) =>
+  post<any>('/message/case-create', payload, session);
+
+export const editCase = (
+  session: ApiSession,
+  payload: {
+    project_id: string;
+    case_id: string;
+    name: string;
+    remark?: string;
+    status: 'open' | 'closed';
+  },
+) =>
+  post<any>('/message/case-edit', payload, session);
 export const getCampaigns = (session: ApiSession, projectId: string) =>
   post<any>(
     '/campaign/list',
@@ -224,7 +298,14 @@ export const getContactList = (
 ) =>
   post<any>(
     '/contact/contact-list',
-    { project_id: projectId, page, limit, search },
+    {
+      project_id: projectId,
+      page_no: page,
+      page,
+      limit,
+      query: search,
+      search,
+    },
     session,
   );
 
@@ -258,3 +339,32 @@ export type PlanPackages = {
   monthly: PlanPackage;
   yearly: PlanPackage;
 };
+
+export type WabaProfilePayload = {
+  project_id: string;
+  profile_picture?: string;
+  about?: string;
+  address?: string;
+  vertical?: string;
+  email?: string;
+  websites?: string[];
+  description?: string;
+};
+
+export async function updateWabaProfileDetails(
+  session: ApiSession,
+  payload: WabaProfilePayload,
+) {
+  return post<any>('/project/update-waba-profile-details', payload, session);
+}
+
+export async function updateWabaProfilePicture(
+  session: ApiSession,
+  projectId: string,
+  profilePicture: string,
+) {
+  return post<any>('/project/update-waba-profile-picture', {
+    project_id: projectId,
+    profile_picture: profilePicture,
+  }, session);
+}

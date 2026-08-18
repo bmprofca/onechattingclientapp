@@ -2,8 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   BackHandler,
-  KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -12,6 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
 import Toast from 'react-native-toast-message';
 import {
   Briefcase,
@@ -143,7 +142,7 @@ export function CreateProjectScreen({
         <View style={styles.headerRight} />
       </View>
 
-      <KeyboardAvoidingView style={styles.keyboardArea} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <KeyboardAvoidView style={styles.keyboardArea}>
         <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
             <View style={[styles.heroIcon, { backgroundColor: theme.mint }]}>
@@ -264,7 +263,7 @@ export function CreateProjectScreen({
 
             </View>
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAvoidView>
 
       <FadeScaleModal
         visible={showInsufficientModal}

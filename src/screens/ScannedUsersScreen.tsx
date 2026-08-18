@@ -43,7 +43,8 @@ import {
   QRCodeItem,
 } from '../api/qrcode';
 import { useTheme } from '../theme/theme';
-import { FadeInView, ScalePressable } from '../components/animations';
+import { ScalePressable, FadeInView } from '../components/animations';
+import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
 import Toast from 'react-native-toast-message';
 
 const INITIAL_FORM = {
@@ -333,7 +334,7 @@ export function ScannedUsersScreen({
   };
 
   return (
-    <View style={[styles.safe, { backgroundColor: theme.canvas }]}>
+    <KeyboardAvoidView style={[styles.safe, { backgroundColor: theme.canvas }]}>
       {/* Header */}
       <View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} style={styles.backButton} hitSlop={8}>
@@ -385,7 +386,7 @@ export function ScannedUsersScreen({
       ) : (
         <FlatList
           data={users}
-          keyExtractor={(item) => item.scan_id || String(item.id)}
+          keyExtractor={(item, index) => String(item.scan_id || item.id || index) + '-' + index}
           renderItem={renderUserCard}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
@@ -417,7 +418,7 @@ export function ScannedUsersScreen({
 
       {/* Add / Edit Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={() => setModalVisible(false)}>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidView style={styles.modalOverlay}>
           <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
             <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
               <Text style={[styles.modalTitle, { color: theme.ink }]}>
@@ -547,9 +548,9 @@ export function ScannedUsersScreen({
               </ScalePressable>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidView>
       </Modal>
-    </View>
+    </KeyboardAvoidView>
   );
 }
 

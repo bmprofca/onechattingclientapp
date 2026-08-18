@@ -4,7 +4,6 @@ import {
   BackHandler,
   FlatList,
   Image,
-  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -14,6 +13,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
 import Toast from 'react-native-toast-message';
 import {
   ArrowLeft,
@@ -456,7 +456,7 @@ export function CreateCampaignScreen({
         <View style={styles.headerRight} />
       </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidView style={{ flex: 1 }}>
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
@@ -812,7 +812,7 @@ export function CreateCampaignScreen({
             )}
           </ScalePressable>
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAvoidView>
 
       {/* Template Picker Slide-Up Modal */}
       <SlideUpModal

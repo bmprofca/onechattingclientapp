@@ -8,11 +8,11 @@ import {
   TextInput,
   Pressable,
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
   Image,
 } from 'react-native';
+import { KeyboardAvoidView } from './KeyboardAvoidView';
 import { X, Search, FileText, ArrowLeft, Upload } from 'lucide-react-native';
 import {
   pick,
@@ -324,8 +324,7 @@ export function TemplateModal({
       onClose={onClose}
       maxHeight="92%"
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      <KeyboardAvoidView
         style={[styles.modalContent, { backgroundColor: theme.surface }]}
       >
         <View style={[styles.header, { borderBottomColor: theme.border }]}>
@@ -367,7 +366,7 @@ export function TemplateModal({
             ) : (
               <FlatList
                 data={filteredTemplates}
-                keyExtractor={(item) => String(item.id || item.template_id || item.name)}
+                keyExtractor={(item, index) => String(item.id || item.template_id || item.name || index) + '-' + index}
                 renderItem={renderItem}
                 contentContainerStyle={styles.listContent}
                 ListEmptyComponent={
@@ -384,7 +383,7 @@ export function TemplateModal({
         ) : (
           renderEditView()
         )}
-      </KeyboardAvoidingView>
+      </KeyboardAvoidView>
     </SlideUpModal>
   );
 }

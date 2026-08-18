@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, ActivityIndicator, Alert, Modal, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, ActivityIndicator, Alert, Modal, Platform } from 'react-native';
+import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
 import { ArrowLeft, Save, Plus, Trash2, X, FileText, Type, HelpCircle, Info, UploadCloud, ChevronDown, ChevronUp } from 'lucide-react-native';
 import Toast from 'react-native-toast-message';
 import {
@@ -476,7 +477,7 @@ export function ContextConfigScreen({
           <ActivityIndicator size="large" color={theme.mint} />
         </View>
       ) : (
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidView style={{ flex: 1 }}>
           <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
             <Text style={[styles.description, { color: theme.muted }]}>
               Train your AI agent by adding information about your company. The AI will use this knowledge to answer customer queries accurately.
@@ -565,7 +566,7 @@ export function ContextConfigScreen({
             
             <View style={{ height: 40 }} />
           </ScrollView>
-        </KeyboardAvoidingView>
+        </KeyboardAvoidView>
       )}
 
       {/* Type Selection / Change Modal */}

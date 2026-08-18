@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Linking } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Linking } from 'react-native';
+import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
 import Toast from 'react-native-toast-message';
 import { ArrowLeft, MessageSquare, Globe, Link as LinkIcon, CheckCircle2 } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
@@ -97,7 +98,7 @@ export function WabaOnboardingScreen({
         <View style={styles.headerRight} />
       </View>
 
-      <KeyboardAvoidingView style={styles.keyboardArea} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <KeyboardAvoidView style={styles.keyboardArea}>
         <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           
           <View style={[styles.heroIcon, { backgroundColor: '#E0F2FE' }]}>
@@ -200,7 +201,7 @@ export function WabaOnboardingScreen({
             </View>
           )}
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAvoidView>
     </View>
   );
 }

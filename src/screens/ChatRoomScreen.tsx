@@ -1,10 +1,10 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Toast from 'react-native-toast-message';
 import {
   ActivityIndicator,
   FlatList,
   Image,
-  KeyboardAvoidingView,
+  Keyboard,
   Platform,
   Pressable,
   StyleSheet,
@@ -98,6 +98,35 @@ export function ChatRoomScreen({
   // Reply state
   const [replyingTo, setReplyingTo] = useState<any | null>(null);
 
+  // Keyboard height animation listener for flawless keypad avoidance on all Android & iOS devices
+  const keyboardHeightAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      Animated.timing(keyboardHeightAnim, {
+        toValue: e.endCoordinates.height,
+        duration: Platform.OS === 'ios' ? (e.duration || 250) : 100,
+        useNativeDriver: false,
+      }).start();
+    });
+
+    const hideSub = Keyboard.addListener(hideEvent, (e) => {
+      Animated.timing(keyboardHeightAnim, {
+        toValue: 0,
+        duration: Platform.OS === 'ios' ? (e.duration || 250) : 100,
+        useNativeDriver: false,
+      }).start();
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [keyboardHeightAnim]);
+
   const loadHistory = useCallback(
     async (loadMore = false) => {
       if (loading || (!hasMore && loadMore)) return;
@@ -115,9 +144,20 @@ export function ChatRoomScreen({
 
         const fetchedMessages = unwrapList(response);
         if (loadMore) {
-          setMessages(prev => [...prev, ...fetchedMessages]);
+          setMessages(prev => {
+            const existingIds = new Set(prev.map(m => String(m.id || m.message_id || m.wamid || m.unique_id)));
+            const uniqueFetched = fetchedMessages.filter(m => !existingIds.has(String(m.id || m.message_id || m.wamid || m.unique_id)));
+            return [...prev, ...uniqueFetched];
+          });
         } else {
-          setMessages(fetchedMessages);
+          const seen = new Set<string>();
+          const uniqueFetched = fetchedMessages.filter(m => {
+            const id = String(m.id || m.message_id || m.wamid || m.unique_id);
+            if (seen.has(id)) return false;
+            seen.add(id);
+            return true;
+          });
+          setMessages(uniqueFetched);
         }
 
         if (response.last_id) {
@@ -708,11 +748,7 @@ export function ChatRoomScreen({
   const canSend = !sending && !isUploading && (!!pendingAttachment || !!inputText.trim());
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: theme.chatBg }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-    >
+    <Animated.View style={[styles.safe, { backgroundColor: theme.canvas, paddingBottom: keyboardHeightAnim }]}>
       {/* Sleek Top Header */}
       <FadeInView direction="down" distance={8} duration={250} style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
         <ScalePressable onPress={onBack} style={styles.backButton} hitSlop={8}>
@@ -740,9 +776,14 @@ export function ChatRoomScreen({
         <ChatWallpaper isDark={theme.isDark} />
         <FlatList
           data={messages}
-          keyExtractor={item => String(item.id || item.message_id)}
+          keyExtractor={(item, index) => {
+            const baseId = item.id || item.message_id || item.wamid || item.unique_id;
+            return baseId ? `${baseId}-${index}` : `msg-${index}`;
+          }}
           renderItem={renderMessage}
           inverted={true}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
           contentContainerStyle={messages.length ? styles.listContent : styles.listContentEmpty}
           onEndReached={() => loadHistory(true)}
           onEndReachedThreshold={0.5}
@@ -869,7 +910,7 @@ export function ChatRoomScreen({
       )}
 
       {/* Input Bar */}
-      <View style={[styles.inputContainer]}>
+      <View style={[styles.inputContainer, { backgroundColor: theme.inputContainerBg, borderTopWidth: 1, borderTopColor: theme.border }]}>
         <ScalePressable
           style={styles.attachButton}
           hitSlop={8}
@@ -925,7 +966,7 @@ export function ChatRoomScreen({
         mediaType={viewerType}
         mediaName={viewerName}
       />
-    </KeyboardAvoidingView>
+    </Animated.View>
   );
 }
 
@@ -951,6 +992,12 @@ function AttachmentOption({
 }
 
 const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+  },
+  keyboardArea: {
+    flex: 1,
+  },
   container: {
     flex: 1,
   },
@@ -1173,7 +1220,7 @@ const styles = StyleSheet.create({
   },
   attachMenu: {
     position: 'absolute',
-    bottom: 60,
+    bottom: 2,
     left: 0,
     right: 0,
     flexDirection: 'row',

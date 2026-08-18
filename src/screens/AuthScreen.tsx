@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
 import Toast from 'react-native-toast-message';
 import { Briefcase, ChevronDown, Globe, Mail, Phone, User, KeyRound, X } from 'lucide-react-native';
 import { login, register, sendOtp } from '../api/auth';
@@ -122,7 +123,7 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: Ses
 
   return (
     <View style={[styles.safe, { backgroundColor: theme.canvas }]}>
-      <KeyboardAvoidingView style={styles.keyboardArea} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <KeyboardAvoidView style={styles.keyboardArea}>
         <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" showsVerticalScrollIndicator={false}>
           <View style={[styles.heroGlowSecondary, { backgroundColor: theme.mintText, opacity: theme.isDark ? 0.07 : 0.05 }]} />
 
@@ -284,7 +285,7 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: Ses
 
           <Text style={[styles.terms, { color: theme.muted }]}>Protected with secure, encrypted access.</Text>
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAvoidView>
 
       <SlideUpModal
         visible={countryPickerOpen}

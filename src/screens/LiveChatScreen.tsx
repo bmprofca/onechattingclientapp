@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   FlatList,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   RefreshControl,
@@ -13,11 +12,21 @@ import {
 } from 'react-native';
 import { Search, MessageSquarePlus, X } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
-import { getInbox, getOpenCases, ListItem, unwrapList } from '../api/workspace';
+import { getInbox, getUnreadCount, ListItem, unwrapList } from '../api/workspace';
 import { LoadState } from '../components/LoadState';
 import { useTheme } from '../theme/theme';
 import { socketManager } from '../services/socketManager';
 import { ScalePressable, FadeInView, SlideUpModal, PulseView } from '../components/animations';
+import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
+
+export type ChatFilterType = 'all' | 'unread' | 'favourites' | 'assigned';
+
+const FILTERS: { key: ChatFilterType; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'unread', label: 'Unread' },
+  { key: 'favourites', label: 'Favourites' },
+  { key: 'assigned', label: 'Assigned' },
+];
 
 export function LiveChatScreen({
   projectId,
@@ -29,8 +38,9 @@ export function LiveChatScreen({
   onOpenChat: (contactNumber: string, contactName: string) => void;
 }) {
   const theme = useTheme();
-  const [mode, setMode] = useState<'chats' | 'cases'>('chats');
+  const [activeFilter, setActiveFilter] = useState<ChatFilterType>('all');
   const [items, setItems] = useState<ListItem[]>([]);
+  const [totalUnreadCount, setTotalUnreadCount] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -43,49 +53,74 @@ export function LiveChatScreen({
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedSearchQuery(searchQuery);
-    }, 500);
+    }, 400);
     return () => clearTimeout(handler);
   }, [searchQuery]);
+
+  const loadUnreadCount = useCallback(async () => {
+    try {
+      const res = await getUnreadCount(session, projectId);
+      const count =
+        res?.data?.count ??
+        res?.count ??
+        res?.data?.unread_count ??
+        res?.unread_count ??
+        0;
+      setTotalUnreadCount(Number(count) || 0);
+    } catch {
+      // ignore
+    }
+  }, [projectId, session.token, session.username]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      setItems(
-        unwrapList(
-          await (mode === 'chats' ? getInbox : getOpenCases)(
-            session,
-            projectId,
-            debouncedSearchQuery
-          ),
-        ),
+      const res = await getInbox(
+        session,
+        projectId,
+        debouncedSearchQuery,
+        activeFilter,
       );
+      setItems(unwrapList(res));
     } catch (requestError) {
       setItems([]);
       setError(
         requestError instanceof Error
           ? requestError.message
-          : 'Could not load this data.',
+          : 'Could not load chats.',
       );
     } finally {
       setLoading(false);
     }
-  }, [mode, projectId, session.token, session.username, debouncedSearchQuery]);
-  useEffect(() => {
-    load();
-  }, [load]);
+  }, [projectId, session.token, session.username, debouncedSearchQuery, activeFilter]);
 
   useEffect(() => {
+    load();
+    loadUnreadCount();
+  }, [load, loadUnreadCount]);
+
+  useEffect(() => {
+    const unsubUnread = socketManager.onTotalUnreadCount((data) => {
+      if (typeof data?.count === 'number') {
+        setTotalUnreadCount(data.count);
+      }
+    });
+
     const unsubChat = socketManager.onChat((data) => {
       setItems((prev) => {
         const contactNum = data.contact?.number;
         if (!contactNum) return prev;
 
-        const existingIdx = prev.findIndex(c => {
+        const existingIdx = prev.findIndex((c) => {
           const cNum = (c.contact as Record<string, any>)?.number || c.phone || c.number;
           return String(cNum) === String(contactNum);
         });
 
-        const newChat: any = existingIdx >= 0 ? { ...prev[existingIdx] } : { contact: data.contact, number: contactNum, unread_count: 0 };
+        const newChat: any =
+          existingIdx >= 0
+            ? { ...prev[existingIdx] }
+            : { contact: data.contact, number: contactNum, unread_count: 0 };
 
         newChat.last_message = data.message;
         if (data.message.type === 'in' && data.message.status !== 'read') {
@@ -97,18 +132,41 @@ export function LiveChatScreen({
           nextList.splice(existingIdx, 1);
         }
 
-        // Only add to list if it fits the current mode, but for simplicity we'll just push to top
-        // If mode is 'cases' and this isn't an open case, it might technically not belong, 
-        // but it's fine for an optimistic update until they refresh.
         nextList.unshift(newChat);
         return nextList;
       });
+
+      // Also refresh unread count
+      loadUnreadCount();
+    });
+
+    const unsubAssigned = socketManager.onChatAssigned(() => {
+      load();
+    });
+
+    const unsubStatus = socketManager.onMessageStatus((data) => {
+      if (!data?.wamid) return;
+      setItems((prev) =>
+        prev.map((c) => {
+          const lastMsg = (c.last_message as Record<string, any>) || {};
+          if (lastMsg.wamid === data.wamid || lastMsg._id === data.message_id) {
+            return {
+              ...c,
+              last_message: { ...lastMsg, status: data.status },
+            };
+          }
+          return c;
+        }),
+      );
     });
 
     return () => {
+      unsubUnread();
       unsubChat();
+      unsubAssigned();
+      unsubStatus();
     };
-  }, []);
+  }, [load, loadUnreadCount]);
 
   const handleDirectChat = () => {
     if (!newChatNumber.trim()) return;
@@ -117,9 +175,11 @@ export function LiveChatScreen({
     setNewChatNumber('');
     setNewChatName('');
   };
+
   return (
-    <View style={{ flex: 1, backgroundColor: theme.canvas }}>
+    <KeyboardAvoidView style={{ flex: 1, backgroundColor: theme.canvas }}>
       <FadeInView direction="down" distance={10} duration={300} style={styles.heading}>
+        {/* Search */}
         <View style={[styles.searchContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <Search size={18} color={theme.muted} />
           <TextInput
@@ -131,52 +191,54 @@ export function LiveChatScreen({
             returnKeyType="search"
           />
         </View>
-        <View style={[styles.segmented, { backgroundColor: theme.cardHover }]}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => setMode('chats')}
-            style={[
-              styles.segment,
-              mode === 'chats' && { backgroundColor: theme.surface },
-            ]}
-          >
-            <Text
-              style={[
-                styles.segmentText,
-                { color: mode === 'chats' ? theme.emerald : theme.muted },
-              ]}
-            >
-              Live chat
-            </Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => setMode('cases')}
-            style={[
-              styles.segment,
-              mode === 'cases' && { backgroundColor: theme.surface },
-            ]}
-          >
-            <Text
-              style={[
-                styles.segmentText,
-                { color: mode === 'cases' ? theme.emerald : theme.muted },
-              ]}
-            >
-              Open cases
-            </Text>
-          </Pressable>
+
+        {/* Filtration Tabs */}
+        <View style={[styles.tabsContainer, { borderBottomColor: theme.border }]}>
+          {FILTERS.map((tab) => {
+            const isActive = activeFilter === tab.key;
+            return (
+              <Pressable
+                key={tab.key}
+                accessibilityRole="button"
+                accessibilityLabel={tab.label}
+                onPress={() => setActiveFilter(tab.key)}
+                style={styles.tabButton}
+                hitSlop={4}
+              >
+                <View style={styles.tabInner}>
+                  <Text
+                    style={[
+                      styles.tabLabel,
+                      { color: isActive ? '#2563EB' : theme.muted },
+                      isActive && styles.tabLabelActive,
+                    ]}
+                  >
+                    {tab.label}
+                  </Text>
+                  {tab.key === 'all' && totalUnreadCount > 0 && (
+                    <View style={[styles.tabBadge, { backgroundColor: '#10B981' }]}>
+                      <Text style={styles.tabBadgeText}>{totalUnreadCount}</Text>
+                    </View>
+                  )}
+                </View>
+                {isActive && <View style={[styles.activeIndicator, { backgroundColor: '#2563EB' }]} />}
+              </Pressable>
+            );
+          })}
         </View>
       </FadeInView>
 
       <FlatList
         data={items}
-        keyExtractor={(item, index) => String(item.id || item._id || index)}
+        keyExtractor={(item, index) => String(item.id || item._id || (item.contact as any)?.number || index) + '-' + index}
         contentContainerStyle={items.length ? styles.list : styles.emptyList}
         refreshControl={
           <RefreshControl
             refreshing={loading}
-            onRefresh={load}
+            onRefresh={() => {
+              load();
+              loadUnreadCount();
+            }}
             tintColor={theme.emerald}
           />
         }
@@ -185,7 +247,10 @@ export function LiveChatScreen({
             loading={false}
             error={error}
             empty={!loading && !error}
-            onRetry={load}
+            onRetry={() => {
+              load();
+              loadUnreadCount();
+            }}
           />
         }
         renderItem={({ item, index }) => (
@@ -216,8 +281,7 @@ export function LiveChatScreen({
         onClose={() => setIsModalVisible(false)}
         maxHeight="70%"
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        <View
           style={[styles.modalContent, { backgroundColor: theme.surface }]}
         >
           <View style={styles.modalHeader}>
@@ -258,18 +322,18 @@ export function LiveChatScreen({
           >
             <Text style={styles.modalButtonText}>Start Conversation</Text>
           </ScalePressable>
-        </KeyboardAvoidingView>
+        </View>
       </SlideUpModal>
-    </View>
+    </KeyboardAvoidView>
   );
 }
 
-function ChatCard({ item, onPress }: { item: ListItem, onPress: (contactNumber: string, contactName: string) => void }) {
+function ChatCard({ item, onPress }: { item: ListItem; onPress: (contactNumber: string, contactName: string) => void }) {
   const theme = useTheme();
   const contact = (item.contact as Record<string, any>) || {};
   const lastMessage = (item.last_message as Record<string, any>) || {};
 
-  const contactNumber = String(contact.number || '');
+  const contactNumber = String(contact.number || item.phone || item.number || '');
   const name = String(
     contact.name || contact.number || item.name || item.contact_name || item.phone || 'Untitled',
   );
@@ -288,9 +352,7 @@ function ChatCard({ item, onPress }: { item: ListItem, onPress: (contactNumber: 
     <ScalePressable
       accessibilityRole="button"
       onPress={() => onPress(contactNumber, name)}
-      style={[
-        styles.card,
-      ]}
+      style={styles.card}
     >
       <View style={[styles.avatar, { backgroundColor: theme.mint }]}>
         <Text style={[styles.avatarText, { color: theme.mintText }]}>
@@ -329,7 +391,7 @@ function ChatCard({ item, onPress }: { item: ListItem, onPress: (contactNumber: 
 }
 
 const styles = StyleSheet.create({
-  heading: { paddingTop: 12, paddingBottom: 0, paddingHorizontal: 10 },
+  heading: { paddingTop: 12, paddingBottom: 0, paddingHorizontal: 12 },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -337,7 +399,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     paddingHorizontal: 12,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   searchInput: {
     flex: 1,
@@ -345,21 +407,53 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 15,
   },
-  segmented: {
-    height: 40,
-    marginTop: 2,
-    padding: 3,
-    borderRadius: 12,
+  tabsContainer: {
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    borderBottomWidth: 1,
+    paddingTop: 4,
   },
-  segment: {
-    flex: 1,
+  tabButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 9,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    position: 'relative',
   },
-  segmentText: { fontSize: 13, fontWeight: '700' },
-  rule: { height: 1, marginTop: 8 },
+  tabInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  tabLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  tabLabelActive: {
+    fontWeight: '700',
+  },
+  tabBadge: {
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabBadgeText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  activeIndicator: {
+    position: 'absolute',
+    bottom: -1,
+    left: 8,
+    right: 8,
+    height: 3,
+    borderRadius: 2,
+  },
   list: { paddingHorizontal: 10, paddingBottom: 18, paddingTop: 4 },
   emptyList: { flexGrow: 1, paddingHorizontal: 0 },
   card: {
@@ -422,12 +516,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    padding: 20,
   },
   modalContent: {
     borderRadius: 20,

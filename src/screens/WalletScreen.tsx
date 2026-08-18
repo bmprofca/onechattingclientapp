@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   BackHandler,
-  KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -11,6 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
 import Toast from 'react-native-toast-message';
 import RazorpayCheckout from 'react-native-razorpay';
 import {
@@ -349,9 +350,7 @@ export function WalletScreen({
         <View style={styles.headerRight} />
       </View>
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <KeyboardAvoidView style={styles.flex}>
         <ScrollView
           contentContainerStyle={styles.page}
           keyboardShouldPersistTaps="handled"
@@ -444,7 +443,7 @@ export function WalletScreen({
             </View>
           </FadeInView>
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAvoidView>
     </View>
   );
 }

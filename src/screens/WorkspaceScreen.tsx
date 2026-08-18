@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { BackHandler, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View, Animated, Easing } from 'react-native';
-import { ArrowLeftRight, Home, MessageCircle, Megaphone, User, Wallet, MoreVertical, Briefcase, Info, HelpCircle, Brain, Settings, ReceiptText, QrCode, Users } from 'lucide-react-native';
+import { BackHandler, Modal, Pressable, ScrollView, StyleSheet, Text, View, Animated, Easing } from 'react-native';
+import { ArrowLeftRight, Home, MessageCircle, Megaphone, User, Wallet, MoreVertical, Briefcase, Info, HelpCircle, Brain, Settings, ReceiptText, QrCode, FolderOpen } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { getAccountProfile } from '../api/auth';
 import { getProjectMeta } from '../api/workspace';
@@ -11,6 +11,7 @@ import { CampaignDetailsScreen } from './CampaignDetailsScreen';
 import { CreateCampaignScreen } from './CreateCampaignScreen';
 import { DashboardScreen } from './DashboardScreen';
 import { LiveChatScreen } from './LiveChatScreen';
+import { OpenCasesScreen } from './OpenCasesScreen';
 import { ChatRoomScreen } from './ChatRoomScreen';
 import { ProfileScreen } from './ProfileScreen';
 import { ProjectsScreen } from './ProjectsScreen';
@@ -28,13 +29,15 @@ import { ScalePressable, FadeInView } from '../components/animations';
 import { Project } from '../api/auth';
 import { ProjectAvatar } from '../components/ProjectAvatar';
 import { ProjectQRModal } from '../components/Modals/ProjectQRModal';
+import { WhatsAppNotificationBanner } from '../components/WhatsAppNotificationBanner';
 import { formatImageUrl } from '../utils/imageUrl';
 
-type Page = 'dashboard' | 'inbox' | 'campaigns' | 'profile' | 'wallet' | 'projects';
+type Page = 'dashboard' | 'inbox' | 'cases' | 'campaigns' | 'profile' | 'wallet' | 'projects';
 
 const FULL_TABS: { key: Page; label: string; icon: typeof Home }[] = [
   { key: 'dashboard', label: 'Home', icon: Home },
   { key: 'inbox', label: 'Chats', icon: MessageCircle },
+  { key: 'cases', label: 'Cases', icon: FolderOpen },
   { key: 'campaigns', label: 'Campaigns', icon: Megaphone },
   { key: 'profile', label: 'Profile', icon: User },
 ];
@@ -216,7 +219,7 @@ export function WorkspaceScreen({
     if (walletTarget) { setWalletTarget(false); return true; }
     if (wabaTarget) { setWabaTarget(false); return true; }
     if (scannedUsersTarget) { setScannedUsersTarget(false); return true; }
-  if (supportTarget) { setSupportTarget(false); return true; }
+    if (supportTarget) { setSupportTarget(false); return true; }
     if (contextConfigTarget) { setContextConfigTarget(false); return true; }
     if (agentConfigTarget) { setAgentConfigTarget(false); return true; }
     if (projectConfigTarget) { setProjectConfigTarget(false); return true; }
@@ -225,7 +228,7 @@ export function WorkspaceScreen({
     if (projectsTarget) { setProjectsTarget(false); return true; }
     if (page !== 'dashboard') { setPage('dashboard'); return true; }
     return false;
-  }, [chatTarget, campaignTarget, createCampaignTarget, walletTarget, wabaTarget, scannedUsersTarget, supportTarget, contextConfigTarget, agentConfigTarget, projectConfigTarget, transactionsTarget, projectsTarget, page]);
+  }, [chatTarget, campaignTarget, createCampaignTarget, walletTarget, wabaTarget, scannedUsersTarget, supportTarget, contextConfigTarget, agentConfigTarget, projectConfigTarget, transactionsTarget, aiBillsTarget, projectsTarget, page]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
@@ -236,13 +239,19 @@ export function WorkspaceScreen({
 
   if (chatTarget) {
     return (
-      <ChatRoomScreen
-        projectId={projectId}
-        session={apiSession}
-        contactNumber={chatTarget.number}
-        contactName={chatTarget.name}
-        onBack={() => setChatTarget(null)}
-      />
+      <View style={{ flex: 1 }}>
+        <ChatRoomScreen
+          projectId={projectId}
+          session={apiSession}
+          contactNumber={chatTarget.number}
+          contactName={chatTarget.name}
+          onBack={() => setChatTarget(null)}
+        />
+        <WhatsAppNotificationBanner
+          currentChatNumber={chatTarget.number}
+          onOpenChat={(contactNumber, contactName) => setChatTarget({ number: contactNumber, name: contactName })}
+        />
+      </View>
     );
   }
 
@@ -295,7 +304,7 @@ export function WorkspaceScreen({
       />
     );
   }
-
+
   if (scannedUsersTarget) {
     return <ScannedUsersScreen projectId={projectId} session={apiSession} onBack={() => setScannedUsersTarget(false)} />;
   }
@@ -467,12 +476,12 @@ export function WorkspaceScreen({
                   <Text style={[styles.secondaryLinkText, { color: theme.emerald }]}>Add funds to wallet</Text>
                 </ScalePressable>
                 <Pressable
-                        accessibilityRole="button"
-                        onPress={onSignOut}
-                        style={[styles.logoutButton, { backgroundColor: theme.isDark ? theme.danger : theme.dangerBg, borderColor: theme.isDark ? theme.danger : theme.dangerBorder }]}
-                      >
-                        <Text style={[styles.logoutButtonText, { color: '#FFFFFF' }]}>Log Out</Text>
-                      </Pressable>
+                  accessibilityRole="button"
+                  onPress={onSignOut}
+                  style={[styles.logoutButton, { backgroundColor: theme.isDark ? theme.danger : theme.dangerBg, borderColor: theme.isDark ? theme.danger : theme.dangerBorder }]}
+                >
+                  <Text style={[styles.logoutButtonText, { color: '#FFFFFF' }]}>Log Out</Text>
+                </Pressable>
               </ScrollView>
             )
           ) : (
@@ -493,6 +502,12 @@ export function WorkspaceScreen({
               />
             ) : page === 'inbox' ? (
               <LiveChatScreen
+                projectId={projectId}
+                session={apiSession}
+                onOpenChat={(contactNumber, contactName) => setChatTarget({ number: contactNumber, name: contactName })}
+              />
+            ) : page === 'cases' ? (
+              <OpenCasesScreen
                 projectId={projectId}
                 session={apiSession}
                 onOpenChat={(contactNumber, contactName) => setChatTarget({ number: contactNumber, name: contactName })}
@@ -622,6 +637,12 @@ export function WorkspaceScreen({
           projectImage={projectProfileImage}
         />
       )}
+
+      {/* WhatsApp In-App Notification Banner */}
+      <WhatsAppNotificationBanner
+        currentChatNumber={null}
+        onOpenChat={(contactNumber, contactName) => setChatTarget({ number: contactNumber, name: contactName })}
+      />
     </View>
   );
 }
