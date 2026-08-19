@@ -16,7 +16,7 @@ import { getInbox, getUnreadCount, ListItem, unwrapList } from '../api/workspace
 import { LoadState } from '../components/LoadState';
 import { useTheme } from '../theme/theme';
 import { socketManager } from '../services/socketManager';
-import { ScalePressable, FadeInView, SlideUpModal, PulseView } from '../components/animations';
+import { ScalePressable, FadeInView, PulseView } from '../components/animations';
 import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
 
 export type ChatFilterType = 'all' | 'unread' | 'favourites' | 'assigned';
@@ -46,9 +46,9 @@ export function LiveChatScreen({
 
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  const [newChatNumber, setNewChatNumber] = useState('');
-  const [newChatName, setNewChatName] = useState('');
+
+  // Controls whether the full-screen "New Chat" view is shown instead of the list.
+  const [isNewChatVisible, setIsNewChatVisible] = useState(false);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -168,13 +168,21 @@ export function LiveChatScreen({
     };
   }, [load, loadUnreadCount]);
 
-  const handleDirectChat = () => {
-    if (!newChatNumber.trim()) return;
-    onOpenChat(newChatNumber.trim(), newChatName.trim() || newChatNumber.trim());
-    setIsModalVisible(false);
-    setNewChatNumber('');
-    setNewChatName('');
-  };
+  // Full-screen "New Chat" view replaces the whole page while active.
+  // This avoids the bottom-sheet-modal problem where the keyboard can cover
+  // the input if the sheet's maxHeight is smaller than the keyboard height.
+  if (isNewChatVisible) {
+    return (
+      <NewChatScreen
+        theme={theme}
+        onClose={() => setIsNewChatVisible(false)}
+        onStart={(number, name) => {
+          setIsNewChatVisible(false);
+          onOpenChat(number, name);
+        }}
+      />
+    );
+  }
 
   return (
     <KeyboardAvoidView style={{ flex: 1, backgroundColor: theme.canvas }}>
@@ -266,7 +274,7 @@ export function LiveChatScreen({
       {/* FAB */}
       <ScalePressable
         accessibilityRole="button"
-        onPress={() => setIsModalVisible(true)}
+        onPress={() => setIsNewChatVisible(true)}
         style={[
           styles.fab,
           { backgroundColor: theme.emerald },
@@ -274,28 +282,47 @@ export function LiveChatScreen({
       >
         <MessageSquarePlus size={24} color="#FFF" />
       </ScalePressable>
+    </KeyboardAvoidView>
+  );
+}
 
-      {/* Direct Chat Modal */}
-      <SlideUpModal
-        visible={isModalVisible}
-        onClose={() => setIsModalVisible(false)}
-        maxHeight="70%"
-      >
-        <View
-          style={[styles.modalContent, { backgroundColor: theme.surface }]}
-        >
-          <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { color: theme.ink }]}>New Chat</Text>
-            <ScalePressable onPress={() => setIsModalVisible(false)} hitSlop={8}>
-              <X size={24} color={theme.muted} />
-            </ScalePressable>
-          </View>
+function NewChatScreen({
+  theme,
+  onClose,
+  onStart,
+}: {
+  theme: ReturnType<typeof useTheme>;
+  onClose: () => void;
+  onStart: (contactNumber: string, contactName: string) => void;
+}) {
+  const [newChatNumber, setNewChatNumber] = useState('');
+  const [newChatName, setNewChatName] = useState('');
 
+  const handleDirectChat = () => {
+    if (!newChatNumber.trim()) return;
+    onStart(newChatNumber.trim(), newChatName.trim() || newChatNumber.trim());
+  };
+
+  return (
+    <KeyboardAvoidingView
+      style={[styles.fullScreen, { backgroundColor: theme.canvas }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <FadeInView direction="up" distance={12} duration={250} style={{ flex: 1 }}>
+        <View style={[styles.fullScreenHeader, { borderBottomColor: theme.border }]}>
+          <ScalePressable onPress={onClose} hitSlop={8}>
+            <X size={24} color={theme.muted} />
+          </ScalePressable>
+          <Text style={[styles.modalTitle, { color: theme.ink }]}>New Chat</Text>
+          <View style={{ width: 24 }} />
+        </View>
+
+        <View style={styles.fullScreenBody}>
           <Text style={[styles.modalSubtitle, { color: theme.muted }]}>
             Enter a phone number with country code to start a new direct chat.
           </Text>
 
-          <View style={[styles.inputWrapper, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
+          <View style={[styles.inputWrapper, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <TextInput
               style={[styles.modalInput, { color: theme.ink }]}
               placeholder="Phone Number (e.g. 919876543210)"
@@ -303,16 +330,20 @@ export function LiveChatScreen({
               keyboardType="phone-pad"
               value={newChatNumber}
               onChangeText={setNewChatNumber}
+              autoFocus
+              returnKeyType="next"
             />
           </View>
 
-          <View style={[styles.inputWrapper, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
+          <View style={[styles.inputWrapper, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <TextInput
               style={[styles.modalInput, { color: theme.ink }]}
               placeholder="Contact Name (Optional)"
               placeholderTextColor={theme.muted}
               value={newChatName}
               onChangeText={setNewChatName}
+              returnKeyType="done"
+              onSubmitEditing={handleDirectChat}
             />
           </View>
 
@@ -323,8 +354,8 @@ export function LiveChatScreen({
             <Text style={styles.modalButtonText}>Start Conversation</Text>
           </ScalePressable>
         </View>
-      </SlideUpModal>
-    </KeyboardAvoidView>
+      </FadeInView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -517,20 +548,22 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
   },
-  modalContent: {
-    borderRadius: 20,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 5,
+  // Full-screen "New Chat" view (replaces the old bottom-sheet modal styles)
+  fullScreen: {
+    flex: 1,
   },
-  modalHeader: {
+  fullScreenHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 60 : 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+  },
+  fullScreenBody: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
   },
   modalTitle: {
     fontSize: 20,
