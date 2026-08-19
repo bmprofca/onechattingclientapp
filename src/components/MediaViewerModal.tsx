@@ -13,9 +13,11 @@ import {
   Alert,
   StatusBar,
   Linking,
+  Share,
 } from 'react-native';
 import { X, Download, ExternalLink, FileText } from 'lucide-react-native';
 import ReactNativeBlobUtil from 'react-native-blob-util';
+import { CameraRoll } from '@react-native-camera-roll/camera-roll';
 import { ScalePressable, FadeInView } from './animations';
 
 type MediaViewerProps = {
@@ -40,48 +42,90 @@ export function MediaViewerModal({
 
   const fileName = mediaName || mediaUrl.split('/').pop() || 'download';
 
+  // --- Android: download to public Downloads via DownloadManager ---
+  const saveAndroid = async () => {
+    const sdkVersion = Platform.Version as number;
+
+    if (sdkVersion < 33) {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+        {
+          title: 'Storage Permission',
+          message: 'App needs storage permission to save files.',
+          buttonPositive: 'OK',
+        },
+      );
+      if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+        Alert.alert('Permission Denied', 'Cannot save without storage permission.');
+        return;
+      }
+    } else {
+      // Android 13+: request notification permission so the download
+      // notification (and completion tracking) works reliably.
+      try {
+        await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+        );
+      } catch {
+        // Non-fatal if this fails — download can still proceed.
+      }
+    }
+
+    const downloadDir = ReactNativeBlobUtil.fs.dirs.DownloadDir;
+    const filePath = `${downloadDir}/${fileName}`;
+
+    const task = ReactNativeBlobUtil.config({
+      path: filePath,
+      addAndroidDownloads: {
+        useDownloadManager: true,
+        notification: true,
+        path: filePath,
+        description: 'Downloading file',
+        title: fileName,
+      },
+    }).fetch('GET', mediaUrl);
+
+    const timeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Download timed out after 30s')), 30000),
+    );
+
+    await Promise.race([task, timeout]);
+    Alert.alert('Saved!', `File saved to Downloads as ${fileName}`);
+  };
+
+  // --- iOS: images/video go to Photos, documents go through Share sheet ---
+  const saveIOS = async () => {
+    // Fetch into a temp cache location first
+    const res = await ReactNativeBlobUtil.config({ fileCache: true }).fetch(
+      'GET',
+      mediaUrl,
+    );
+    const tmpPath = res.path();
+
+    if (mediaType === 'image' || mediaType === 'video') {
+      // Save directly into Photos — this is the only place iOS users expect
+      // media to land, and it needs NSPhotoLibraryAddUsageDescription in Info.plist.
+      await CameraRoll.save(`file://${tmpPath}`, {
+        type: mediaType === 'video' ? 'video' : 'photo',
+      });
+      Alert.alert('Saved!', 'Saved to your Photos.');
+    } else {
+      // Documents/audio: no equivalent of a "Downloads" folder on iOS —
+      // hand off to the native share sheet so the user can save to Files,
+      // AirDrop, etc.
+      await Share.share({ url: `file://${tmpPath}`, title: fileName });
+    }
+  };
+
   const handleSave = async () => {
     if (!mediaUrl) return;
     setDownloading(true);
     try {
-      // Request storage permission on Android
       if (Platform.OS === 'android') {
-        const sdkVersion = Platform.Version;
-        if (typeof sdkVersion === 'number' && sdkVersion < 33) {
-          const granted = await PermissionsAndroid.request(
-            PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
-            {
-              title: 'Storage Permission',
-              message: 'App needs storage permission to save files.',
-              buttonPositive: 'OK',
-            },
-          );
-          if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-            Alert.alert('Permission Denied', 'Cannot save without storage permission.');
-            return;
-          }
-        }
+        await saveAndroid();
+      } else {
+        await saveIOS();
       }
-
-      const downloadDir = Platform.OS === 'android'
-        ? ReactNativeBlobUtil.fs.dirs.DownloadDir
-        : ReactNativeBlobUtil.fs.dirs.DocumentDir;
-
-      const filePath = `${downloadDir}/${fileName}`;
-
-      await ReactNativeBlobUtil.config({
-        fileCache: true,
-        path: filePath,
-        addAndroidDownloads: {
-          useDownloadManager: true,
-          notification: true,
-          path: filePath,
-          description: 'Downloading file',
-          title: fileName,
-        },
-      }).fetch('GET', mediaUrl);
-
-      Alert.alert('Saved!', `File saved to Downloads as ${fileName}`);
     } catch (err: any) {
       console.warn('Download error', err);
       Alert.alert('Download Failed', err?.message || 'Unknown error');
@@ -93,7 +137,7 @@ export function MediaViewerModal({
   const handleOpenExternal = () => {
     if (mediaUrl) {
       Linking.openURL(mediaUrl).catch(() =>
-        Alert.alert('Cannot open', 'Could not open this file in browser.')
+        Alert.alert('Cannot open', 'Could not open this file in browser.'),
       );
     }
   };
@@ -103,11 +147,7 @@ export function MediaViewerModal({
       return (
         <View style={styles.imageContainer}>
           {imgLoading && (
-            <ActivityIndicator
-              size="large"
-              color="#10B981"
-              style={styles.imgLoader}
-            />
+            <ActivityIndicator size="large" color="#10B981" style={styles.imgLoader} />
           )}
           <Image
             source={{ uri: mediaUrl }}
@@ -131,7 +171,6 @@ export function MediaViewerModal({
       );
     }
 
-    // document / audio / fallback
     return (
       <View style={styles.placeholderContainer}>
         <View style={styles.docIconCircle}>
@@ -157,7 +196,6 @@ export function MediaViewerModal({
     >
       <StatusBar backgroundColor="#000" barStyle="light-content" />
       <View style={styles.container}>
-        {/* Top bar */}
         <FadeInView direction="down" distance={20} duration={300} style={styles.topBar}>
           <ScalePressable onPress={onClose} hitSlop={12} style={styles.closeBtn}>
             <X size={26} color="#FFF" />
@@ -168,22 +206,17 @@ export function MediaViewerModal({
           <View style={{ width: 36 }} />
         </FadeInView>
 
-        {/* Content */}
-        <FadeInView scale={true} startScale={0.92} duration={350} style={styles.body}>
+        <FadeInView scale startScale={0.92} duration={350} style={styles.body}>
           {renderContent()}
         </FadeInView>
 
-        {/* Bottom action bar */}
         <FadeInView direction="up" distance={20} duration={300} style={styles.bottomBar}>
-          <ScalePressable
-            style={[styles.actionBtn, styles.openBtn]}
-            onPress={handleOpenExternal}
-          >
+          <Pressable style={[styles.actionBtn, styles.openBtn]} onPress={handleOpenExternal}>
             <ExternalLink size={20} color="#FFF" />
             <Text style={styles.actionBtnText}>Open</Text>
-          </ScalePressable>
+          </Pressable>
 
-          <ScalePressable
+          <Pressable
             style={[styles.actionBtn, styles.saveBtn]}
             onPress={handleSave}
             disabled={downloading}
@@ -196,7 +229,7 @@ export function MediaViewerModal({
             <Text style={styles.actionBtnText}>
               {downloading ? 'Saving...' : 'Save'}
             </Text>
-          </ScalePressable>
+          </Pressable>
         </FadeInView>
       </View>
     </Modal>
@@ -204,10 +237,7 @@ export function MediaViewerModal({
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
+  container: { flex: 1, backgroundColor: '#000' },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -216,12 +246,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     backgroundColor: 'rgba(0,0,0,0.85)',
   },
-  closeBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  closeBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   topTitle: {
     flex: 1,
     color: '#FFF',
@@ -230,29 +255,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginHorizontal: 8,
   },
-  body: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  imageContainer: {
-    flex: 1,
-    width: SCREEN_W,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  imgLoader: {
-    position: 'absolute',
-    zIndex: 1,
-  },
-  fullImage: {
-    width: SCREEN_W,
-    height: SCREEN_H * 0.7,
-  },
-  placeholderContainer: {
-    alignItems: 'center',
-    paddingHorizontal: 32,
-  },
+  body: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  imageContainer: { flex: 1, width: SCREEN_W, justifyContent: 'center', alignItems: 'center' },
+  imgLoader: { position: 'absolute', zIndex: 1 },
+  fullImage: { width: SCREEN_W, height: SCREEN_H * 0.7 },
+  placeholderContainer: { alignItems: 'center', paddingHorizontal: 32 },
   videoIconCircle: {
     width: 80,
     height: 80,
@@ -262,10 +269,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 20,
   },
-  videoPlayIcon: {
-    fontSize: 32,
-    color: '#FFF',
-  },
+  videoPlayIcon: { fontSize: 32, color: '#FFF' },
   docIconCircle: {
     width: 80,
     height: 80,
@@ -282,11 +286,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 8,
   },
-  placeholderSub: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 14,
-    textAlign: 'center',
-  },
+  placeholderSub: { color: 'rgba(255,255,255,0.6)', fontSize: 14, textAlign: 'center' },
   bottomBar: {
     flexDirection: 'row',
     paddingHorizontal: 20,
@@ -304,15 +304,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     gap: 8,
   },
-  openBtn: {
-    backgroundColor: '#374151',
-  },
-  saveBtn: {
-    backgroundColor: '#10B981',
-  },
-  actionBtnText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
+  openBtn: { backgroundColor: '#374151' },
+  saveBtn: { backgroundColor: '#10B981' },
+  actionBtnText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
 });

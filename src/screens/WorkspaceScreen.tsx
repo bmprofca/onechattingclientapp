@@ -67,8 +67,9 @@ export function WorkspaceScreen({
   const theme = useTheme();
   const projectId = session.selectedProjectId || '';
   const hasProject = !!projectId;
+  console.log('hasProject:', hasProject, 'projectId:', projectId, 'session.selectedProjectId:', session.selectedProjectId);
 
-  const [page, setPage] = useState<Page>('dashboard');
+  const [page, setPage] = useState<Page>(hasProject ? 'inbox' : 'dashboard');
   const [walletBalance, setWalletBalance] = useState<number | string>(session.balance ?? 0);
   const [projectCount, setProjectCount] = useState<number>(session.projectCount ?? session.projects?.length ?? 0);
   const [projects, setProjects] = useState<Project[]>(session.projects || []);
@@ -173,7 +174,7 @@ export function WorkspaceScreen({
         const img = formatImageUrl(rawImg);
         setProjectProfileImage(img || initialImg || '');
       })
-      .catch(() => {});
+      .catch(() => { });
 
     return () => {
       isMounted = false;
@@ -210,11 +211,8 @@ export function WorkspaceScreen({
     refreshAccount();
   }, [refreshAccount]);
 
-  // Only entering/leaving workspace mode resets the page. Switching between
-  // projects keeps the current page mounted and its projectId-aware loaders
-  // fetch the new workspace data.
   useEffect(() => {
-    setPage('dashboard');
+    setPage(hasProject ? 'inbox' : 'dashboard');
   }, [hasProject]);
 
   useEffect(() => {
@@ -411,10 +409,10 @@ export function WorkspaceScreen({
               alignItems: "center",
               gap: 5,
             }}>
-              <View style={[styles.logo, { backgroundColor: theme.mint }]}> 
-                <Text style={[styles.logoText, { color: theme.isDark? '#ffffffff' : theme.mintText }]}>1</Text>
+              <View style={[styles.logo, { backgroundColor: theme.mint }]}>
+                <Text style={[styles.logoText, { color: theme.isDark ? '#ffffffff' : theme.mintText }]}>1</Text>
               </View>
-              <Text style={[styles.logoText, { color: theme.isDark ? '#ffffffff':theme.mintText }]}>Chatting</Text>
+              <Text style={[styles.logoText, { color: theme.isDark ? '#ffffffff' : theme.mintText }]}>Chatting</Text>
 
             </View>
             {!hasProject &&
@@ -512,13 +510,13 @@ export function WorkspaceScreen({
                 <ScalePressable onPress={() => setPage('wallet')} style={styles.secondaryLink} hitSlop={8}>
                   <Text style={[styles.secondaryLinkText, { color: theme.emerald }]}>Add funds to wallet</Text>
                 </ScalePressable>
-                <Pressable
+                <ScalePressable
                   accessibilityRole="button"
                   onPress={onSignOut}
                   style={[styles.logoutButton, { backgroundColor: theme.isDark ? theme.danger : theme.dangerBg, borderColor: theme.isDark ? theme.danger : theme.dangerBorder }]}
                 >
                   <Text style={[styles.logoutButtonText, { color: '#FFFFFF' }]}>Log Out</Text>
-                </Pressable>
+                </ScalePressable>
               </ScrollView>
             )
           ) : (
@@ -574,7 +572,7 @@ export function WorkspaceScreen({
               style={styles.tabItem}
               hitSlop={4}
             >
-              <View style={[styles.tabPill ]}>
+              <View style={[styles.tabPill]}>
                 <Icon size={22} color={active ? theme.emerald : theme.ink} strokeWidth={active ? 2.5 : 2} />
                 <Text style={[styles.tabLabel, { color: active ? theme.emerald : theme.ink }, active && styles.tabLabelActive]}>
                   {tab.label}
@@ -813,9 +811,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 12,
+    marginTop: 100,
     borderWidth: 1,
-    paddingHorizontal:130,
+    paddingHorizontal: 80,
   },
   logoutButtonText: {
     fontSize: 16,

@@ -674,42 +674,6 @@ export function OpenCasesScreen({
 
   return (
     <KeyboardAvoidView style={[styles.container, { backgroundColor: theme.canvas }]}>
-      <View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
-        <View style={styles.headerLeft}>
-          {onBack && (
-            <ScalePressable onPress={onBack} style={styles.backBtn} hitSlop={8}>
-              <ArrowLeft size={22} color={theme.ink} strokeWidth={2.5} />
-            </ScalePressable>
-          )}
-          <View>
-            <Text style={[styles.headerTitle, { color: theme.ink }]}>Open Cases</Text>
-            <Text style={[styles.headerSubtitle, { color: theme.muted }]}>
-              List of numbers with at least one open case
-            </Text>
-          </View>
-        </View>
-
-        <ScalePressable
-          accessibilityRole="button"
-          onPress={openCaseCreateModal}
-          style={[styles.createBtn, { backgroundColor: theme.emerald }]}
-        >
-          <Plus size={16} color="#FFF" strokeWidth={3} />
-          <Text style={styles.createBtnText}>Create Case</Text>
-        </ScalePressable>
-      </View>
-
-      <View style={styles.counterBannerRow}>
-        <View style={[styles.counterPill, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-          <PulseView duration={1600} maxScale={1.2} minScale={0.8}>
-            <View style={[styles.counterDot, { backgroundColor: theme.emerald }]} />
-          </PulseView>
-          <Text style={[styles.counterText, { color: theme.muted }]}>
-            Total Numbers with Open Cases:{' '}
-            <Text style={{ fontWeight: '800', color: theme.ink }}>{total}</Text>
-          </Text>
-        </View>
-      </View>
 
       <View style={styles.searchSection}>
         <View style={[styles.searchContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
@@ -762,130 +726,67 @@ export function OpenCasesScreen({
             const dateB = new Date(b?.create_date || b?.created_at || b?.createdAt || 0).getTime();
             return dateB - dateA;
           });
+          const latestCase = sortedCases[0];
+          const openCount = rawCases.filter(
+            (c: any) => c?.status === true || c?.status === '1' || c?.status === 'open',
+          ).length;
+          const latestDate = latestCase?.create_date || latestCase?.created_at || latestCase?.createdAt;
 
           return (
-            <FadeInView delay={index * 40} duration={260} distance={10}>
-              <View
-                style={[
-                  styles.numberCard,
-                  {
-                    backgroundColor: theme.surface,
-                    borderColor: theme.border,
-                  },
-                ]}
+            <FadeInView delay={Math.min(index * 35, 250)} distance={12}>
+              <ScalePressable
+                accessibilityRole="button"
+                onPress={() => openCaseModal(item)}
+                style={styles.card}
               >
-                <View style={styles.numberCardHeader}>
-                  <View style={[styles.contactAvatar, { backgroundColor: theme.mint }]}>
-                    <Text style={[styles.contactAvatarText, { color: theme.mintText }]}>
-                      {contactName.trim().charAt(0).toUpperCase() || 'C'}
-                    </Text>
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text numberOfLines={1} style={[styles.contactName, { color: theme.ink }]}>
+                <View style={[styles.avatar, { backgroundColor: theme.mint }]}>
+                  <Text style={[styles.avatarText, { color: theme.mintText }]}>
+                    {contactName.trim().charAt(0).toUpperCase() || 'C'}
+                  </Text>
+                </View>
+
+                <View style={styles.cardBody}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <Text numberOfLines={1} style={[styles.cardTitle, { color: theme.ink, flex: 1 }]}>
                       {contactName}
                     </Text>
-                    <Text style={[styles.contactPhone, { color: theme.muted }]}>
-                      {contactNum}
-                    </Text>
+                    {latestDate && (
+                      <Text style={[styles.timeText, { color: theme.muted }]}>
+                        {formatShortDateTime(latestDate)}
+                      </Text>
+                    )}
                   </View>
-                  <ScalePressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Open Chat"
-                    onPress={() => onOpenChat(contactNum, contactName)}
-                    style={[styles.chatActionBtn, { backgroundColor: theme.mint }]}
-                    hitSlop={6}
-                  >
-                    <MessageCircle size={17} color={theme.emerald} strokeWidth={2.2} />
-                  </ScalePressable>
+
+                  {/* <Text numberOfLines={1} style={[styles.cardDetail, { color: theme.muted }]}>
+                    {latestCase?.name || contactNum}
+                  </Text> */}
+
+                  {openCount > 0 && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={[styles.cardMeta, { color: theme.muted }]}>
+                        {rawCases.length} case{rawCases.length === 1 ? '' : 's'}
+                      </Text>
+                      <View style={[styles.unreadBadge, { backgroundColor: theme.emerald }]}>
+                        <Text style={styles.unreadText}>{openCount} open</Text>
+                      </View>
+                    </View>
+                  )}
                 </View>
 
-                <View style={[styles.cardDivider, { backgroundColor: theme.border }]} />
-
-                {sortedCases.length === 0 ? (
-                  <Text style={[styles.noCasesText, { color: theme.muted }]}>No case details available</Text>
-                ) : (
-                  <View style={styles.miniCasesGrid}>
-                    {sortedCases.slice(0, 3).map((c: any, cIdx: number) => {
-                      const caseDate = c?.create_date || c?.created_at || c?.createdAt || c?.created_date;
-                      const isOpen = c?.status === true || c?.status === '1' || c?.status === 'open';
-
-                      return (
-                        <View
-                          key={c?.case_id || c?.id || `${contactNum}-${cIdx}`}
-                          style={[
-                            styles.miniCaseCard,
-                            {
-                              backgroundColor: theme.isDark ? '#0D2B22' : '#F4FBF7',
-                              borderColor: theme.isDark ? '#1C4A3C' : '#D1F2E0',
-                            },
-                          ]}
-                        >
-                          <View style={styles.miniCaseHeader}>
-                            <View style={[styles.miniCaseIcon, { backgroundColor: theme.emerald }]}>
-                              <FileText size={13} color="#FFF" />
-                            </View>
-                            <Text numberOfLines={1} style={[styles.miniCaseTitle, { color: theme.ink }]}>
-                              {c?.name || 'Case'}
-                            </Text>
-                          </View>
-
-                          <View style={styles.miniCaseMetaRow}>
-                            <View
-                              style={[
-                                styles.openSincePill,
-                                {
-                                  backgroundColor: isOpen ? '#FEF3C7' : '#DCFCE7',
-                                },
-                              ]}
-                            >
-                              <Clock size={11} color={isOpen ? '#D97706' : '#16A34A'} />
-                              <Text
-                                style={[
-                                  styles.openSinceText,
-                                  { color: isOpen ? '#B45309' : '#15803D' },
-                                ]}
-                              >
-                                {isOpen ? `Open ${formatOpenSince(caseDate)}` : 'Closed'}
-                              </Text>
-                            </View>
-                          </View>
-
-                          {caseDate && (
-                            <View style={styles.miniCaseDateRow}>
-                              <Calendar size={11} color={theme.muted} />
-                              <Text style={[styles.miniCaseDateText, { color: theme.muted }]}>
-                                {formatShortDateTime(caseDate)}
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-                      );
-                    })}
-                  </View>
-                )}
-
-                <View style={styles.numberCardFooter}>
-                  <ScalePressable
-                    onPress={() => openCaseModal(item)}
-                    style={[
-                      styles.viewCasesBtn,
-                      {
-                        backgroundColor: theme.isDark ? '#103B35' : '#E7F8F2',
-                        borderColor: theme.isDark ? '#1C4A3C' : '#D1F2E0',
-                      },
-                    ]}
-                  >
-                    <Eye size={14} color={theme.emerald} strokeWidth={2.2} />
-                    <Text style={[styles.viewCasesBtnText, { color: theme.emerald }]}>
-                      View All Cases ({rawCases.length})
-                    </Text>
-                  </ScalePressable>
-                </View>
-              </View>
+                <Text style={[styles.arrow, { color: theme.muted }]}>›</Text>
+              </ScalePressable>
             </FadeInView>
           );
         }}
       />
+
+      <ScalePressable
+        accessibilityRole="button"
+        onPress={openCaseCreateModal}
+        style={[styles.fab, { backgroundColor: theme.emerald }]}
+      >
+        <Plus size={24} color="#FFF" strokeWidth={2.5} />
+      </ScalePressable>
 
       {renderEditCaseModal()}
 
@@ -1141,15 +1042,6 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
   headerSubtitle: { fontSize: 11, marginTop: 1 },
-  createBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-  },
-  createBtnText: { color: '#FFF', fontWeight: '800', fontSize: 13 },
 
   // Counter banner
   counterBannerRow: {
@@ -1185,7 +1077,7 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 12,
     borderWidth: 1,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     gap: 8,
   },
   searchInput: {
@@ -1195,101 +1087,73 @@ const styles = StyleSheet.create({
   },
 
   // List
-  listContent: { paddingHorizontal: 16, paddingBottom: 28, paddingTop: 6 },
+  listContent: { paddingHorizontal: 16, paddingBottom: 90, paddingTop: 6, gap:10 },
   emptyListContent: { flexGrow: 1, paddingHorizontal: 16 },
 
-  // Number card
-  numberCard: {
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 14,
-    marginTop: 10,
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-  },
-  numberCardHeader: {
+  // List row (matches LiveChatScreen's ChatCard)
+  card: {
+    borderRadius: 17,
+    padding: 2,
+    marginTop:6,
     flexDirection: 'row',
     alignItems: 'center',
   },
-  contactAvatar: {
-    width: 42,
-    height: 42,
+  avatar: {
+    width: 44,
+    height: 44,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  contactAvatarText: { fontSize: 17, fontWeight: '800' },
-  contactName: { fontSize: 15, fontWeight: '800' },
-  contactPhone: { fontSize: 12, marginTop: 2 },
-  chatActionBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
+  avatarText: { fontSize: 17, fontWeight: '800' },
+  cardBody: { flex: 1, marginLeft: 12 },
+  cardTitle: { fontSize: 15, fontWeight: '800' },
+  cardDetail: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 5,
+  },
+  cardMeta: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  timeText: {
+    fontSize: 10,
+    marginLeft: 8,
+  },
+  unreadBadge: {
+    borderRadius: 10,
+    minHeight: 20,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  cardDivider: { height: 1, marginVertical: 12, opacity: 0.6 },
-  noCasesText: { fontSize: 12, paddingVertical: 4 },
-
-  // Mini cases grid
-  miniCasesGrid: { gap: 8 },
-  miniCaseCard: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 10,
-  },
-  miniCaseHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  miniCaseIcon: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  miniCaseTitle: { fontSize: 13, fontWeight: '700', flex: 1 },
-  miniCaseMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     marginTop: 6,
   },
-  openSincePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
+  unreadText: {
+    color: '#FFF',
+    fontSize: 9,
+    fontWeight: '800',
   },
-  openSinceText: { fontSize: 11, fontWeight: '700' },
-  miniCaseDateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
-  },
-  miniCaseDateText: { fontSize: 11 },
+  arrow: { fontSize: 24, lineHeight: 26, marginLeft: 4 },
 
-  // Number card footer
-  numberCardFooter: {
-    marginTop: 10,
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-  },
-  viewCasesBtn: {
-    flexDirection: 'row',
+  // FAB
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
+    justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
   },
-  viewCasesBtnText: { fontSize: 12, fontWeight: '700' },
 
   // Modal styles
   modalOverlay: {
@@ -1380,7 +1244,7 @@ const styles = StyleSheet.create({
   },
   remarkText: { fontSize: 12, lineHeight: 16 },
 
-  // Form styles
+  // Form styles (used in Create Case / Edit Case modals)
   formLabel: {
     fontSize: 10,
     fontWeight: '800',
@@ -1402,6 +1266,18 @@ const styles = StyleSheet.create({
   },
   input: { flex: 1, fontSize: 14, height: '100%' },
   textArea: { height: '100%', paddingTop: 10, textAlignVertical: 'top' },
+
+  // Contact avatar/name/phone used inside Create Case modal's selected-contact card
+  contactAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  contactAvatarText: { fontSize: 17, fontWeight: '800' },
+  contactName: { fontSize: 15, fontWeight: '800' },
+  contactPhone: { fontSize: 12, marginTop: 2 },
 
   selectedContactCard: {
     flexDirection: 'row',
