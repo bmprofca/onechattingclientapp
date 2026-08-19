@@ -199,13 +199,12 @@ export function OpenCasesScreen({
       setCaseListLoading(true);
       setCaseListError('');
       try {
-        const res = await getCaseList(
-          session,
-          projectId,
+        // FIX: getCaseList expects an options object, not positional args
+        const res = await getCaseList(session, projectId, {
           number,
-          searchQuery !== undefined ? searchQuery : caseListSearch,
-          statusFilter !== undefined ? statusFilter : caseListStatusFilter,
-        );
+          search: searchQuery !== undefined ? searchQuery : caseListSearch,
+          status: statusFilter !== undefined ? statusFilter : caseListStatusFilter,
+        });
         if (res?.error) {
           setCaseListError(typeof res.error === 'string' ? res.error : res.message || 'Failed to load cases');
           setCaseList([]);
@@ -292,13 +291,15 @@ export function OpenCasesScreen({
     setCaseCreateLoading(true);
     setCaseCreateError('');
     try {
-      const res = await createCase(session, {
-        project_id: projectId,
-        number: num,
+      // FIX: createCase takes positional args, not an object
+      const res = await createCase(
+        session,
+        projectId,
+        num,
         name,
-        remark: caseCreateRemark.trim(),
-        status: caseCreateStatus,
-      });
+        caseCreateRemark.trim(),
+        caseCreateStatus,
+      );
 
       if (res?.error) {
         setCaseCreateError(typeof res.error === 'string' ? res.error : res.msg || 'Failed to create case');
@@ -341,13 +342,15 @@ export function OpenCasesScreen({
     setCaseEditLoading(true);
     setCaseEditError('');
     try {
-      const res = await editCase(session, {
-        project_id: projectId,
-        case_id: caseId,
+      // FIX: editCase takes positional args, not an object
+      const res = await editCase(
+        session,
+        projectId,
+        caseId,
         name,
-        remark: caseEditRemark.trim(),
-        status: caseEditStatus,
-      });
+        caseEditRemark.trim(),
+        caseEditStatus,
+      );
 
       if (res?.error) {
         setCaseEditError(typeof res.error === 'string' ? res.error : res.msg || 'Failed to update case');
@@ -731,17 +734,43 @@ export function OpenCasesScreen({
             </View>
           </View>
 
-          <ScalePressable
-            onPress={() => {
-              setShowCaseListModal(false);
-              onOpenChat(caseModalNumber, caseModalContact?.name || caseModalNumber);
-            }}
-            style={[styles.chatHeaderBtn, { backgroundColor: theme.mint }]}
-            hitSlop={6}
-          >
-            <MessageCircle size={16} color={theme.emerald} />
-            <Text style={[styles.chatHeaderBtnText, { color: theme.emerald }]}>Chat</Text>
-          </ScalePressable>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <ScalePressable
+              onPress={() => {
+                // Open create case pre-filled with this contact
+                setCaseCreateSelectedContact(
+                  caseModalContact
+                    ? { name: caseModalContact.name, number: caseModalNumber }
+                    : null,
+                );
+                setCaseCreateName('');
+                setCaseCreateRemark('');
+                setCaseCreateStatus('open');
+                setCaseCreateError('');
+                setManualNumberInput(!caseModalContact);
+                setManualNumber(caseModalContact ? '' : caseModalNumber);
+                setCreateContacts([]);
+                setCreateContactsQuery('');
+                setShowCaseCreateModal(true);
+              }}
+              style={[styles.chatHeaderBtn, { backgroundColor: theme.inputBg ?? theme.surface }]}
+              hitSlop={6}
+            >
+              <Plus size={16} color={theme.emerald} />
+              <Text style={[styles.chatHeaderBtnText, { color: theme.emerald }]}>New</Text>
+            </ScalePressable>
+            <ScalePressable
+              onPress={() => {
+                setShowCaseListModal(false);
+                onOpenChat(caseModalNumber, caseModalContact?.name || caseModalNumber);
+              }}
+              style={[styles.chatHeaderBtn, { backgroundColor: theme.mint }]}
+              hitSlop={6}
+            >
+              <MessageCircle size={16} color={theme.emerald} />
+              <Text style={[styles.chatHeaderBtnText, { color: theme.emerald }]}>Chat</Text>
+            </ScalePressable>
+          </View>
         </View>
 
         <View style={[styles.modalFiltersRow, { backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border, paddingBottom: 12 }]}>
@@ -1236,8 +1265,8 @@ const styles = StyleSheet.create({
   contactsPickerList: {
     maxHeight: 160,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
     borderRadius: 12,
+    overflow: 'hidden',
   },
   contactPickerItem: {
     flexDirection: 'row',

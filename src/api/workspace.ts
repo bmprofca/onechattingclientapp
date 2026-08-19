@@ -2,6 +2,7 @@ import { ApiSession, post } from './client';
 import { formatImageUrl } from '../utils/imageUrl';
 
 export type ListItem = Record<string, unknown>;
+
 export const unwrapList = (response: any): ListItem[] => {
   const value =
     response?.list ||
@@ -9,11 +10,20 @@ export const unwrapList = (response: any): ListItem[] => {
     response?.data ||
     response?.results ||
     [];
+
   return Array.isArray(value) ? value : [];
 };
-export const unwrapItem = (response: any): Record<string, unknown> | null => {
+
+export const unwrapItem = (
+  response: any,
+): Record<string, unknown> | null => {
   return response?.item || response?.data || response || null;
 };
+
+// --------------------------------------------------
+// Inbox
+// --------------------------------------------------
+
 export const getInbox = (
   session: ApiSession,
   projectId: string,
@@ -29,12 +39,17 @@ export const getInbox = (
       page,
       limit,
       search: search || '',
-      filter: filter,
+      filter,
       filter_type: filter,
       type: filter !== 'all' ? filter : undefined,
     },
     session,
   );
+
+// --------------------------------------------------
+// Cases
+// --------------------------------------------------
+
 export const getOpenCases = (
   session: ApiSession,
   projectId: string,
@@ -57,104 +72,287 @@ export const getOpenCases = (
 export const getCaseList = (
   session: ApiSession,
   projectId: string,
-  contactNumber: string,
-  search?: string,
-  status?: string,
-  page = 1,
-  limit = 20,
+  options: {
+    number?: string;
+    search?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+  } = {},
 ) =>
   post<any>(
     '/message/case-list',
     {
       project_id: projectId,
-      number: contactNumber,
-      page_no: page,
-      page,
-      limit,
-      ...(search ? { search } : {}),
-      ...(status ? { status } : {}),
+      number: options.number,
+      page_no: options.page || 1,
+      page: options.page || 1,
+      limit: options.limit || 20,
+      ...(options.search ? { search: options.search } : {}),
+      ...(options.status ? { status: options.status } : {}),
     },
     session,
   );
 
 export const createCase = (
   session: ApiSession,
-  payload: {
-    project_id: string;
-    number: string;
-    name: string;
-    remark?: string;
-    status: 'open' | 'closed';
-  },
+  projectId: string,
+  contactNumber: string,
+  name: string,
+  remark: string,
+  status: 'open' | 'closed',
 ) =>
-  post<any>('/message/case-create', payload, session);
+  post<any>(
+    '/message/case-create',
+    {
+      project_id: projectId,
+      number: contactNumber,
+      name,
+      remark,
+      status,
+    },
+    session,
+  );
 
 export const editCase = (
   session: ApiSession,
-  payload: {
-    project_id: string;
-    case_id: string;
-    name: string;
-    remark?: string;
-    status: 'open' | 'closed';
-  },
+  projectId: string,
+  caseId: string | number,
+  name: string,
+  remark: string,
+  status: 'open' | 'closed',
 ) =>
-  post<any>('/message/case-edit', payload, session);
-export const getCampaigns = (session: ApiSession, projectId: string) =>
+  post<any>(
+    '/message/case-edit',
+    {
+      project_id: projectId,
+      case_id: caseId,
+      name,
+      remark,
+      status,
+    },
+    session,
+  );
+// --------------------------------------------------
+// Campaigns
+// --------------------------------------------------
+
+export const getCampaigns = (
+  session: ApiSession,
+  projectId: string,
+) =>
   post<any>(
     '/campaign/list',
-    { project_id: projectId, page: 1, limit: 30 },
+    {
+      project_id: projectId,
+      page: 1,
+      limit: 30,
+    },
     session,
   );
-export const getCampaignDetails = (session: ApiSession, projectId: string, campaignId: string) =>
+
+export const getCampaignDetails = (
+  session: ApiSession,
+  projectId: string,
+  campaignId: string,
+) =>
   post<any>(
     '/campaign/campaign-details',
-    { project_id: projectId, campaign_id: campaignId },
+    {
+      project_id: projectId,
+      campaign_id: campaignId,
+    },
     session,
   );
-export const getCampaignMessages = (session: ApiSession, projectId: string, campaignId: string) =>
+
+export const getCampaignMessages = (
+  session: ApiSession,
+  projectId: string,
+  campaignId: string,
+) =>
   post<any>(
     '/campaign/campaign-messages',
-    { project_id: projectId, campaign_id: campaignId },
+    {
+      project_id: projectId,
+      campaign_id: campaignId,
+    },
     session,
   );
-export const getProjectMeta = (session: ApiSession, projectId: string) =>
-  post<any>('/project/meta-details', { project_id: projectId }, session);
-export const getProjectDashboard = (session: ApiSession, projectId: string) =>
-  post<any>('/project/dashboard', { project_id: projectId }, session);
-export const getUnreadCount = (session: ApiSession, projectId: string) =>
-  post<any>('/message/total-unread-count', { project_id: projectId }, session);
-export const getChatHistory = (session: ApiSession, projectId: string, contactNumber: string, lastId?: number) =>
-  post<any>('/message/chat-history', { project_id: projectId, number: contactNumber, last_id: lastId || 0 }, session);
-export const markAsRead = (session: ApiSession, projectId: string, contactNumber: string) =>
-  post<any>('/message/mark-as-read', { project_id: projectId, number: contactNumber }, session);
-export const sendMessage = (session: ApiSession, projectId: string, contactNumber: string, message: string, replyWamid?: string) =>
-  post<any>('/message/send-text-message', {
-    project_id: projectId,
-    number: contactNumber,
-    message_type: 'text',
-    message,
-    ...(replyWamid ? { is_reply: true, reply_wamid: replyWamid } : {}),
-  }, session);
-export const getContactDetails = (session: ApiSession, projectId: string, contactNumber: string) =>
-  post<any>('/contact/contact-details', { project_id: projectId, number: contactNumber }, session);
-export const getOpenCaseCount = (session: ApiSession, projectId: string, contactNumber: string) =>
-  post<any>('/message/open-case-count', { project_id: projectId, number: contactNumber }, session);
 
-export const getTemplates = (session: ApiSession, projectId: string, status?: string) =>
-  post<any>('/template/template-list', { project_id: projectId, status }, session);
+// --------------------------------------------------
+// Project
+// --------------------------------------------------
 
-export const sendTemplate = (session: ApiSession, projectId: string, contactNumber: string, templateId: string, components: any[]) =>
-  post<any>('/message/send-template', { project_id: projectId, number: contactNumber, template_id: templateId, component: components }, session);
+export const getProjectMeta = (
+  session: ApiSession,
+  projectId: string,
+) =>
+  post<any>(
+    '/project/meta-details',
+    {
+      project_id: projectId,
+    },
+    session,
+  );
 
-// ---- Media messages ----
+export const getProjectDashboard = (
+  session: ApiSession,
+  projectId: string,
+) =>
+  post<any>(
+    '/project/dashboard',
+    {
+      project_id: projectId,
+    },
+    session,
+  );
+
+export const getUnreadCount = (
+  session: ApiSession,
+  projectId: string,
+) =>
+  post<any>(
+    '/message/total-unread-count',
+    {
+      project_id: projectId,
+    },
+    session,
+  );
+
+// --------------------------------------------------
+// Chat
+// --------------------------------------------------
+
+export const getChatHistory = (
+  session: ApiSession,
+  projectId: string,
+  contactNumber: string,
+  lastId?: number,
+) =>
+  post<any>(
+    '/message/chat-history',
+    {
+      project_id: projectId,
+      number: contactNumber,
+      last_id: lastId || 0,
+    },
+    session,
+  );
+
+export const markAsRead = (
+  session: ApiSession,
+  projectId: string,
+  contactNumber: string,
+) =>
+  post<any>(
+    '/message/mark-as-read',
+    {
+      project_id: projectId,
+      number: contactNumber,
+    },
+    session,
+  );
+
+export const sendMessage = (
+  session: ApiSession,
+  projectId: string,
+  contactNumber: string,
+  message: string,
+  replyWamid?: string,
+) =>
+  post<any>(
+    '/message/send-text-message',
+    {
+      project_id: projectId,
+      number: contactNumber,
+      message_type: 'text',
+      message,
+      ...(replyWamid
+        ? {
+          is_reply: true,
+          reply_wamid: replyWamid,
+        }
+        : {}),
+    },
+    session,
+  );
+
+export const getContactDetails = (
+  session: ApiSession,
+  projectId: string,
+  contactNumber: string,
+) =>
+  post<any>(
+    '/contact/contact-details',
+    {
+      project_id: projectId,
+      number: contactNumber,
+    },
+    session,
+  );
+
+export const getOpenCaseCount = (
+  session: ApiSession,
+  projectId: string,
+  contactNumber: string,
+) =>
+  post<any>(
+    '/message/open-case-count',
+    {
+      project_id: projectId,
+      number: String(contactNumber || '').trim(),
+    },
+    session,
+  );
+
+// --------------------------------------------------
+// Templates
+// --------------------------------------------------
+
+export const getTemplates = (
+  session: ApiSession,
+  projectId: string,
+  status?: string,
+) =>
+  post<any>(
+    '/template/template-list',
+    {
+      project_id: projectId,
+      status,
+    },
+    session,
+  );
+
+export const sendTemplate = (
+  session: ApiSession,
+  projectId: string,
+  contactNumber: string,
+  templateId: string,
+  components: any[],
+) =>
+  post<any>(
+    '/message/send-template',
+    {
+      project_id: projectId,
+      number: contactNumber,
+      template_id: templateId,
+      component: components,
+    },
+    session,
+  );
+
+// --------------------------------------------------
+// Media
+// --------------------------------------------------
 
 export type SendMediaOptions = {
   isReply?: boolean;
   replyWamid?: string;
 };
 
-const replyFields = (options: SendMediaOptions = {}) => ({
+const replyFields = (
+  options: SendMediaOptions = {},
+) => ({
   is_reply: options.isReply || false,
   reply_wamid: options.replyWamid || null,
 });
@@ -166,12 +364,16 @@ export async function sendImageMessage(
   imageLink: string,
   caption?: string,
 ) {
-  return post('/message/send-image-message', {
-    project_id: projectId,
-    number: contactNumber,
-    image_link: imageLink,
-    message: caption || '',
-  }, session);
+  return post<any>(
+    '/message/send-image-message',
+    {
+      project_id: projectId,
+      number: contactNumber,
+      image_link: imageLink,
+      message: caption || '',
+    },
+    session,
+  );
 }
 
 export async function sendVideoMessage(
@@ -181,12 +383,16 @@ export async function sendVideoMessage(
   videoLink: string,
   caption?: string,
 ) {
-  return post('/message/send-video-message', {
-    project_id: projectId,
-    number: contactNumber,
-    video_link: videoLink,
-    message: caption || '',
-  }, session);
+  return post<any>(
+    '/message/send-video-message',
+    {
+      project_id: projectId,
+      number: contactNumber,
+      video_link: videoLink,
+      message: caption || '',
+    },
+    session,
+  );
 }
 
 export async function sendDocumentMessage(
@@ -197,14 +403,19 @@ export async function sendDocumentMessage(
   documentName: string,
   caption?: string,
 ) {
-  return post('/message/send-document-message', {
-    project_id: projectId,
-    number: contactNumber,
-    document_link: documentLink,
-    document_name: documentName,
-    message: caption || '',
-  }, session);
+  return post<any>(
+    '/message/send-document-message',
+    {
+      project_id: projectId,
+      number: contactNumber,
+      document_link: documentLink,
+      document_name: documentName,
+      message: caption || '',
+    },
+    session,
+  );
 }
+
 export const sendAudioMessage = (
   session: ApiSession,
   projectId: string,
@@ -215,21 +426,35 @@ export const sendAudioMessage = (
 ) =>
   post<any>(
     '/message/send-audio-message',
-    { project_id: projectId, number, audio_link: audioLink, is_voice: isVoice, ...replyFields(options) },
+    {
+      project_id: projectId,
+      number,
+      audio_link: audioLink,
+      is_voice: isVoice,
+      ...replyFields(options),
+    },
     session,
   );
+
+// --------------------------------------------------
+// Project Create/Edit
+// --------------------------------------------------
 
 export async function createProject(
   session: ApiSession,
   companyName: string,
   projectName: string,
-  packageId: string
+  packageId: string,
 ) {
-  return post<any>('/project/create-project', {
-    company_name: companyName,
-    project_name: projectName,
-    package_id: packageId,
-  }, session);
+  return post<any>(
+    '/project/create-project',
+    {
+      company_name: companyName,
+      project_name: projectName,
+      package_id: packageId,
+    },
+    session,
+  );
 }
 
 export type EditProjectPayload = {
@@ -251,16 +476,34 @@ export async function editProject(
   data: EditProjectPayload | string,
   projectName?: string,
 ) {
-  const payload = typeof data === 'string'
-    ? { company_name: data, project_name: projectName || '' }
-    : {
+  const payload =
+    typeof data === 'string'
+      ? {
+        company_name: data,
+        project_name: projectName || '',
+      }
+      : {
         ...data,
         company_name: data.company_name,
         project_name: data.project_name,
-        profile_image: formatImageUrl(data.profile_image || data.logo || data.image || data.profile_picture),
+        profile_image: formatImageUrl(
+          data.profile_image ||
+          data.logo ||
+          data.image ||
+          data.profile_picture,
+        ),
       };
-  return post<any>('/project/edit-project', payload, session);
+
+  return post<any>(
+    '/project/edit-project',
+    payload,
+    session,
+  );
 }
+
+// --------------------------------------------------
+// Campaign Create
+// --------------------------------------------------
 
 export type CreateCampaignPayload = {
   project_id: string;
@@ -280,14 +523,30 @@ export async function createCampaign(
   payload: CreateCampaignPayload,
 ) {
   try {
-    return await post<any>('/campaign/create-campaign', payload, session);
+    return await post<any>(
+      '/campaign/create-campaign',
+      payload,
+      session,
+    );
   } catch (error: any) {
-    if (error?.message?.includes('404') || error?.message?.includes('Cannot POST')) {
-      return await post<any>('/campaign/create', payload, session);
+    if (
+      error?.message?.includes('404') ||
+      error?.message?.includes('Cannot POST')
+    ) {
+      return await post<any>(
+        '/campaign/create',
+        payload,
+        session,
+      );
     }
+
     throw error;
   }
 }
+
+// --------------------------------------------------
+// Contacts
+// --------------------------------------------------
 
 export const getContactList = (
   session: ApiSession,
@@ -309,26 +568,63 @@ export const getContactList = (
     session,
   );
 
-export async function embedSignup(session: ApiSession, projectId: string) {
-  return post<any>('/project/embed-signup', {
-    project_id: projectId,
-  }, session);
+// --------------------------------------------------
+// WABA / Embed
+// --------------------------------------------------
+
+export async function embedSignup(
+  session: ApiSession,
+  projectId: string,
+) {
+  return post<any>(
+    '/project/embed-signup',
+    {
+      project_id: projectId,
+    },
+    session,
+  );
 }
 
-export async function submitWabaId(session: ApiSession, projectId: string, wabaId: string) {
-  return post<any>('/project/submit-waba-id', {
-    project_id: projectId,
-    waba_id: wabaId,
-  }, session);
+export async function submitWabaId(
+  session: ApiSession,
+  projectId: string,
+  wabaId: string,
+) {
+  return post<any>(
+    '/project/submit-waba-id',
+    {
+      project_id: projectId,
+      waba_id: wabaId,
+    },
+    session,
+  );
 }
 
-export async function getWabaInformation(session: ApiSession, projectId: string) {
-  return post<any>('/project/waba-information', {
-    project_id: projectId,
-  }, session);
+export async function getWabaInformation(
+  session: ApiSession,
+  projectId: string,
+) {
+  return post<any>(
+    '/project/waba-information',
+    {
+      project_id: projectId,
+    },
+    session,
+  );
 }
-export const getPlans = (session: ApiSession) =>
-  post<any>('/plan', {}, session);
+
+// --------------------------------------------------
+// Plans
+// --------------------------------------------------
+
+export const getPlans = (
+  session: ApiSession,
+) =>
+  post<any>(
+    '/plan',
+    {},
+    session,
+  );
 
 export type PlanPackage = {
   amount: string;
@@ -339,6 +635,10 @@ export type PlanPackages = {
   monthly: PlanPackage;
   yearly: PlanPackage;
 };
+
+// --------------------------------------------------
+// WABA Profile
+// --------------------------------------------------
 
 export type WabaProfilePayload = {
   project_id: string;
@@ -355,7 +655,11 @@ export async function updateWabaProfileDetails(
   session: ApiSession,
   payload: WabaProfilePayload,
 ) {
-  return post<any>('/project/update-waba-profile-details', payload, session);
+  return post<any>(
+    '/project/update-waba-profile-details',
+    payload,
+    session,
+  );
 }
 
 export async function updateWabaProfilePicture(
@@ -363,8 +667,71 @@ export async function updateWabaProfilePicture(
   projectId: string,
   profilePicture: string,
 ) {
-  return post<any>('/project/update-waba-profile-picture', {
-    project_id: projectId,
-    profile_picture: profilePicture,
-  }, session);
+  return post<any>(
+    '/project/update-waba-profile-picture',
+    {
+      project_id: projectId,
+      profile_picture: profilePicture,
+    },
+    session,
+  );
+}
+
+// --------------------------------------------------
+// Chat Assignment
+// --------------------------------------------------
+
+export type AssignedUser = {
+  username: string;
+  name?: string;
+  email?: string;
+  mobile?: string;
+  is_me?: boolean;
+};
+
+export type ChatAssignInfo = {
+  assigned: boolean;
+  assigned_to_me?: boolean;
+  assigned_user?: AssignedUser | null;
+  users?: AssignedUser[];
+};
+
+export type CaseRow = {
+  id?: string | number;
+  case_id?: string | number;
+  name?: string;
+  remark?: string;
+  status?: boolean | string;
+  create_date?: string;
+  created_at?: string;
+};
+
+/**
+ * Assign or unassign the given chat.
+ *
+ * type:
+ *   'assign'   -> target is required
+ *   'unassign' -> target is not required
+ */
+export async function changeChatAssignment(
+  session: ApiSession,
+  projectId: string,
+  number: string,
+  type: 'assign' | 'unassign',
+  target?: string,
+): Promise<{
+  assigning?: ChatAssignInfo;
+  error?: any;
+  message?: string;
+}> {
+  return post<any>(
+    '/message/chat-assign',
+    {
+      project_id: projectId,
+      type,
+      number,
+      ...(type === 'assign' ? { target } : {}),
+    },
+    session,
+  );
 }

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { BackHandler, Modal, Pressable, ScrollView, StyleSheet, Text, View, Animated, Easing } from 'react-native';
-import { ArrowLeftRight, Home, MessageCircle, Megaphone, User, Wallet, MoreVertical, Briefcase, Info, HelpCircle, Brain, Settings, ReceiptText, QrCode, FolderOpen } from 'lucide-react-native';
+import { ArrowLeftRight, Home, MessageCircle, Megaphone, User, Wallet, MoreVertical, Briefcase, HelpCircle, Brain, Settings, ReceiptText, QrCode, FolderOpen } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { getAccountProfile } from '../api/auth';
 import { getProjectMeta, getUnreadCount } from '../api/workspace';
@@ -566,7 +566,7 @@ export function WorkspaceScreen({
                 projectCount={projectCount || session.projects?.length || session.projectCount || 0}
                 onBalanceUpdated={(bal) => setWalletBalance(bal)}
                 onOpenInbox={() => setPage('inbox')}
-                onOpenProfile={() => setPage('profile')}
+                onOpenProfile={() => setProfileTarget(true)}
                 onOpenProjectsHub={() => setProjectsTarget(true)}
                 onOpenWallet={() => setWalletTarget(true)}
                 onOpenSupport={() => setSupportTarget(true)}
@@ -663,13 +663,6 @@ export function WorkspaceScreen({
               >
                 <Briefcase size={18} color={theme.ink} />
                 <Text style={[styles.menuItemText, { color: theme.ink }]}>Projects</Text>
-              </ScalePressable>
-              <ScalePressable
-                style={[styles.menuItem]}
-                onPress={() => { setIsMenuVisible(false); setWabaTarget(true); }}
-              >
-                <Info size={18} color={theme.ink} />
-                <Text style={[styles.menuItemText, { color: theme.ink }]}>WABA Info</Text>
               </ScalePressable>
               <ScalePressable
                 style={[styles.menuItem]}

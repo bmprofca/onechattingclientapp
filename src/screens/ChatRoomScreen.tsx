@@ -5,8 +5,10 @@ import {
   FlatList,
   Image,
   Keyboard,
+  Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -16,7 +18,23 @@ import {
   PanResponder,
 } from 'react-native';
 import Svg, { Circle, G, Path, Pattern, Rect } from 'react-native-svg';
-import { Clock, Check, CheckCheck, AlertCircle, Info, Plus, X, Reply, CornerUpLeft } from 'lucide-react-native';
+import {
+  Clock,
+  Check,
+  CheckCheck,
+  AlertCircle,
+  Info,
+  Plus,
+  X,
+  Reply,
+  CornerUpLeft,
+  MoreVertical,
+  UserPlus,
+  UserCheck,
+  CheckCircle2,
+  Briefcase,
+  Edit2,
+} from 'lucide-react-native';
 import {
   launchImageLibrary,
   ImagePickerResponse,
@@ -38,6 +56,11 @@ import {
   sendAudioMessage,
   sendTemplate,
   unwrapList,
+  changeChatAssignment,
+  getOpenCaseCount,
+  getCaseList,
+  createCase,
+  editCase,
 } from '../api/workspace';
 import { uploadFile, PickedFile } from '../api/upload';
 import { LoadState } from '../components/LoadState';
@@ -97,6 +120,35 @@ export function ChatRoomScreen({
 
   // Reply state
   const [replyingTo, setReplyingTo] = useState<any | null>(null);
+
+  // ── Chat assign + case status/menu state (mirrors the web app) ─────────
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [assignmentInfo, setAssignmentInfo] = useState<any>(null);
+  const [assignActionLoading, setAssignActionLoading] = useState(false);
+
+  const [caseStatus, setCaseStatus] = useState<number | null>(null);
+  const [caseStatusLoading, setCaseStatusLoading] = useState(false);
+  const [caseListModalOpen, setCaseListModalOpen] = useState(false);
+  const [caseList, setCaseList] = useState<any[]>([]);
+  const [caseListLoading, setCaseListLoading] = useState(false);
+
+  const [caseFormOpen, setCaseFormOpen] = useState(false);
+  const [caseFormMode, setCaseFormMode] = useState<'create' | 'edit'>('create');
+  const [caseFormRow, setCaseFormRow] = useState<any>(null);
+  const [caseFormName, setCaseFormName] = useState('');
+  const [caseFormRemark, setCaseFormRemark] = useState('');
+  const [caseFormStatus, setCaseFormStatus] = useState<'open' | 'closed'>('open');
+  const [caseFormSubmitting, setCaseFormSubmitting] = useState(false);
+
+  const isAssigned = assignmentInfo?.assigned === true;
+  const assignedUserName =
+    assignmentInfo?.assigned_user?.name ||
+    assignmentInfo?.assigned_user?.username ||
+    assignmentInfo?.assigned_user?.mobile ||
+    'Unassigned';
+  const assignedUsername = assignmentInfo?.assigned_user?.username;
+  const assignmentUsers: any[] = assignmentInfo?.users || [];
 
   // Keyboard height animation listener for flawless keypad avoidance on all Android & iOS devices
   const keyboardHeightAnim = useRef(new Animated.Value(0)).current;
@@ -158,6 +210,11 @@ export function ChatRoomScreen({
             return true;
           });
           setMessages(uniqueFetched);
+
+          // Chat history responses carry current assignment info, same as the web app.
+          if ((response as any)?.assigning) {
+            setAssignmentInfo((response as any).assigning);
+          }
         }
 
         if (response.last_id) {
@@ -187,6 +244,28 @@ export function ChatRoomScreen({
     loadHistory();
     markAsRead(session, projectId, contactNumber).catch(() => { });
   }, []);
+
+  // Fetch open-case count whenever the chat changes, same as the web header badge.
+  const fetchCaseStatus = useCallback(async () => {
+    if (!contactNumber) return;
+    setCaseStatusLoading(true);
+    try {
+      const res = await getOpenCaseCount(session, projectId, contactNumber);
+      setCaseStatus(
+        !res?.error && typeof res?.case_open_count === 'number'
+          ? Math.max(0, res.case_open_count)
+          : null,
+      );
+    } catch {
+      setCaseStatus(null);
+    } finally {
+      setCaseStatusLoading(false);
+    }
+  }, [session, projectId, contactNumber]);
+
+  useEffect(() => {
+    fetchCaseStatus();
+  }, [fetchCaseStatus]);
 
   useEffect(() => {
     const unsubChat = socketManager.onChat((data) => {
@@ -254,6 +333,152 @@ export function ChatRoomScreen({
     setMessages([]);
     await loadHistory(false);
   };
+
+  // ── Chat assign actions ─────────────────────────────────────────────
+  const handleAssignChange = useCallback(
+    async (type: 'assign' | 'unassign', target?: string) => {
+      if (type === 'assign' && !target) {
+        Toast.show({ type: 'error', text1: 'Choose a user to assign this chat to.' });
+        return;
+      }
+
+      setAssignActionLoading(true);
+      try {
+        const res = await changeChatAssignment(session, projectId, contactNumber, type, target);
+        if ((res as any)?.error) {
+          throw new Error((res as any)?.message || 'Failed to update assignment.');
+        }
+
+        if ((res as any)?.assigning) {
+          setAssignmentInfo((res as any).assigning);
+        } else if (type === 'assign') {
+          // Optimistically patch state if server didn't echo back assigning info
+          setAssignmentInfo((prev: any) => ({
+            ...prev,
+            assigned: true,
+            assigned_user: prev?.users?.find((u: any) => u.username === target) || { username: target },
+          }));
+        } else if (type === 'unassign') {
+          setAssignmentInfo((prev: any) => ({ ...prev, assigned: false, assigned_to_me: false, assigned_user: null }));
+        }
+
+        // Re-sync assignment info from server to ensure accurate state
+        try {
+          const freshHistory = await getChatHistory(session, projectId, contactNumber, undefined);
+          if ((freshHistory as any)?.assigning) {
+            setAssignmentInfo((freshHistory as any).assigning);
+          }
+        } catch {
+          // Non-critical: optimistic state already applied above
+        }
+
+        // Close the assign modal on success
+        setAssignModalOpen(false);
+
+        Toast.show({
+          type: 'success',
+          text1: type === 'assign' ? 'Chat assigned' : 'Chat unassigned',
+        });
+      } catch (err) {
+        Toast.show({
+          type: 'error',
+          text1: 'Could not update assignment',
+          text2: err instanceof Error ? err.message : String(err),
+        });
+      } finally {
+        setAssignActionLoading(false);
+      }
+    },
+    [session, projectId, contactNumber],
+  );
+
+  const openAssignModal = useCallback(() => {
+    setHeaderMenuOpen(false);
+    setAssignModalOpen(true);
+  }, []);
+
+  // ── Case list / create / edit actions ───────────────────────────────
+  const loadCaseList = useCallback(async () => {
+    setCaseListLoading(true);
+    try {
+      const res = await getCaseList(session, projectId, { number: contactNumber, status: '' });
+      setCaseList(!res?.error && Array.isArray(res?.data) ? res!.data! : []);
+    } catch {
+      setCaseList([]);
+      Toast.show({ type: 'error', text1: 'Could not load cases' });
+    } finally {
+      setCaseListLoading(false);
+    }
+  }, [session, projectId, contactNumber]);
+
+  const openCaseListModal = useCallback(() => {
+    setHeaderMenuOpen(false);
+    setCaseListModalOpen(true);
+    loadCaseList();
+  }, [loadCaseList]);
+
+  const openCaseCreateForm = useCallback(() => {
+    setCaseFormMode('create');
+    setCaseFormRow(null);
+    setCaseFormName('');
+    setCaseFormRemark('');
+    setCaseFormStatus('open');
+    setCaseFormOpen(true);
+  }, []);
+
+  const openCaseEditForm = useCallback((row: any) => {
+    setCaseFormMode('edit');
+    setCaseFormRow(row);
+    setCaseFormName(row?.name ?? '');
+    setCaseFormRemark(row?.remark ?? '');
+    setCaseFormStatus(row?.status === true || row?.status === '1' ? 'open' : 'closed');
+    setCaseFormOpen(true);
+  }, []);
+
+  const submitCaseForm = useCallback(async () => {
+    if (!caseFormName.trim()) {
+      Toast.show({ type: 'error', text1: 'Case name is required' });
+      return;
+    }
+
+    setCaseFormSubmitting(true);
+    try {
+      if (caseFormMode === 'create') {
+        const res = await createCase(session, projectId, contactNumber, caseFormName, caseFormRemark, caseFormStatus);
+        if ((res as any)?.error) throw new Error((res as any)?.error);
+        Toast.show({ type: 'success', text1: 'Case created' });
+      } else {
+        const caseId = caseFormRow?.case_id ?? caseFormRow?.id;
+        const res = await editCase(session, projectId, caseId, caseFormName, caseFormRemark, caseFormStatus);
+        if ((res as any)?.error) throw new Error((res as any)?.error);
+        Toast.show({ type: 'success', text1: 'Case updated' });
+      }
+
+      setCaseFormOpen(false);
+      fetchCaseStatus();
+      if (caseListModalOpen) loadCaseList();
+    } catch (err) {
+      Toast.show({
+        type: 'error',
+        text1: caseFormMode === 'create' ? 'Could not create case' : 'Could not update case',
+        text2: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setCaseFormSubmitting(false);
+    }
+  }, [
+    caseFormMode,
+    caseFormRow,
+    caseFormName,
+    caseFormRemark,
+    caseFormStatus,
+    session,
+    projectId,
+    contactNumber,
+    caseListModalOpen,
+    loadCaseList,
+    fetchCaseStatus,
+  ]);
 
   // Picks a file and stores it as a pending preview — does NOT upload or send yet.
   const handlePickAttachment = async (kind: AttachmentKind) => {
@@ -745,7 +970,9 @@ export function ChatRoomScreen({
 
   const initialLetter = (contactName || contactNumber || 'C').trim().charAt(0).toUpperCase();
   const isUploading = uploadingKind !== null;
-  const canSend = !sending && !isUploading && (!!pendingAttachment || !!inputText.trim());
+  // Chat is locked for sending when it's assigned to someone else (mirrors web app Conversation.js behaviour)
+  const isLockedByAssignment = isAssigned && !assignmentInfo?.assigned_to_me;
+  const canSend = !sending && !isUploading && !isLockedByAssignment && (!!pendingAttachment || !!inputText.trim());
 
   return (
     <Animated.View style={[styles.safe, { backgroundColor: theme.canvas, paddingBottom: keyboardHeightAnim }]}>
@@ -765,11 +992,295 @@ export function ChatRoomScreen({
         </View>
 
         <View style={styles.headerRightActions}>
-          <ScalePressable style={styles.headerIconBtn} hitSlop={8}>
-            <Text style={[styles.headerIcon, { color: theme.ink }]}>⋮</Text>
+          <ScalePressable
+            style={styles.headerIconBtn}
+            hitSlop={8}
+            onPress={() => setHeaderMenuOpen((open) => !open)}
+          >
+            <MoreVertical size={20} color={theme.ink} />
           </ScalePressable>
         </View>
       </FadeInView>
+
+      {/* Header dropdown: Chat Assign + Case (same two actions as the web app's ⋮ menu) */}
+      <Modal
+        visible={headerMenuOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setHeaderMenuOpen(false)}
+      >
+        <Pressable style={styles.menuBackdrop} onPress={() => setHeaderMenuOpen(false)}>
+          <View style={[styles.headerDropdown, { backgroundColor: theme.header, borderColor: theme.border }]}>
+            <ScalePressable style={styles.headerDropdownItem} onPress={openAssignModal}>
+              <View style={[styles.headerDropdownIconWrap, { backgroundColor: theme.inputBg }]}>
+                {isAssigned ? (
+                  <UserCheck size={18} color={theme.emerald} />
+                ) : (
+                  <UserPlus size={18} color={theme.emerald} />
+                )}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.headerDropdownLabel, { color: theme.ink }]}>Chat Assign</Text>
+                <Text style={[styles.headerDropdownSub, { color: theme.muted }]} numberOfLines={1}>
+                  {isAssigned ? assignedUserName : 'Unassigned'}
+                </Text>
+              </View>
+            </ScalePressable>
+
+            <View style={[styles.headerDropdownDivider, { backgroundColor: theme.border }]} />
+
+            <ScalePressable style={styles.headerDropdownItem} onPress={openCaseListModal}>
+              <View style={[styles.headerDropdownIconWrap, { backgroundColor: theme.inputBg }]}>
+                {(caseStatus ?? 0) > 0 ? (
+                  <AlertCircle size={18} color="#D97706" />
+                ) : (
+                  <CheckCircle2 size={18} color={theme.emerald} />
+                )}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.headerDropdownLabel, { color: theme.ink }]}>Case</Text>
+                <Text style={[styles.headerDropdownSub, { color: theme.muted }]} numberOfLines={1}>
+                  {caseStatusLoading
+                    ? 'Loading…'
+                    : (caseStatus ?? 0) > 0
+                      ? `Open (${caseStatus})`
+                      : caseStatus === 0
+                        ? 'Closed'
+                        : '—'}
+                </Text>
+              </View>
+            </ScalePressable>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Chat Assign modal: unassign (if assigned to me) + list of agents to assign to */}
+      <Modal
+        visible={assignModalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAssignModalOpen(false)}
+      >
+        <Pressable style={styles.sheetBackdrop} onPress={() => setAssignModalOpen(false)}>
+          <Pressable style={[styles.sheet, { backgroundColor: theme.header }]} onPress={() => {}}>
+            <View style={styles.sheetHeader}>
+              <Text style={[styles.sheetTitle, { color: theme.ink }]}>Assign chat</Text>
+              <ScalePressable onPress={() => setAssignModalOpen(false)} hitSlop={8}>
+                <X size={20} color={theme.muted} />
+              </ScalePressable>
+            </View>
+            <Text style={[styles.sheetSubtitle, { color: theme.muted }]}>
+              Current: {isAssigned ? assignedUserName : 'Unassigned'}
+            </Text>
+
+            {isAssigned && (
+              <ScalePressable
+                style={[styles.unassignRow, { borderColor: '#FCA5A5' }]}
+                onPress={() => handleAssignChange('unassign')}
+                disabled={assignActionLoading}
+              >
+                <Text style={styles.unassignText}>Unassign chat</Text>
+              </ScalePressable>
+            )}
+
+            <ScrollView style={{ maxHeight: 320, marginTop: 10 }}>
+              {assignmentUsers.length === 0 ? (
+                <Text style={[styles.emptyHint, { color: theme.muted }]}>No agents found for assignment.</Text>
+              ) : (
+                assignmentUsers.map((user) => {
+                  const active = assignedUsername === user.username;
+                  return (
+                    <ScalePressable
+                      key={user.username}
+                      style={[styles.agentRow, { borderColor: theme.border }, active && { opacity: 0.6 }]}
+                      onPress={() => !active && handleAssignChange('assign', user.username)}
+                      disabled={assignActionLoading || active}
+                    >
+                      <View style={[styles.agentAvatar, { backgroundColor: theme.inputBg }]}>
+                        <Text style={{ color: theme.ink, fontWeight: '700' }}>
+                          {(user.name || user.username || '?').charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.agentName, { color: theme.ink }]}>
+                          {user.name || user.username || 'Unknown'}{user.is_me ? ' (You)' : ''}
+                        </Text>
+                        <Text style={[styles.agentSub, { color: theme.muted }]} numberOfLines={1}>
+                          {user.email || user.mobile || user.username}
+                        </Text>
+                      </View>
+                      {active ? (
+                        <Check size={18} color={theme.emerald} />
+                      ) : (
+                        <UserPlus size={18} color={theme.emerald} />
+                      )}
+                    </ScalePressable>
+                  );
+                })
+              )}
+            </ScrollView>
+
+            {assignActionLoading && (
+              <ActivityIndicator style={{ marginTop: 10 }} color={theme.emerald} />
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Case list modal */}
+      <Modal
+        visible={caseListModalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setCaseListModalOpen(false)}
+      >
+        <Pressable style={styles.sheetBackdrop} onPress={() => setCaseListModalOpen(false)}>
+          <Pressable style={[styles.sheet, { backgroundColor: theme.header }]} onPress={() => {}}>
+            <View style={styles.sheetHeader}>
+              <Text style={[styles.sheetTitle, { color: theme.ink }]}>Cases</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                <ScalePressable onPress={openCaseCreateForm} hitSlop={8}>
+                  <Plus size={20} color={theme.emerald} />
+                </ScalePressable>
+                <ScalePressable onPress={() => setCaseListModalOpen(false)} hitSlop={8}>
+                  <X size={20} color={theme.muted} />
+                </ScalePressable>
+              </View>
+            </View>
+
+            {caseListLoading ? (
+              <ActivityIndicator style={{ marginTop: 24 }} color={theme.emerald} />
+            ) : (
+              <ScrollView style={{ maxHeight: 380, marginTop: 6 }}>
+                {caseList.length === 0 ? (
+                  <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+                    <Briefcase size={28} color={theme.muted} />
+                    <Text style={[styles.emptyHint, { color: theme.muted, marginTop: 8 }]}>No cases for this chat.</Text>
+                    <ScalePressable
+                      style={[styles.createCaseBtn, { backgroundColor: theme.emerald }]}
+                      onPress={openCaseCreateForm}
+                    >
+                      <Text style={styles.createCaseBtnText}>Create case</Text>
+                    </ScalePressable>
+                  </View>
+                ) : (
+                  caseList.map((row, index) => {
+                    const isOpen = row.status === true || row.status === '1';
+                    return (
+                      <ScalePressable
+                        key={row.id ?? row.case_id ?? index}
+                        style={[styles.caseRow, { borderColor: theme.border }]}
+                        onPress={() => openCaseEditForm(row)}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.agentName, { color: theme.ink }]} numberOfLines={1}>
+                            {row.name || 'Untitled case'}
+                          </Text>
+                          {!!row.remark && (
+                            <Text style={[styles.agentSub, { color: theme.muted }]} numberOfLines={1}>
+                              {row.remark}
+                            </Text>
+                          )}
+                        </View>
+                        <View
+                          style={[
+                            styles.caseBadge,
+                            { backgroundColor: isOpen ? '#FEF3C7' : '#D1FAE5' },
+                          ]}
+                        >
+                          <Text style={{ color: isOpen ? '#92400E' : '#065F46', fontSize: 12, fontWeight: '700' }}>
+                            {isOpen ? 'Open' : 'Closed'}
+                          </Text>
+                        </View>
+                        <Edit2 size={16} color={theme.muted} style={{ marginLeft: 10 }} />
+                      </ScalePressable>
+                    );
+                  })
+                )}
+              </ScrollView>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Create / edit case form */}
+      <Modal
+        visible={caseFormOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setCaseFormOpen(false)}
+      >
+        <Pressable style={styles.sheetBackdrop} onPress={() => setCaseFormOpen(false)}>
+          <Pressable style={[styles.sheet, { backgroundColor: theme.header }]} onPress={() => {}}>
+            <View style={styles.sheetHeader}>
+              <Text style={[styles.sheetTitle, { color: theme.ink }]}>
+                {caseFormMode === 'create' ? 'Create case' : 'Edit case'}
+              </Text>
+              <ScalePressable onPress={() => setCaseFormOpen(false)} hitSlop={8}>
+                <X size={20} color={theme.muted} />
+              </ScalePressable>
+            </View>
+
+            <Text style={[styles.fieldLabel, { color: theme.muted }]}>Name</Text>
+            <TextInput
+              style={[styles.formInput, { color: theme.ink, borderColor: theme.border, backgroundColor: theme.inputBg }]}
+              value={caseFormName}
+              onChangeText={setCaseFormName}
+              placeholder="Case name"
+              placeholderTextColor={theme.muted}
+            />
+
+            <Text style={[styles.fieldLabel, { color: theme.muted, marginTop: 12 }]}>Remark</Text>
+            <TextInput
+              style={[
+                styles.formInput,
+                { color: theme.ink, borderColor: theme.border, backgroundColor: theme.inputBg, height: 80, textAlignVertical: 'top' },
+              ]}
+              value={caseFormRemark}
+              onChangeText={setCaseFormRemark}
+              placeholder="Remark"
+              placeholderTextColor={theme.muted}
+              multiline
+            />
+
+            <Text style={[styles.fieldLabel, { color: theme.muted, marginTop: 12 }]}>Status</Text>
+            <View style={styles.statusToggleRow}>
+              <Pressable
+                style={[
+                  styles.statusToggleBtn,
+                  { borderColor: theme.border },
+                  caseFormStatus === 'open' && { backgroundColor: '#F59E0B', borderColor: '#F59E0B' },
+                ]}
+                onPress={() => setCaseFormStatus('open')}
+              >
+                <Text style={{ color: caseFormStatus === 'open' ? '#FFFFFF' : theme.ink, fontWeight: '600' }}>Open</Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.statusToggleBtn,
+                  { borderColor: theme.border },
+                  caseFormStatus === 'closed' && { backgroundColor: '#10B981', borderColor: '#10B981' },
+                ]}
+                onPress={() => setCaseFormStatus('closed')}
+              >
+                <Text style={{ color: caseFormStatus === 'closed' ? '#FFFFFF' : theme.ink, fontWeight: '600' }}>Closed</Text>
+              </Pressable>
+            </View>
+
+            <ScalePressable
+              style={[styles.submitBtn, { backgroundColor: theme.emerald }]}
+              onPress={submitCaseForm}
+              disabled={caseFormSubmitting}
+            >
+              {caseFormSubmitting ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.submitBtnText}>{caseFormMode === 'create' ? 'Create' : 'Save'}</Text>
+              )}
+            </ScalePressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Message List area */}
       <View style={[styles.chatBackground, { backgroundColor: theme.chatBg }]}>
@@ -909,47 +1420,69 @@ export function ChatRoomScreen({
         </FadeInView>
       )}
 
-      {/* Input Bar */}
-      <View style={[styles.inputContainer, { backgroundColor: theme.inputContainerBg, borderTopWidth: 1, borderTopColor: theme.border }]}>
+      {/* Assignment Lock Banner — replaces the input bar when chat is assigned to someone else */}
+      {isLockedByAssignment ? (
         <ScalePressable
-          style={styles.attachButton}
-          hitSlop={8}
-          disabled={isUploading}
-          onPress={() => setAttachMenuOpen(open => !open)}
+          onPress={openAssignModal}
+          style={[styles.assignedLockBanner, { backgroundColor: theme.surface, borderTopColor: theme.border }]}
+          activeOpacity={0.85}
         >
-          {attachMenuOpen ? (
-            <X size={22} color={theme.emerald} />
-          ) : (
-            <Plus size={22} color={theme.emerald} />
-          )}
+          <View style={styles.assignedLockIcon}>
+            <UserCheck size={18} color="#D97706" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.assignedLockTitle, { color: theme.ink }]}>
+              Chat Assigned to {assignedUserName}
+            </Text>
+            <Text style={[styles.assignedLockSub, { color: theme.muted }]}>
+              Request reassignment to send messages.
+            </Text>
+          </View>
+          <Text style={[styles.assignedLockChevron, { color: theme.muted }]}>›</Text>
         </ScalePressable>
+      ) : (
+        /* Input Bar */
+        <View style={[styles.inputContainer, { backgroundColor: theme.inputContainerBg, borderTopWidth: 1, borderTopColor: theme.border }]}>
+          <ScalePressable
+            style={styles.attachButton}
+            hitSlop={8}
+            disabled={isUploading}
+            onPress={() => setAttachMenuOpen(open => !open)}
+          >
+            {attachMenuOpen ? (
+              <X size={22} color={theme.emerald} />
+            ) : (
+              <Plus size={22} color={theme.emerald} />
+            )}
+          </ScalePressable>
 
-        <View style={[styles.inputPill, { backgroundColor: theme.inputBg }]}>
-          <TextInput
-            style={[styles.textInput, { color: theme.ink }]}
-            value={inputText}
-            onChangeText={setInputText}
-            placeholder={pendingAttachment ? 'Add a caption…' : 'Message'}
-            placeholderTextColor={theme.muted}
-            multiline
-          />
+          <View style={[styles.inputPill, { backgroundColor: theme.inputBg }]}>
+            <TextInput
+              style={[styles.textInput, { color: theme.ink }]}
+              value={inputText}
+              onChangeText={setInputText}
+              placeholder={pendingAttachment ? 'Add a caption…' : 'Message'}
+              placeholderTextColor={theme.muted}
+              multiline
+            />
+          </View>
+          <ScalePressable
+            style={[
+              styles.sendButton,
+              { backgroundColor: theme.emerald },
+              !canSend && { backgroundColor: theme.muted },
+            ]}
+            onPress={handleSend}
+            disabled={!canSend}
+          >
+            {sending || isUploading ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={styles.sendButtonIcon}>➤</Text>
+            )}
+          </ScalePressable>
         </View>
-        <ScalePressable
-          style={[
-            styles.sendButton,
-            { backgroundColor: theme.emerald },
-            !canSend && { backgroundColor: theme.muted },
-          ]}
-          onPress={handleSend}
-          disabled={!canSend}
-        >
-          {sending || isUploading ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <Text style={styles.sendButtonIcon}>➤</Text>
-          )}
-        </ScalePressable>
-      </View>
+      )}
 
       <TemplateModal
         visible={templateMenuOpen}
@@ -1085,6 +1618,171 @@ const styles = StyleSheet.create({
     textAlignVertical: 'center',
     includeFontPadding: false,
     lineHeight: 36,
+  },
+  // ── Header dropdown menu (Chat Assign / Case) ──────────────────────
+  menuBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.15)',
+  },
+  headerDropdown: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 92 : 68,
+    right: 12,
+    width: 240,
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingVertical: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  headerDropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  headerDropdownIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerDropdownLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  headerDropdownSub: {
+    fontSize: 12,
+    marginTop: 1,
+  },
+  headerDropdownDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: 8,
+  },
+  // ── Bottom sheets (assign modal / case list / case form) ───────────
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 28,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sheetTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  sheetSubtitle: {
+    fontSize: 13,
+    marginTop: 4,
+  },
+  unassignRow: {
+    marginTop: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  unassignText: {
+    color: '#DC2626',
+    fontWeight: '700',
+  },
+  agentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 10,
+  },
+  agentAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  agentName: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  agentSub: {
+    fontSize: 12,
+    marginTop: 1,
+  },
+  emptyHint: {
+    fontSize: 13,
+    textAlign: 'center',
+    paddingVertical: 10,
+  },
+  caseRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  caseBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  createCaseBtn: {
+    marginTop: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 999,
+  },
+  createCaseBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  formInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+  },
+  statusToggleRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 8,
+  },
+  statusToggleBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  submitBtn: {
+    marginTop: 20,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  submitBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 15,
   },
   chatBackground: {
     flex: 1,
@@ -1350,6 +2048,36 @@ const styles = StyleSheet.create({
   },
   replyBannerMessage: {
     fontSize: 13,
+  },
+  // ── Assignment lock banner (shown instead of input bar when chat is assigned to someone else) ──
+  assignedLockBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    gap: 12,
+  },
+  assignedLockIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  assignedLockTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  assignedLockSub: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  assignedLockChevron: {
+    fontSize: 22,
+    lineHeight: 24,
+    fontWeight: '300',
   },
 });
 

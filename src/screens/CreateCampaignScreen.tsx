@@ -5,6 +5,7 @@ import {
   FlatList,
   Image,
   Modal,
+  PermissionsAndroid,
   Platform,
   Pressable,
   ScrollView,
@@ -13,6 +14,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import Contacts from 'react-native-contacts';
 import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
 import Toast from 'react-native-toast-message';
 import {
@@ -34,6 +36,10 @@ import {
   Users,
   X,
   Search,
+  Smartphone,
+  RefreshCw,
+  CheckSquare,
+  Square,
 } from 'lucide-react-native';
 import {
   pick,
@@ -85,13 +91,22 @@ export function CreateCampaignScreen({
   const [uploadingMedia, setUploadingMedia] = useState(false);
 
   // Audience / Recipients state
-  const [recipientMode, setRecipientMode] = useState<'manual' | 'contacts' | 'csv'>('manual');
+  const [recipientMode, setRecipientMode] = useState<'manual' | 'contacts' | 'device' | 'csv'>('manual');
   const [manualNumbersText, setManualNumbersText] = useState('');
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [contactsList, setContactsList] = useState<any[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
   const [contactsSearch, setContactsSearch] = useState('');
   const [contactsModalOpen, setContactsModalOpen] = useState(false);
+  
+  // Device / SIM Contacts state
+  const [selectedDeviceContacts, setSelectedDeviceContacts] = useState<string[]>([]);
+  const [deviceContactsList, setDeviceContactsList] = useState<Array<{ id: string; name: string; number: string }>>([]);
+  const [loadingDeviceContacts, setLoadingDeviceContacts] = useState(false);
+  const [deviceContactsSearch, setDeviceContactsSearch] = useState('');
+  const [deviceContactsModalOpen, setDeviceContactsModalOpen] = useState(false);
+  const [devicePermissionDenied, setDevicePermissionDenied] = useState(false);
+
   const [csvFileUrl, setCsvFileUrl] = useState('');
   const [csvFileName, setCsvFileName] = useState('');
   const [uploadingCsv, setUploadingCsv] = useState(false);
@@ -111,11 +126,15 @@ export function CreateCampaignScreen({
         setContactsModalOpen(false);
         return true;
       }
+      if (deviceContactsModalOpen) {
+        setDeviceContactsModalOpen(false);
+        return true;
+      }
       onBack();
       return true;
     });
     return () => sub.remove();
-  }, [onBack, templatePickerOpen, contactsModalOpen]);
+  }, [onBack, templatePickerOpen, contactsModalOpen, deviceContactsModalOpen]);
 
   // Load templates
   const loadTemplates = useCallback(async () => {
@@ -131,7 +150,7 @@ export function CreateCampaignScreen({
     }
   }, [projectId, session]);
 
-  // Load contacts list
+  // Load workspace contacts list
   const loadContacts = useCallback(async () => {
     setLoadingContacts(true);
     try {
@@ -145,6 +164,79 @@ export function CreateCampaignScreen({
     }
   }, [projectId, session]);
 
+  // Load device & SIM contacts
+  const loadDeviceContacts = useCallback(async () => {
+    setLoadingDeviceContacts(true);
+    setDevicePermissionDenied(false);
+    try {
+      let hasPermission = false;
+      if (Platform.OS === 'android') {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.READ_CONTACTS,
+          {
+            title: 'Contacts Permission',
+            message: 'OneChat needs access to your device contacts to broadcast campaigns to phone & SIM contacts.',
+            buttonPositive: 'Allow',
+            buttonNegative: 'Deny',
+          },
+        );
+        hasPermission = granted === PermissionsAndroid.RESULTS.GRANTED;
+      } else {
+        hasPermission = true;
+      }
+
+      if (!hasPermission) {
+        setDevicePermissionDenied(true);
+        Toast.show({
+          type: 'error',
+          text1: 'Permission Denied',
+          text2: 'Please allow contacts permission to import device / SIM contacts.',
+        });
+        return;
+      }
+
+      const raw = await Contacts.getAllWithoutPhotos();
+      const parsed: Array<{ id: string; name: string; number: string }> = [];
+      const seen = new Set<string>();
+
+      raw.forEach((c) => {
+        const fullName = [c.givenName, c.middleName, c.familyName]
+          .filter(Boolean)
+          .join(' ')
+          .trim() || c.displayName || 'Unnamed Contact';
+
+        if (Array.isArray(c.phoneNumbers)) {
+          c.phoneNumbers.forEach((pn) => {
+            const rawNum = pn.number || '';
+            const cleaned = rawNum.replace(/[^0-9+]/g, '');
+            if (cleaned.length >= 7) {
+              const key = `${fullName}-${cleaned}`;
+              if (!seen.has(key)) {
+                seen.add(key);
+                parsed.push({
+                  id: `${c.recordID || ''}-${pn.label || ''}-${cleaned}`,
+                  name: fullName,
+                  number: cleaned,
+                });
+              }
+            }
+          });
+        }
+      });
+
+      parsed.sort((a, b) => a.name.localeCompare(b.name));
+      setDeviceContactsList(parsed);
+    } catch (err: any) {
+      Toast.show({
+        type: 'error',
+        text1: 'Could not load contacts',
+        text2: err?.message || 'Failed to read contacts from device.',
+      });
+    } finally {
+      setLoadingDeviceContacts(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadTemplates();
   }, [loadTemplates]);
@@ -154,6 +246,12 @@ export function CreateCampaignScreen({
       loadContacts();
     }
   }, [contactsModalOpen, loadContacts]);
+
+  useEffect(() => {
+    if (deviceContactsModalOpen && deviceContactsList.length === 0) {
+      loadDeviceContacts();
+    }
+  }, [deviceContactsModalOpen, deviceContactsList.length, loadDeviceContacts]);
 
   // When user selects a template
   const handleSelectTemplate = (template: any) => {
@@ -283,9 +381,10 @@ export function CreateCampaignScreen({
   const totalRecipientsCount = useMemo(() => {
     if (recipientMode === 'manual') return parsedManualNumbers.length;
     if (recipientMode === 'contacts') return selectedContacts.length;
+    if (recipientMode === 'device') return selectedDeviceContacts.length;
     if (recipientMode === 'csv') return csvFileUrl ? 'File uploaded' : 0;
     return 0;
-  }, [recipientMode, parsedManualNumbers, selectedContacts, csvFileUrl]);
+  }, [recipientMode, parsedManualNumbers, selectedContacts, selectedDeviceContacts, csvFileUrl]);
 
   // Formatted components for template payload
   const formattedComponents = useMemo(() => {
@@ -384,6 +483,12 @@ export function CreateCampaignScreen({
         return;
       }
       numbers = selectedContacts;
+    } else if (recipientMode === 'device') {
+      if (selectedDeviceContacts.length === 0) {
+        Toast.show({ type: 'error', text1: 'Device Contacts Required', text2: 'Select at least one contact from your device / SIM.' });
+        return;
+      }
+      numbers = selectedDeviceContacts;
     } else if (recipientMode === 'csv') {
       if (!csvFileUrl) {
         Toast.show({ type: 'error', text1: 'File Required', text2: 'Please upload a recipients CSV file.' });
@@ -444,6 +549,25 @@ export function CreateCampaignScreen({
       (c.number || c.phone || '').includes(lower)
     );
   }, [contactsList, contactsSearch]);
+
+  const filteredDeviceContacts = useMemo(() => {
+    if (!deviceContactsSearch.trim()) return deviceContactsList;
+    const lower = deviceContactsSearch.toLowerCase();
+    return deviceContactsList.filter((c) =>
+      c.name.toLowerCase().includes(lower) || c.number.includes(lower)
+    );
+  }, [deviceContactsList, deviceContactsSearch]);
+
+  const handleToggleSelectAllDeviceContacts = () => {
+    const visibleNumbers = filteredDeviceContacts.map((c) => c.number);
+    if (visibleNumbers.length === 0) return;
+    const allSelected = visibleNumbers.every((n) => selectedDeviceContacts.includes(n));
+    if (allSelected) {
+      setSelectedDeviceContacts((prev) => prev.filter((n) => !visibleNumbers.includes(n)));
+    } else {
+      setSelectedDeviceContacts((prev) => Array.from(new Set([...prev, ...visibleNumbers])));
+    }
+  };
 
   return (
     <View style={[styles.safe, { backgroundColor: theme.canvas }]}>
@@ -639,7 +763,7 @@ export function CreateCampaignScreen({
                   style={[styles.audienceTab, recipientMode === 'manual' && { backgroundColor: theme.surface }]}
                 >
                   <Text style={[styles.audienceTabText, { color: recipientMode === 'manual' ? theme.emerald : theme.muted }]}>
-                    Phone Numbers
+                    Numbers
                   </Text>
                 </Pressable>
                 <Pressable
@@ -650,6 +774,17 @@ export function CreateCampaignScreen({
                   style={[styles.audienceTab, recipientMode === 'contacts' && { backgroundColor: theme.surface }]}
                 >
                   <Text style={[styles.audienceTabText, { color: recipientMode === 'contacts' ? theme.emerald : theme.muted }]}>
+                    Workspace
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    setRecipientMode('device');
+                    if (deviceContactsList.length === 0) loadDeviceContacts();
+                  }}
+                  style={[styles.audienceTab, recipientMode === 'device' && { backgroundColor: theme.surface }]}
+                >
+                  <Text style={[styles.audienceTabText, { color: recipientMode === 'device' ? theme.emerald : theme.muted }]}>
                     Contacts
                   </Text>
                 </Pressable>
@@ -658,7 +793,7 @@ export function CreateCampaignScreen({
                   style={[styles.audienceTab, recipientMode === 'csv' && { backgroundColor: theme.surface }]}
                 >
                   <Text style={[styles.audienceTabText, { color: recipientMode === 'csv' ? theme.emerald : theme.muted }]}>
-                    CSV Upload
+                    CSV
                   </Text>
                 </Pressable>
               </View>
@@ -687,7 +822,7 @@ export function CreateCampaignScreen({
                 </View>
               )}
 
-              {/* Mode 2: Select from Contacts */}
+              {/* Mode 2: Select from Workspace Contacts */}
               {recipientMode === 'contacts' && (
                 <View style={styles.audienceBody}>
                   <ScalePressable
@@ -697,15 +832,52 @@ export function CreateCampaignScreen({
                     <UserCheck size={18} color={theme.emerald} />
                     <Text style={[styles.contactSelectText, { color: theme.ink }]}>
                       {selectedContacts.length > 0
-                        ? `${selectedContacts.length} Contacts Selected`
+                        ? `${selectedContacts.length} Workspace Contacts Selected`
                         : 'Select from workspace contacts'}
                     </Text>
                     <Text style={[styles.selectAction, { color: theme.emerald }]}>Choose ›</Text>
                   </ScalePressable>
+                  {selectedContacts.length > 0 && (
+                    <View style={styles.countBadgeRow}>
+                      <Users size={14} color={theme.emerald} />
+                      <Text style={[styles.countBadgeText, { color: theme.emerald }]}>
+                        {selectedContacts.length} recipient{selectedContacts.length === 1 ? '' : 's'} selected from workspace
+                      </Text>
+                    </View>
+                  )}
                 </View>
               )}
 
-              {/* Mode 3: Upload CSV */}
+              {/* Mode 3: Select from Device / SIM Contacts */}
+              {recipientMode === 'device' && (
+                <View style={styles.audienceBody}>
+                  <ScalePressable
+                    onPress={() => {
+                      setDeviceContactsModalOpen(true);
+                      if (deviceContactsList.length === 0) loadDeviceContacts();
+                    }}
+                    style={[styles.contactSelectBtn, { backgroundColor: theme.canvas, borderColor: theme.border }]}
+                  >
+                    <Smartphone size={18} color={theme.emerald} />
+                    <Text style={[styles.contactSelectText, { color: theme.ink }]}>
+                      {selectedDeviceContacts.length > 0
+                        ? `${selectedDeviceContacts.length} Device & SIM Contacts Selected`
+                        : 'Import from Phone / SIM Contacts'}
+                    </Text>
+                    <Text style={[styles.selectAction, { color: theme.emerald }]}>Choose ›</Text>
+                  </ScalePressable>
+                  {selectedDeviceContacts.length > 0 && (
+                    <View style={styles.countBadgeRow}>
+                      <Users size={14} color={theme.emerald} />
+                      <Text style={[styles.countBadgeText, { color: theme.emerald }]}>
+                        {selectedDeviceContacts.length} recipient{selectedDeviceContacts.length === 1 ? '' : 's'} selected from device / SIM
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Mode 4: Upload CSV */}
               {recipientMode === 'csv' && (
                 <View style={styles.audienceBody}>
                   {csvFileUrl ? (
@@ -964,6 +1136,148 @@ export function CreateCampaignScreen({
               style={[styles.doneBtn, { backgroundColor: theme.emerald }]}
             >
               <Text style={styles.doneBtnText}>Done ({selectedContacts.length} selected)</Text>
+            </ScalePressable>
+          </View>
+        </View>
+      </SlideUpModal>
+
+      {/* Device / SIM Contacts Multi-Select Modal */}
+      <SlideUpModal
+        visible={deviceContactsModalOpen}
+        onClose={() => setDeviceContactsModalOpen(false)}
+        maxHeight="92%"
+        contentStyle={{ height: '86%' }}
+      >
+        <View style={[styles.modalInner, { backgroundColor: theme.surface }]}>
+          {/* Header row with Select All */}
+          <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.modalTitle, { color: theme.ink }]}>Device & SIM Contacts</Text>
+              {deviceContactsList.length > 0 && (
+                <Text style={[{ fontSize: 11, color: theme.muted, marginTop: 2 }]}>
+                  {deviceContactsList.length} contacts found
+                </Text>
+              )}
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {deviceContactsList.length > 0 && (
+                <ScalePressable onPress={handleToggleSelectAllDeviceContacts} hitSlop={8}>
+                  <Text style={[{ fontSize: 12, fontWeight: '700', color: theme.emerald }]}>
+                    {filteredDeviceContacts.every((c) => selectedDeviceContacts.includes(c.number))
+                      ? 'Deselect All'
+                      : 'Select All'}
+                  </Text>
+                </ScalePressable>
+              )}
+              <Pressable onPress={() => setDeviceContactsModalOpen(false)} hitSlop={8}>
+                <X size={22} color={theme.muted} />
+              </Pressable>
+            </View>
+          </View>
+
+          {/* Search */}
+          <View style={[styles.searchBox, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
+            <Search size={18} color={theme.muted} />
+            <TextInput
+              value={deviceContactsSearch}
+              onChangeText={setDeviceContactsSearch}
+              placeholder="Search contacts by name or number..."
+              placeholderTextColor={theme.muted}
+              style={[styles.searchInput, { color: theme.ink }]}
+            />
+            {deviceContactsSearch.length > 0 && (
+              <Pressable onPress={() => setDeviceContactsSearch('')} hitSlop={8}>
+                <X size={16} color={theme.muted} />
+              </Pressable>
+            )}
+          </View>
+
+          {/* Permission denied state */}
+          {devicePermissionDenied ? (
+            <View style={styles.centerBox}>
+              <Smartphone size={40} color={theme.border} />
+              <Text style={[styles.emptyModalText, { color: theme.muted, marginTop: 12 }]}>
+                Contacts permission was denied.
+              </Text>
+              <ScalePressable
+                onPress={loadDeviceContacts}
+                style={[styles.doneBtn, { backgroundColor: theme.emerald, marginTop: 16, paddingHorizontal: 24 }]}
+              >
+                <Text style={styles.doneBtnText}>Grant Permission & Retry</Text>
+              </ScalePressable>
+            </View>
+          ) : loadingDeviceContacts ? (
+            <View style={styles.centerBox}>
+              <ActivityIndicator size="large" color={theme.emerald} />
+              <Text style={[styles.emptyModalText, { color: theme.muted, marginTop: 10 }]}>
+                Loading contacts from device...
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={filteredDeviceContacts}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={{ padding: 16 }}
+              initialNumToRender={30}
+              maxToRenderPerBatch={30}
+              windowSize={10}
+              getItemLayout={(_, index) => ({ length: 54, offset: 54 * index, index })}
+              ListEmptyComponent={
+                <View style={styles.centerBox}>
+                  <Smartphone size={36} color={theme.border} />
+                  <Text style={[styles.emptyModalText, { color: theme.muted, marginTop: 10 }]}>
+                    {deviceContactsSearch
+                      ? 'No matching contacts found'
+                      : 'No contacts found on device / SIM'}
+                  </Text>
+                  {!deviceContactsSearch && (
+                    <ScalePressable onPress={loadDeviceContacts} style={{ marginTop: 16 }}>
+                      <Text style={[{ fontSize: 13, fontWeight: '700', color: theme.emerald }]}>
+                        Retry
+                      </Text>
+                    </ScalePressable>
+                  )}
+                </View>
+              }
+              renderItem={({ item }) => {
+                const isSelected = selectedDeviceContacts.includes(item.number);
+                return (
+                  <Pressable
+                    onPress={() => {
+                      if (isSelected) {
+                        setSelectedDeviceContacts((prev) => prev.filter((n) => n !== item.number));
+                      } else {
+                        setSelectedDeviceContacts((prev) => [...prev, item.number]);
+                      }
+                    }}
+                    style={[styles.contactItem, { borderColor: theme.border }]}
+                  >
+                    <View
+                      style={[
+                        styles.checkbox,
+                        isSelected && { backgroundColor: theme.emerald, borderColor: theme.emerald },
+                        { borderColor: theme.border },
+                      ]}
+                    >
+                      {isSelected && <Check size={14} color="#FFF" />}
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={[styles.contactName, { color: theme.ink }]}>{item.name}</Text>
+                      <Text style={[styles.contactNumber, { color: theme.muted }]}>{item.number}</Text>
+                    </View>
+                    <Smartphone size={14} color={theme.muted} />
+                  </Pressable>
+                );
+              }}
+            />
+          )}
+
+          <View style={[styles.modalFooter, { borderTopColor: theme.border }]}>
+            <ScalePressable
+              onPress={() => setDeviceContactsModalOpen(false)}
+              style={[styles.doneBtn, { backgroundColor: theme.emerald }]}
+            >
+              <Text style={styles.doneBtnText}>Done ({selectedDeviceContacts.length} selected)</Text>
             </ScalePressable>
           </View>
         </View>
