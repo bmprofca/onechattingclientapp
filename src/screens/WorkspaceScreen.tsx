@@ -3,7 +3,7 @@ import { BackHandler, Modal, Pressable, ScrollView, StyleSheet, Text, View, Anim
 import { ArrowLeftRight, Home, MessageCircle, Megaphone, User, Wallet, MoreVertical, Briefcase, Info, HelpCircle, Brain, Settings, ReceiptText, QrCode, FolderOpen } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { getAccountProfile } from '../api/auth';
-import { getProjectMeta } from '../api/workspace';
+import { getProjectMeta, getUnreadCount } from '../api/workspace';
 import { Session, loadSession, saveSession } from '../services/session';
 import { useTheme } from '../theme/theme';
 import { CampaignsScreen } from './CampaignsScreen';
@@ -91,6 +91,7 @@ export function WorkspaceScreen({
   const [projectQrModalOpen, setProjectQrModalOpen] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
   const [projectProfileImage, setProjectProfileImage] = useState<string>('');
+  const [totalUnreadCount, setTotalUnreadCount] = useState<number>(0);
 
   useEffect(() => {
     if (session.projects) {
@@ -134,6 +135,42 @@ export function WorkspaceScreen({
 
   const handleBalanceUpdated = useCallback((bal: number) => {
     setWalletBalance(bal);
+  }, []);
+
+  // ---- Total unread count, used for the "Chats" tab badge ----
+  const loadUnreadCount = useCallback(async () => {
+    if (!hasProject || !projectId) {
+      setTotalUnreadCount(0);
+      return;
+    }
+    try {
+      const res = await getUnreadCount(apiSession, projectId);
+      const count =
+        (res as any)?.data?.count ??
+        (res as any)?.count ??
+        (res as any)?.data?.unread_count ??
+        (res as any)?.unread_count ??
+        0;
+      setTotalUnreadCount(Number(count) || 0);
+    } catch {
+      // ignore — badge just won't update this cycle
+    }
+  }, [apiSession, hasProject, projectId]);
+
+  useEffect(() => {
+    loadUnreadCount();
+  }, [loadUnreadCount]);
+
+  useEffect(() => {
+    // Live updates: server pushes the new total whenever a message is
+    // read/received, so the badge stays correct even while sitting on
+    // a different tab (e.g. Dashboard) than the chat list itself.
+    const unsub = socketManager.onTotalUnreadCount((data) => {
+      if (typeof data?.count === 'number') {
+        setTotalUnreadCount(data.count);
+      }
+    });
+    return () => unsub();
   }, []);
 
   useEffect(() => {
@@ -563,17 +600,32 @@ export function WorkspaceScreen({
         {tabs.map(tab => {
           const Icon = tab.icon;
           const active = page === tab.key;
+          const showBadge = tab.key === 'inbox' && totalUnreadCount > 0;
           return (
             <Pressable
               key={tab.key}
               accessibilityRole="button"
-              accessibilityLabel={tab.label}
+              accessibilityLabel={showBadge ? `${tab.label}, ${totalUnreadCount} unread` : tab.label}
               onPress={() => setPage(tab.key)}
               style={styles.tabItem}
               hitSlop={4}
             >
-              <View style={[styles.tabPill]}>
-                <Icon size={22} color={active ? theme.emerald : theme.ink} strokeWidth={active ? 2.5 : 2} />
+              <View
+                style={[
+                  styles.tabPill,
+                  active && {
+                    backgroundColor: theme.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(11, 205, 21, 0.09)',borderRadius:12
+                  },
+                ]}
+              >
+                <View style={styles.tabIconWrap}>
+                  <Icon size={22} color={active ? theme.emerald : theme.ink} strokeWidth={active ? 2.5 : 2} />
+                  {showBadge && (
+                    <View style={[styles.tabBadge, { backgroundColor: theme.emerald, borderColor: theme.header }]}>
+                      <Text style={styles.tabBadgeText}>{totalUnreadCount > 99 ? '99+' : totalUnreadCount}</Text>
+                    </View>
+                  )}
+                </View>
                 <Text style={[styles.tabLabel, { color: active ? theme.emerald : theme.ink }, active && styles.tabLabelActive]}>
                   {tab.label}
                 </Text>
@@ -764,6 +816,26 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 16,
     minWidth: 64,
+  },
+  tabIconWrap: {
+    position: 'relative',
+  },
+  tabBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -9,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+  },
+  tabBadgeText: {
+    color: '#FFF',
+    fontSize: 9,
+    fontWeight: '800',
   },
   tabLabel: { fontSize: 11, fontWeight: '600', marginTop: 2 },
   tabLabelActive: { fontWeight: '800' },

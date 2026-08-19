@@ -4,6 +4,7 @@ import {
   Alert,
   FlatList,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -12,6 +13,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import {
   ArrowLeft,
   Calendar,
@@ -60,6 +62,8 @@ const INITIAL_FORM = {
   qr_id: '',
 };
 
+type DateFieldKey = 'dob' | 'anniversary';
+
 export function ScannedUsersScreen({
   projectId,
   session,
@@ -83,6 +87,9 @@ export function ScannedUsersScreen({
   const [selectedUser, setSelectedUser] = useState<ScannedUser | null>(null);
   const [formData, setFormData] = useState(INITIAL_FORM);
   const [submitting, setSubmitting] = useState(false);
+
+  // Date picker state
+  const [activeDateField, setActiveDateField] = useState<DateFieldKey | null>(null);
 
   const loadData = useCallback(async (search = searchTerm) => {
     if (!projectId) return;
@@ -222,6 +229,40 @@ export function ScannedUsersScreen({
     );
   };
 
+  // ----- Date picker helpers -----
+  const openDatePicker = (field: DateFieldKey) => {
+    setActiveDateField(field);
+  };
+
+  const closeDatePicker = () => {
+    setActiveDateField(null);
+  };
+
+  const handleDateValueChange = (event: any, selectedDate?: Date) => {
+    const field = activeDateField;
+    if (!field || !selectedDate) return;
+
+    const iso = selectedDate.toISOString().split('T')[0];
+    setFormData((prev) => ({ ...prev, [field]: iso }));
+
+    // Android's dialog picker closes itself after a value is picked.
+    if (Platform.OS === 'android') {
+      setActiveDateField(null);
+    }
+    // iOS spinner stays open until the user taps "Done".
+  };
+
+  const handleDateDismiss = () => {
+    setActiveDateField(null);
+  };
+
+  const formatDateLabel = (value: string) => {
+    if (!value) return '';
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return value;
+    return d.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+
   const renderUserCard = ({ item, index }: { item: ScannedUser; index: number }) => {
     const initials = (item.name || 'U')
       .split(' ')
@@ -344,77 +385,89 @@ export function ScannedUsersScreen({
           <Text style={[styles.headerTitle, { color: theme.ink }]}>Scanned Users</Text>
           <Text style={[styles.headerSubtitle, { color: theme.muted }]}>{totalCount} captured profiles</Text>
         </View>
-        <View style={styles.headerRightActions}>
-          <Pressable onPress={openAddModal} style={[styles.addBtn, { backgroundColor: theme.emerald }]} hitSlop={6}>
-            <Plus size={18} color="#FFF" />
-          </Pressable>
-        </View>
       </View>
 
-      {/* Search & Stats Bar */}
-      <View style={styles.searchSection}>
-        <View style={[styles.searchInputWrap, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-          <Search size={16} color={theme.muted} />
-          <TextInput
-            value={searchTerm}
-            onChangeText={setSearchTerm}
-            onSubmitEditing={handleSearch}
-            placeholder="Search name, phone, tags..."
-            placeholderTextColor={theme.muted}
-            style={[styles.searchInput, { color: theme.ink }]}
-          />
-          {!!searchTerm && (
-            <Pressable
-              onPress={() => {
-                setSearchTerm('');
-                loadData('');
-              }}
-              hitSlop={6}
-            >
-              <X size={16} color={theme.muted} />
-            </Pressable>
-          )}
-        </View>
-      </View>
-
-      {/* Main List */}
-      {loading && !refreshing ? (
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color={theme.emerald} />
-          <Text style={[styles.loadingText, { color: theme.muted }]}>Loading scanned users...</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={users}
-          keyExtractor={(item, index) => String(item.scan_id || item.id || index) + '-' + index}
-          renderItem={renderUserCard}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.emerald} />
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <View style={[styles.emptyIconWrap, { backgroundColor: theme.mint }]}>
-                <Users size={32} color={theme.emerald} />
-              </View>
-              <Text style={[styles.emptyTitle, { color: theme.ink }]}>No Scanned Users Found</Text>
-              <Text style={[styles.emptySubtitle, { color: theme.muted }]}>
-                {searchTerm
-                  ? 'No contacts matched your search query.'
-                  : 'Customers who scan your QR codes or whom you manually record will appear here.'}
-              </Text>
-              <ScalePressable
-                onPress={openAddModal}
-                style={[styles.emptyAddBtn, { backgroundColor: theme.emerald }]}
+      {/* Content area hosts the floating action button */}
+      <View style={styles.contentContainer}>
+        {/* Search & Stats Bar */}
+        <View style={styles.searchSection}>
+          <View style={[styles.searchInputWrap, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <Search size={16} color={theme.muted} />
+            <TextInput
+              value={searchTerm}
+              onChangeText={setSearchTerm}
+              onSubmitEditing={handleSearch}
+              placeholder="Search name, phone, tags..."
+              placeholderTextColor={theme.muted}
+              style={[styles.searchInput, { color: theme.ink }]}
+            />
+            {!!searchTerm && (
+              <Pressable
+                onPress={() => {
+                  setSearchTerm('');
+                  loadData('');
+                }}
+                hitSlop={6}
               >
-                <Plus size={16} color="#FFF" />
-                <Text style={styles.emptyAddBtnText}>Add First User</Text>
-              </ScalePressable>
-            </View>
-          }
-        />
-      )}
+                <X size={16} color={theme.muted} />
+              </Pressable>
+            )}
+          </View>
+        </View>
+
+        {/* Main List */}
+        {loading && !refreshing ? (
+          <View style={styles.centerContainer}>
+            <ActivityIndicator size="large" color={theme.emerald} />
+            <Text style={[styles.loadingText, { color: theme.muted }]}>Loading scanned users...</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={users}
+            keyExtractor={(item, index) => String(item.scan_id || item.id || index) + '-' + index}
+            renderItem={renderUserCard}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.emerald} />
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <View style={[styles.emptyIconWrap, { backgroundColor: theme.mint }]}>
+                  <Users size={32} color={theme.emerald} />
+                </View>
+                <Text style={[styles.emptyTitle, { color: theme.ink }]}>No Scanned Users Found</Text>
+                <Text style={[styles.emptySubtitle, { color: theme.muted }]}>
+                  {searchTerm
+                    ? 'No contacts matched your search query.'
+                    : 'Customers who scan your QR codes or whom you manually record will appear here.'}
+                </Text>
+                <ScalePressable
+                  onPress={openAddModal}
+                  style={[styles.emptyAddBtn, { backgroundColor: theme.emerald }]}
+                >
+                  <Plus size={16} color="#FFF" />
+                  <Text style={styles.emptyAddBtnText}>Add First User</Text>
+                </ScalePressable>
+              </View>
+            }
+          />
+        )}
+
+        {/* WhatsApp-style Floating Action Button */}
+        <ScalePressable
+          onPress={openAddModal}
+          style={[
+            styles.fab,
+            {
+              backgroundColor: theme.emerald,
+              shadowColor: theme.isDark ? '#000' : '#0F5132',
+            },
+          ]}
+        >
+          <Plus size={26} color="#FFF" strokeWidth={2.5} />
+        </ScalePressable>
+      </View>
 
       {/* Add / Edit Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={() => setModalVisible(false)}>
@@ -470,24 +523,66 @@ export function ScannedUsersScreen({
 
               <View style={styles.formRow}>
                 <View style={styles.halfCol}>
-                  <Text style={[styles.inputLabel, { color: theme.ink }]}>DOB (YYYY-MM-DD)</Text>
-                  <TextInput
-                    value={formData.dob}
-                    onChangeText={(text) => setFormData((prev) => ({ ...prev, dob: text }))}
-                    placeholder="1995-05-15"
-                    placeholderTextColor={theme.muted}
-                    style={[styles.modalInput, { backgroundColor: theme.canvas, borderColor: theme.border, color: theme.ink }]}
-                  />
+                  <Text style={[styles.inputLabel, { color: theme.ink }]}>Date of Birth</Text>
+                  <Pressable
+                    onPress={() => openDatePicker('dob')}
+                    style={[
+                      styles.modalInput,
+                      styles.dateInput,
+                      { backgroundColor: theme.canvas, borderColor: theme.border },
+                    ]}
+                  >
+                    <Calendar size={16} color={theme.muted} />
+                    <Text
+                      style={[styles.dateInputText, { color: formData.dob ? theme.ink : theme.muted }]}
+                      numberOfLines={1}
+                    >
+                      {formData.dob ? formatDateLabel(formData.dob) : 'Select date'}
+                    </Text>
+                    {!!formData.dob && (
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setFormData((prev) => ({ ...prev, dob: '' }));
+                        }}
+                        hitSlop={8}
+                        style={styles.dateClearBtn}
+                      >
+                        <X size={14} color={theme.muted} />
+                      </Pressable>
+                    )}
+                  </Pressable>
                 </View>
                 <View style={styles.halfCol}>
                   <Text style={[styles.inputLabel, { color: theme.ink }]}>Anniversary</Text>
-                  <TextInput
-                    value={formData.anniversary}
-                    onChangeText={(text) => setFormData((prev) => ({ ...prev, anniversary: text }))}
-                    placeholder="2020-11-20"
-                    placeholderTextColor={theme.muted}
-                    style={[styles.modalInput, { backgroundColor: theme.canvas, borderColor: theme.border, color: theme.ink }]}
-                  />
+                  <Pressable
+                    onPress={() => openDatePicker('anniversary')}
+                    style={[
+                      styles.modalInput,
+                      styles.dateInput,
+                      { backgroundColor: theme.canvas, borderColor: theme.border },
+                    ]}
+                  >
+                    <Heart size={15} color="#EC4899" />
+                    <Text
+                      style={[styles.dateInputText, { color: formData.anniversary ? theme.ink : theme.muted }]}
+                      numberOfLines={1}
+                    >
+                      {formData.anniversary ? formatDateLabel(formData.anniversary) : 'Select date'}
+                    </Text>
+                    {!!formData.anniversary && (
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setFormData((prev) => ({ ...prev, anniversary: '' }));
+                        }}
+                        hitSlop={8}
+                        style={styles.dateClearBtn}
+                      >
+                        <X size={14} color={theme.muted} />
+                      </Pressable>
+                    )}
+                  </Pressable>
                 </View>
               </View>
 
@@ -550,6 +645,65 @@ export function ScannedUsersScreen({
           </View>
         </KeyboardAvoidView>
       </Modal>
+
+      {/* Android date picker: native dialog, closes itself on pick/dismiss */}
+      {Platform.OS === 'android' && activeDateField && (
+        <DateTimePicker
+          value={
+            formData[activeDateField] && !isNaN(new Date(formData[activeDateField]).getTime())
+              ? new Date(formData[activeDateField])
+              : new Date()
+          }
+          mode="date"
+          display="default"
+          maximumDate={new Date()}
+          onValueChange={handleDateValueChange}
+          onDismiss={handleDateDismiss}
+        />
+      )}
+
+      {/* iOS date picker: spinner in a bottom sheet with a Done button */}
+      {Platform.OS === 'ios' && (
+        <Modal
+          visible={!!activeDateField}
+          transparent
+          animationType="fade"
+          onRequestClose={closeDatePicker}
+        >
+          <Pressable style={styles.datePickerOverlay} onPress={closeDatePicker}>
+            <Pressable
+              style={[styles.datePickerSheet, { backgroundColor: theme.surface }]}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <View style={styles.datePickerHeader}>
+                <Text style={[styles.datePickerTitle, { color: theme.ink }]}>
+                  {activeDateField === 'dob' ? 'Select Date of Birth' : 'Select Anniversary'}
+                </Text>
+              </View>
+              {activeDateField && (
+                <DateTimePicker
+                  value={
+                    formData[activeDateField] && !isNaN(new Date(formData[activeDateField]).getTime())
+                      ? new Date(formData[activeDateField])
+                      : new Date()
+                  }
+                  mode="date"
+                  display="spinner"
+                  maximumDate={new Date()}
+                  onValueChange={handleDateValueChange}
+                  style={styles.iosSpinner}
+                />
+              )}
+              <Pressable
+                style={[styles.datePickerDoneBtn, { backgroundColor: theme.emerald }]}
+                onPress={closeDatePicker}
+              >
+                <Text style={styles.datePickerDoneText}>Done</Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      )}
     </KeyboardAvoidView>
   );
 }
@@ -568,13 +722,9 @@ const styles = StyleSheet.create({
   headerTitleGroup: { flex: 1 },
   headerTitle: { fontSize: 18, fontWeight: '800' },
   headerSubtitle: { fontSize: 11, fontWeight: '600', marginTop: 1 },
-  headerRightActions: { flexDirection: 'row', alignItems: 'center' },
-  addBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+  contentContainer: {
+    flex: 1,
+    position: 'relative',
   },
   searchSection: {
     paddingHorizontal: 16,
@@ -596,8 +746,23 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 16,
-    paddingBottom: 40,
+    paddingBottom: 96,
     gap: 12,
+  },
+  // WhatsApp-style floating action button
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 24,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 6,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
   },
   card: {
     borderWidth: 1,
@@ -804,6 +969,19 @@ const styles = StyleSheet.create({
     height: 44,
     fontSize: 14,
   },
+  dateInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  dateInputText: {
+    fontSize: 14,
+    flex: 1,
+  },
+  dateClearBtn: {
+    marginLeft: 4,
+    padding: 2,
+  },
   formRow: {
     flexDirection: 'row',
     gap: 10,
@@ -846,5 +1024,39 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: '700',
     fontSize: 13,
+  },
+  // iOS date picker sheet
+  datePickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  datePickerSheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 24,
+  },
+  datePickerHeader: {
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  datePickerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  iosSpinner: {
+    alignSelf: 'center',
+  },
+  datePickerDoneBtn: {
+    marginHorizontal: 20,
+    marginTop: 10,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  datePickerDoneText: {
+    color: '#FFF',
+    fontWeight: '700',
+    fontSize: 14,
   },
 });
