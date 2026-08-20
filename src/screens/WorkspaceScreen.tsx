@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { BackHandler, Modal, Pressable, ScrollView, StyleSheet, Text, View, Animated, Easing } from 'react-native';
-import { ArrowLeftRight, Home, MessageCircle, Megaphone, User, Wallet, MoreVertical, Briefcase, HelpCircle, Brain, Settings, ReceiptText, QrCode, FolderOpen } from 'lucide-react-native';
+import { ArrowLeftRight, Home, MessageCircle, Megaphone, User, Wallet, MoreVertical, Briefcase, HelpCircle, Brain, Settings, ReceiptText, QrCode, FolderOpen, Users, FileText } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { getAccountProfile } from '../api/auth';
 import { getProjectMeta, getUnreadCount } from '../api/workspace';
@@ -24,6 +24,11 @@ import { ProjectConfigScreen } from './ProjectConfigScreen';
 import { AgentConfigScreen } from './AgentConfigScreen';
 import { TransactionsScreen } from './TransactionsScreen';
 import { AiBillsScreen } from './AiBillsScreen';
+import { ContactsScreen } from './ContactsScreen';
+import { GroupsScreen } from './GroupsScreen';
+import { GroupDetailsScreen } from './GroupDetailsScreen';
+import { TemplatesScreen } from './TemplatesScreen';
+import { TemplateEditorScreen } from './TemplateEditorScreen';
 import { socketManager, ConnectionStatus } from '../services/socketManager';
 import { notificationService } from '../services/notificationService';
 import { ScalePressable, FadeInView } from '../components/animations';
@@ -87,6 +92,11 @@ export function WorkspaceScreen({
   const [projectsTarget, setProjectsTarget] = useState(false);
   const [profileTarget, setProfileTarget] = useState(false);
   const [scannedUsersTarget, setScannedUsersTarget] = useState(false); // full-screen projects hub, used from full mode
+  const [contactsTarget, setContactsTarget] = useState(false);
+  const [groupsTarget, setGroupsTarget] = useState(false);
+  const [groupDetailsTarget, setGroupDetailsTarget] = useState<any>(null);
+  const [templatesTarget, setTemplatesTarget] = useState(false);
+  const [templateEditorTarget, setTemplateEditorTarget] = useState<any>(null);
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [projectQrModalOpen, setProjectQrModalOpen] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
@@ -279,6 +289,11 @@ export function WorkspaceScreen({
     if (walletTarget) { setWalletTarget(false); return true; }
     if (wabaTarget) { setWabaTarget(false); return true; }
     if (scannedUsersTarget) { setScannedUsersTarget(false); return true; }
+    if (contactsTarget) { setContactsTarget(false); return true; }
+    if (groupsTarget) { setGroupsTarget(false); return true; }
+    if (groupDetailsTarget) { setGroupDetailsTarget(null); return true; }
+    if (templateEditorTarget) { setTemplateEditorTarget(null); setTemplatesTarget(true); return true; }
+    if (templatesTarget) { setTemplatesTarget(false); return true; }
     if (supportTarget) { setSupportTarget(false); return true; }
     if (contextConfigTarget) { setContextConfigTarget(false); return true; }
     if (agentConfigTarget) { setAgentConfigTarget(false); return true; }
@@ -289,7 +304,7 @@ export function WorkspaceScreen({
     if (profileTarget) { setProfileTarget(false); return true; }
     if (page !== 'dashboard') { setPage('dashboard'); return true; }
     return false;
-  }, [chatTarget, campaignTarget, createCampaignTarget, walletTarget, wabaTarget, scannedUsersTarget, supportTarget, contextConfigTarget, agentConfigTarget, projectConfigTarget, transactionsTarget, aiBillsTarget, projectsTarget, profileTarget, page]);
+  }, [chatTarget, campaignTarget, createCampaignTarget, walletTarget, wabaTarget, scannedUsersTarget, contactsTarget, groupsTarget, groupDetailsTarget, templatesTarget, templateEditorTarget, supportTarget, contextConfigTarget, agentConfigTarget, projectConfigTarget, transactionsTarget, aiBillsTarget, projectsTarget, profileTarget, page]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
@@ -368,6 +383,26 @@ export function WorkspaceScreen({
 
   if (scannedUsersTarget) {
     return <ScannedUsersScreen projectId={projectId} session={apiSession} onBack={() => setScannedUsersTarget(false)} />;
+  }
+
+  if (contactsTarget) {
+    return <ContactsScreen projectId={projectId} session={apiSession} onBack={() => setContactsTarget(false)} />;
+  }
+
+  if (groupsTarget) {
+    return <GroupsScreen projectId={projectId} session={apiSession} onBack={() => setGroupsTarget(false)} onOpen={(group) => { setGroupsTarget(false); setGroupDetailsTarget(group); }} />;
+  }
+
+  if (groupDetailsTarget) {
+    return <GroupDetailsScreen projectId={projectId} session={apiSession} group={groupDetailsTarget} onBack={() => { setGroupDetailsTarget(null); setGroupsTarget(true); }} />;
+  }
+
+  if (templatesTarget) {
+    return <TemplatesScreen projectId={projectId} session={apiSession} onBack={() => setTemplatesTarget(false)} onCreate={() => { setTemplatesTarget(false); setTemplateEditorTarget({}); }} onEdit={(template) => { setTemplatesTarget(false); setTemplateEditorTarget(template); }} />;
+  }
+
+  if (templateEditorTarget) {
+    return <TemplateEditorScreen projectId={projectId} session={apiSession} template={templateEditorTarget.template_id || templateEditorTarget.id ? templateEditorTarget : undefined} onBack={() => { setTemplateEditorTarget(null); setTemplatesTarget(true); }} onSaved={() => { setTemplateEditorTarget(null); setTemplatesTarget(true); }} />;
   }
 
   if (supportTarget) {
@@ -571,6 +606,9 @@ export function WorkspaceScreen({
                 onOpenWallet={() => setWalletTarget(true)}
                 onOpenSupport={() => setSupportTarget(true)}
                 onOpenScannedUsers={() => setScannedUsersTarget(true)}
+                onOpenTemplates={() => setTemplatesTarget(true)}
+                onOpenGroups={() => setGroupsTarget(true)}
+                onOpenContacts={() => setContactsTarget(true)}
               />
             ) : page === 'inbox' ? (
               <LiveChatScreen
@@ -656,6 +694,27 @@ export function WorkspaceScreen({
               >
                 <QrCode size={18} color={theme.emerald} />
                 <Text style={[styles.menuItemText, { color: theme.ink }]}>Project QR Code</Text>
+              </ScalePressable>
+              <ScalePressable
+                style={[styles.menuItem]}
+                onPress={() => { setIsMenuVisible(false); setContactsTarget(true); }}
+              >
+                <Users size={18} color={theme.ink} />
+                <Text style={[styles.menuItemText, { color: theme.ink }]}>All Contacts</Text>
+              </ScalePressable>
+              <ScalePressable
+                style={[styles.menuItem]}
+                onPress={() => { setIsMenuVisible(false); setGroupsTarget(true); }}
+              >
+                <Users size={18} color={theme.ink} />
+                <Text style={[styles.menuItemText, { color: theme.ink }]}>Contact Groups</Text>
+              </ScalePressable>
+              <ScalePressable
+                style={[styles.menuItem]}
+                onPress={() => { setIsMenuVisible(false); setTemplatesTarget(true); }}
+              >
+                <FileText size={18} color={theme.ink} />
+                <Text style={[styles.menuItemText, { color: theme.ink }]}>Templates</Text>
               </ScalePressable>
               <ScalePressable
                 style={[styles.menuItem]}

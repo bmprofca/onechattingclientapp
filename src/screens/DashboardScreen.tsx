@@ -42,6 +42,9 @@ export function DashboardScreen({
   onOpenWallet,
   onOpenSupport,
   onOpenScannedUsers,
+  onOpenTemplates,
+  onOpenGroups,
+  onOpenContacts,
 }: {
   projectId: string;
   session: ApiSession;
@@ -54,6 +57,9 @@ export function DashboardScreen({
   onOpenWallet?: () => void;
   onOpenSupport?: () => void;
   onOpenScannedUsers?: () => void;
+  onOpenTemplates?: () => void;
+  onOpenGroups?: () => void;
+  onOpenContacts?: () => void;
 }) {
   const theme = useTheme();
   const [dashboardData, setDashboardData] = useState<any>(null);
@@ -148,6 +154,9 @@ export function DashboardScreen({
   const actions = [
     { title: 'Scanned Users', note: 'QR scan audience', onPress: onOpenScannedUsers },
     { title: 'Projects', note: 'Switch workspace', onPress: onOpenProjectsHub },
+    { title: 'Templates', note: 'Manage message templates', onPress: onOpenTemplates },
+    { title: 'Groups', note: 'Manage contact groups', onPress: onOpenGroups },
+    { title: 'All Contacts', note: 'Manage workspace contacts', onPress: onOpenContacts },
     { title: 'Wallet', note: 'Balance & top-up', onPress: onOpenWallet },
     { title: 'Profile', note: 'Account details', onPress: onOpenProfile },
     { title: 'Support', note: 'Help center', onPress: onOpenSupport },

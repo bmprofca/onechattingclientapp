@@ -133,6 +133,13 @@ export const editCase = (
     },
     session,
   );
+
+export const bulkCloseCases = (
+  session: ApiSession,
+  projectId: string,
+  caseIds: Array<string | number>,
+) =>
+  post<any>('/message/case-bulk-close', { project_id: projectId, case_ids: caseIds }, session);
 // --------------------------------------------------
 // Campaigns
 // --------------------------------------------------
@@ -318,10 +325,24 @@ export const getTemplates = (
     '/template/template-list',
     {
       project_id: projectId,
-      status,
+      status: status || '',
+      page_no: 1,
+      limit: 100,
     },
     session,
   );
+
+export const createTemplate = (session: ApiSession, projectId: string, template: Record<string, any>) =>
+  post<any>('/template/create-template', {project_id: projectId, template}, session);
+
+export const getTemplateDetails = (session: ApiSession, projectId: string, templateId: string | number) =>
+  post<any>('/template/template-details', {project_id: projectId, template_id: templateId}, session);
+
+export const editTemplate = (session: ApiSession, projectId: string, templateId: string | number, template: Record<string, any>) =>
+  post<any>('/template/template-edit', {project_id: projectId, template_id: templateId, template}, session);
+
+export const deleteTemplate = (session: ApiSession, projectId: string, templateId: string | number) =>
+  post<any>('/template/template-delete', {project_id: projectId, template_id: templateId}, session);
 
 export const sendTemplate = (
   session: ApiSession,
@@ -567,6 +588,21 @@ export const getContactList = (
     },
     session,
   );
+
+export const getContactGroups = (session: ApiSession, projectId: string, page = 1, limit = 100) =>
+  post<any>('/contact/group-list', {project_id: projectId, page_no: page, page, limit}, session);
+
+export const addContactToGroup = (session: ApiSession, projectId: string, groupId: string, contactId: string | number) =>
+  post<any>('/contact/group-contact-add', {project_id: projectId, group_id: groupId, contact_id: contactId}, session);
+
+export const getGroupContacts = (session: ApiSession, projectId: string, groupId: string, page = 1, limit = 20, search = '') =>
+  post<any>('/contact/group-contact-list', {project_id: projectId, group_id: groupId, page_no: page, page, limit, search}, session);
+
+export const removeContactFromGroup = (session: ApiSession, projectId: string, groupId: string, contact: any) =>
+  post<any>('/contact/group-contact-delete', {project_id: projectId, group_id: groupId, all_contact_delete: false, unique_ids: contact?.unique_id ? [contact.unique_id] : [], contact_ids: contact?.contact_id || contact?.id ? [contact.contact_id || contact.id] : []}, session);
+
+export const updateContact = (session: ApiSession, projectId: string, payload: Record<string, any>) =>
+  post<any>('/contact/update-contact', {project_id: projectId, ...payload}, session);
 
 // --------------------------------------------------
 // WABA / Embed

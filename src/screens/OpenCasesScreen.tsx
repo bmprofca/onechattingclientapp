@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   BackHandler,
   FlatList,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -22,6 +23,8 @@ import {
   FileText,
   AlertCircle,
   Phone,
+  Check,
+  CheckSquare,
 } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import {
@@ -29,6 +32,7 @@ import {
   getCaseList,
   createCase,
   editCase,
+  bulkCloseCases,
   getContactList,
 } from '../api/workspace';
 import { LoadState } from '../components/LoadState';
@@ -36,6 +40,43 @@ import { useTheme } from '../theme/theme';
 import { socketManager } from '../services/socketManager';
 import { ScalePressable, FadeInView } from '../components/animations';
 import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
+import { loadCaseNames, saveCustomCaseName } from '../services/caseNames';
+
+function CaseNameSelect({value, options, onChange, onCreateNew, theme}: any) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <>
+      <Pressable
+        onPress={() => setVisible(true)}
+        style={[styles.inputRow, {backgroundColor: theme.canvas, borderColor: theme.border}]}
+      >
+        <FileText size={16} color={theme.muted} />
+        <Text style={[styles.input, {color: value ? theme.ink : theme.muted}]} numberOfLines={1}>
+          {value || 'Select a case name'}
+        </Text>
+      </Pressable>
+      <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
+        <Pressable style={styles.namePickerOverlay} onPress={() => setVisible(false)}>
+          <View style={[styles.namePicker, {backgroundColor: theme.surface, borderColor: theme.border}]}>
+            <Text style={[styles.namePickerTitle, {color: theme.ink}]}>Select case name</Text>
+            <ScrollView>
+              {options.map((option: string) => (
+                <Pressable key={option} onPress={() => { onChange(option); setVisible(false); }} style={styles.namePickerOption}>
+                  {option === value ? <Check size={16} color={theme.emerald} /> : <View style={{width: 16}} />}
+                  <Text style={[styles.namePickerOptionText, {color: theme.ink}]}>{option}</Text>
+                </Pressable>
+              ))}
+              <Pressable onPress={() => { setVisible(false); onCreateNew(); }} style={[styles.namePickerOption, {borderTopWidth: 1, borderTopColor: theme.border}]}>
+                <Plus size={16} color={theme.emerald} />
+                <Text style={[styles.namePickerOptionText, {color: theme.emerald}]}>Create new case name</Text>
+              </Pressable>
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
+    </>
+  );
+}
 
 // --- Date Formatters matching web OpenCaseList.js ---
 const parseServerDate = (value: any): Date | null => {
@@ -122,6 +163,84 @@ export function OpenCasesScreen({
   const [caseEditStatus, setCaseEditStatus] = useState<'open' | 'closed'>('open');
   const [caseEditLoading, setCaseEditLoading] = useState(false);
   const [caseEditError, setCaseEditError] = useState('');
+  const [caseNames, setCaseNames] = useState<string[]>([]);
+  const [newCaseName, setNewCaseName] = useState('');
+  const [creatingCaseNameFor, setCreatingCaseNameFor] = useState<'create' | 'edit' | null>(null);
+  const [selectedNumbers, setSelectedNumbers] = useState<string[]>([]);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [bulkCloseLoading, setBulkCloseLoading] = useState(false);
+
+  useEffect(() => {
+    loadCaseNames().then(setCaseNames);
+  }, []);
+
+  const createNewCaseName = async () => {
+    const name = newCaseName.trim();
+    if (!name) {
+      if (creatingCaseNameFor === 'create') setCaseCreateError('Case name is required');
+      else setCaseEditError('Case name is required');
+      return;
+    }
+    const names = await saveCustomCaseName(name);
+    setCaseNames(names);
+    if (creatingCaseNameFor === 'create') setCaseCreateName(name);
+    if (creatingCaseNameFor === 'edit') setCaseEditName(name);
+    setNewCaseName('');
+    setCreatingCaseNameFor(null);
+  };
+
+  const closeSelectedCases = async () => {
+    if (!selectedNumbers.length) return;
+    const selectedOpenCases = casesByNumber
+      .filter(row => selectedNumbers.includes(String(row.number || row.phone || '')))
+      .flatMap(row => (Array.isArray(row.cases) ? row.cases : []))
+      .filter((item: any) => item?.status === true || item?.status === 1 || item?.status === '1' || String(item?.status).toLowerCase() === 'open');
+    const caseIds = selectedOpenCases
+      .map((item: any) => item.case_id || item.id)
+      .filter(Boolean);
+    if (!caseIds.length) {
+      Toast.show({type: 'error', text1: 'Nothing to close', text2: 'No valid open case IDs were found.'});
+      return;
+    }
+    setBulkCloseLoading(true);
+    try {
+      try {
+        const res = await bulkCloseCases(session, projectId, caseIds);
+        if (res?.error) throw new Error(typeof res.error === 'string' ? res.error : 'Bulk close endpoint failed');
+      } catch {
+        await Promise.all(
+          selectedOpenCases.map((item: any) =>
+            editCase(
+              session,
+              projectId,
+              item.case_id || item.id,
+              item.name || '',
+              item.remark || '',
+              'closed',
+            ),
+          ),
+        );
+      }
+      Toast.show({type: 'success', text1: 'Cases closed', text2: `${caseIds.length} case(s) closed successfully`});
+      setSelectedNumbers([]);
+      setSelectionMode(false);
+      fetchOpenCases();
+    } catch (err: any) {
+      Toast.show({type: 'error', text1: 'Bulk close failed', text2: err?.message || 'Please try again'});
+    } finally {
+      setBulkCloseLoading(false);
+    }
+  };
+
+  const toggleAllCases = () => {
+    const numbers = casesByNumber.map(row => String(row.number || row.phone || '')).filter(Boolean);
+    setSelectedNumbers(selectedNumbers.length === numbers.length ? [] : numbers);
+  };
+
+  const cancelSelection = () => {
+    setSelectedNumbers([]);
+    setSelectionMode(false);
+  };
 
   // Debounce search
   useEffect(() => {
@@ -410,16 +529,11 @@ export function OpenCasesScreen({
 
           <View>
             <Text style={[styles.formLabel, { color: theme.muted }]}>CASE NAME *</Text>
-            <View style={[styles.inputRow, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
-              <FileText size={16} color={theme.muted} />
-              <TextInput
-                value={caseEditName}
-                onChangeText={setCaseEditName}
-                placeholder="Case name"
-                placeholderTextColor={theme.muted}
-                style={[styles.input, { color: theme.ink }]}
-              />
-            </View>
+            <CaseNameSelect value={caseEditName} options={caseNames} onChange={(value: string) => { setCaseEditName(value); setCaseEditError(''); }} onCreateNew={() => { setNewCaseName(''); setCreatingCaseNameFor('edit'); }} theme={theme} />
+            {creatingCaseNameFor === 'edit' && <View style={styles.newNameRow}>
+              <TextInput value={newCaseName} onChangeText={setNewCaseName} placeholder="New case name" placeholderTextColor={theme.muted} style={[styles.newNameInput, {color: theme.ink, borderColor: theme.border, backgroundColor: theme.canvas}]} />
+              <Pressable onPress={createNewCaseName} style={[styles.newNameButton, {backgroundColor: theme.emerald}]}><Text style={styles.newNameButtonText}>Add</Text></Pressable>
+            </View>}
           </View>
 
           <View>
@@ -629,16 +743,11 @@ export function OpenCasesScreen({
           {/* Step 2: Case Details */}
           <View>
             <Text style={[styles.formLabel, { color: theme.muted }]}>CASE NAME *</Text>
-            <View style={[styles.inputRow, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
-              <FileText size={16} color={theme.muted} />
-              <TextInput
-                value={caseCreateName}
-                onChangeText={setCaseCreateName}
-                placeholder="e.g. Order Inquiry / Support Ticket"
-                placeholderTextColor={theme.muted}
-                style={[styles.input, { color: theme.ink }]}
-              />
-            </View>
+            <CaseNameSelect value={caseCreateName} options={caseNames} onChange={(value: string) => { setCaseCreateName(value); setCaseCreateError(''); }} onCreateNew={() => { setNewCaseName(''); setCreatingCaseNameFor('create'); }} theme={theme} />
+            {creatingCaseNameFor === 'create' && <View style={styles.newNameRow}>
+              <TextInput value={newCaseName} onChangeText={setNewCaseName} placeholder="New case name" placeholderTextColor={theme.muted} style={[styles.newNameInput, {color: theme.ink, borderColor: theme.border, backgroundColor: theme.canvas}]} />
+              <Pressable onPress={createNewCaseName} style={[styles.newNameButton, {backgroundColor: theme.emerald}]}><Text style={styles.newNameButtonText}>Add</Text></Pressable>
+            </View>}
           </View>
 
           <View>
@@ -915,7 +1024,6 @@ export function OpenCasesScreen({
   // =========================================================================
   return (
     <KeyboardAvoidView style={[styles.container, { backgroundColor: theme.canvas }]}>
-
       <View style={styles.searchSection}>
         <View style={[styles.searchContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <Search size={18} color={theme.muted} />
@@ -934,6 +1042,15 @@ export function OpenCasesScreen({
             </Pressable>
           )}
         </View>
+         {selectionMode && <View style={styles.selectionActions}>
+          <Text style={[styles.count, { color: theme.ink }]}>{selectedNumbers.length} selected</Text>
+          <Pressable onPress={toggleAllCases} style={[styles.selectAllButton, {borderColor: theme.border}]}> 
+            <Text style={[styles.selectAllText, {color: theme.emerald}]}>{selectedNumbers.length === casesByNumber.length && casesByNumber.length ? 'Clear' : 'Select all'}</Text>
+          </Pressable>
+          <Pressable onPress={cancelSelection} style={[styles.cancelButton, {borderColor: theme.border}]}>
+            <Text style={[styles.selectAllText, {color: theme.muted}]}>Cancel</Text>
+          </Pressable>
+        </View>}
       </View>
 
       <FlatList
@@ -977,9 +1094,26 @@ export function OpenCasesScreen({
             <FadeInView delay={Math.min(index * 35, 250)} distance={12}>
               <ScalePressable
                 accessibilityRole="button"
-                onPress={() => openCaseModal(item)}
+                onLongPress={() => {
+                  setSelectionMode(true);
+                  setSelectedNumbers([contactNum]);
+                }}
+                delayLongPress={450}
+                onPress={() => {
+                  if (selectionMode) {
+                    setSelectedNumbers(prev => prev.includes(contactNum) ? prev.filter(value => value !== contactNum) : [...prev, contactNum]);
+                  } else {
+                    openCaseModal(item);
+                  }
+                }}
                 style={styles.card}
               >
+                {selectionMode && <Pressable onPress={() => {
+                  const number = String(item.number || item.phone || '');
+                  setSelectedNumbers(prev => prev.includes(number) ? prev.filter(value => value !== number) : [...prev, number]);
+                }} style={[styles.selectCircle, {borderColor: theme.border, backgroundColor: selectedNumbers.includes(contactNum) ? theme.emerald : theme.canvas}]}> 
+                  {selectedNumbers.includes(contactNum) && <Check size={13} color="#FFF" />}
+                </Pressable>}
                 <View style={[styles.avatar, { backgroundColor: theme.mint }]}>
                   <Text style={[styles.avatarText, { color: theme.mintText }]}>
                     {contactName.trim().charAt(0).toUpperCase() || 'C'}
@@ -1017,19 +1151,50 @@ export function OpenCasesScreen({
         }}
       />
 
-      <ScalePressable
+      {selectionMode && <ScalePressable
+        accessibilityRole="button"
+        accessibilityLabel="Close selected cases"
+        onPress={closeSelectedCases}
+        disabled={!selectedNumbers.length || bulkCloseLoading}
+        style={[styles.bulkFab, {backgroundColor: selectedNumbers.length ? '#E11D48' : theme.muted}]}
+      >
+        {bulkCloseLoading ? <ActivityIndicator color="#FFF" size="small" /> : <><CheckSquare size={21} color="#FFF" /><Text style={styles.bulkFabText}>Close {selectedNumbers.length}</Text></>}
+      </ScalePressable>}
+
+      {!selectionMode && <ScalePressable
         accessibilityRole="button"
         onPress={openCaseCreateModal}
         style={[styles.fab, { backgroundColor: theme.emerald }]}
       >
         <Plus size={24} color="#FFF" strokeWidth={2.5} />
-      </ScalePressable>
+      </ScalePressable>}
     </KeyboardAvoidView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  bulkBar: { paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1 },
+  bulkTitle: { fontSize: 18, fontWeight: '800' },
+  bulkSubtitle: { fontSize: 11, marginTop: 2 },
+  selectAllButton: { paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderRadius: 9, marginLeft: 8 },
+  selectionActions: { flexDirection: 'row', alignItems: 'center', justifyContent: "space-between", gap: 6 },
+  cancelButton: { paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderRadius: 9 },
+  selectAllText: { fontSize: 11, fontWeight: '800' },
+  bulkCloseButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 9, borderRadius: 10 },
+  bulkCloseText: { color: '#FFF', fontSize: 11, fontWeight: '800' },
+  bulkFab: { position: 'absolute', right: 22, bottom: 24, minWidth: 126, height: 56, borderRadius: 28, paddingHorizontal: 17, flexDirection: 'row', gap: 7, alignItems: 'center', justifyContent: 'center', elevation: 5, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: {width: 0, height: 4} },
+  bulkFabText: { color: '#FFF', fontSize: 14, fontWeight: '900' },
+  selectCircle: { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', marginRight: 8 },
+  namePickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  namePicker: { maxHeight: '70%', borderTopLeftRadius: 22, borderTopRightRadius: 22, borderWidth: 1, paddingTop: 16, paddingBottom: 24 },
+  namePickerTitle: { fontSize: 16, fontWeight: '800', paddingHorizontal: 20, paddingBottom: 10 },
+  namePickerOption: { minHeight: 46, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  namePickerOptionText: { fontSize: 14, fontWeight: '600' },
+  newNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
+  newNameInput: { flex: 1, height: 42, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, fontSize: 13 },
+  newNameButton: { height: 42, borderRadius: 10, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center' },
+  newNameButtonText: { color: '#FFF', fontSize: 12, fontWeight: '800' },
   header: {
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -1056,9 +1221,10 @@ const styles = StyleSheet.create({
 
   // Search
   searchSection: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 10,
     paddingTop: 10,
     paddingBottom: 4,
+    gap:8,
   },
   searchContainer: {
     flexDirection: 'row',
@@ -1228,6 +1394,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     gap: 8,
   },
+  count: { flex: 1, fontSize: 12, fontWeight: '800' },
   textAreaRow: {
     height: 80,
     alignItems: 'flex-start',
