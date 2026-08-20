@@ -95,12 +95,10 @@ export function ProjectQRModal({
   if (!visible) return null;
 
   const currentQR = qrList[selectedIndex] || qrList[0];
-  const qrId = currentQR?.qr_id || currentQR?.id || projectId;
-  const qrTitle = currentQR?.title || currentQR?.label || currentQR?.name || `${projectName} QR`;
-  const qrTarget = currentQR?.target_type || 'Workspace Chat';
+  const qrId = currentQR?.qr_id;
 
   // Construct standard public URL for this QR code
-  const publicQrUrl = `https://server.onechatting.com/qr/${qrId}`;
+  const publicQrUrl = `https://app.onechatting.com/qr/${qrId}`;
 
   const handleShare = async () => {
     try {
@@ -231,7 +229,7 @@ export function ProjectQRModal({
                   >
                     {qrList.map((item, index) => {
                       const isSelected = selectedIndex === index;
-                      const tabTitle = item.title || item.label || `QR #${index + 1}`;
+                      const tabTitle = `QR #${index + 1}`;
                       return (
                         <Pressable
                           key={String(item.id || item.qr_id || index)}
@@ -272,13 +270,13 @@ export function ProjectQRModal({
               {/* QR Title & Target Meta */}
               <View style={styles.qrMetaContainer}>
                 <Text style={[styles.qrTitle, { color: theme.ink }]}>
-                  {qrTitle}
+                  {`QR #${selectedIndex + 1}`}
                 </Text>
                 <View style={styles.metaBadgeRow}>
                   <View style={[styles.badge, { backgroundColor: theme.mint }]}>
                     <Layers size={11} color={theme.emerald} style={{ marginRight: 4 }} />
                     <Text style={[styles.badgeText, { color: theme.emerald }]}>
-                      {qrTarget.toUpperCase()}
+                      PROJECT CHAT
                     </Text>
                   </View>
                   {currentQR?.scan_count !== undefined && (

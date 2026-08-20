@@ -346,10 +346,10 @@ export function ScannedUsersScreen({
 
             {/* QR source & tags */}
             <View style={styles.badgeRow}>
-              {!!item.qr_label && (
+              {!!item.qr_id && (
                 <View style={[styles.qrBadge, { backgroundColor: theme.mint }]}>
                   <QrCode size={11} color={theme.emerald} />
-                  <Text style={[styles.qrBadgeText, { color: theme.emerald }]}>{item.qr_label}</Text>
+                  <Text style={[styles.qrBadgeText, { color: theme.emerald }]}>QR {item.qr_id}</Text>
                 </View>
               )}
 

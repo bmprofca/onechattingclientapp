@@ -2,13 +2,8 @@ import { ApiSession, get, post } from './client';
 
 export type QRCodeItem = {
   id?: string | number;
-  qr_id?: string;
+  qr_id: string;
   project_id?: string;
-  title?: string;
-  label?: string;
-  name?: string;
-  target_type?: string;
-  target_value?: string;
   scan_count?: number;
   is_active?: boolean | number;
   created_at?: string;
@@ -33,7 +28,6 @@ export type ScannedUser = {
   status?: string;
   create_date?: string;
   modify_date?: string;
-  qr_label?: string | null;
 };
 
 export type ScannedUsersListResponse = {
