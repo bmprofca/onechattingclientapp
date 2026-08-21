@@ -11,6 +11,7 @@ import {
 import { ArrowLeft, RefreshCw, Calendar, FileText, IndianRupee } from 'lucide-react-native';
 import { useTheme } from '../theme/theme';
 import { ApiSession, get } from '../api/client';
+import { StaggeredCell } from '../components/animations';
 
 // ---- Types ----
 
@@ -266,6 +267,7 @@ export function AiBillsScreen({
       ) : (
         <FlatList
           data={bills}
+          CellRendererComponent={StaggeredCell}
           keyExtractor={(item, index) => item.transaction_id || String(index)}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}

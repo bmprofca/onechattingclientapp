@@ -3,6 +3,7 @@ import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Project } from '../api/auth';
 import { useTheme } from '../theme/theme';
 import { ProjectAvatar } from '../components/ProjectAvatar';
+import { FadeInView } from '../components/animations';
 
 export function ProjectPickerScreen({
   projects,
@@ -41,9 +42,10 @@ export function ProjectPickerScreen({
             </Text>
           </>
         }
-        renderItem={({ item }) => {
+        renderItem={({ item, index }) => {
           const profileImg = (item as any).profile_image || (item as any).profile_picture || (item as any).logo || (item as any).image;
           return (
+            <FadeInView delay={Math.min(index * 35, 250)} distance={12} duration={280}>
             <Pressable
               accessibilityRole="button"
               onPress={() => onSelect(item.id)}
@@ -69,6 +71,7 @@ export function ProjectPickerScreen({
               </View>
               <Text style={[styles.arrow, { color: theme.mintText }]}>›</Text>
             </Pressable>
+            </FadeInView>
           );
         }}
       />

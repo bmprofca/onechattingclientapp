@@ -26,6 +26,7 @@ import { CreateProjectScreen } from './CreateProjectScreen';
 import { ManageProjectScreen } from './ManageProjectScreen';
 import { ProjectAvatar } from '../components/ProjectAvatar';
 import { ProjectQRModal } from '../components/Modals/ProjectQRModal';
+import { StaggeredCell } from '../components/animations';
 import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
 
 type Mode = 'list' | 'create' | 'manage';
@@ -226,6 +227,7 @@ export function ProjectsScreen({
       ) : (
         <FlatList
           data={filteredProjects}
+          CellRendererComponent={StaggeredCell}
           keyExtractor={(project) => project.id}
           contentContainerStyle={[styles.page, !hasProjects && styles.pageFull]}
           keyboardShouldPersistTaps="handled"

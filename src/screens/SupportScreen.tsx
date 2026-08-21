@@ -5,6 +5,7 @@ import { ApiSession } from '../api/client';
 import { getSupportInfo, SupportData } from '../api/company';
 import { useTheme } from '../theme/theme';
 import Toast from 'react-native-toast-message';
+import { FadeInView } from '../components/animations';
 
 export function SupportScreen({
   session,
@@ -84,6 +85,7 @@ export function SupportScreen({
                   <Text style={[styles.sectionTitle, { color: theme.ink }]}>Phone Support</Text>
                 </View>
                 {data.phone.map((contact, idx) => (
+                  <FadeInView delay={Math.min(idx * 35, 250)} distance={12}>
                   <Pressable 
                     key={`phone-${idx}`}
                     onPress={() => handlePress('phone', contact.number!)}
@@ -95,6 +97,7 @@ export function SupportScreen({
                     </View>
                     <Text style={[styles.actionText, { color: theme.emerald }]}>Call</Text>
                   </Pressable>
+                  </FadeInView>
                 ))}
               </View>
             )}
@@ -106,6 +109,7 @@ export function SupportScreen({
                   <Text style={[styles.sectionTitle, { color: theme.ink }]}>WhatsApp Support</Text>
                 </View>
                 {data.whatsapp.map((contact, idx) => (
+                  <FadeInView delay={Math.min(idx * 35, 250)} distance={12}>
                   <Pressable 
                     key={`wa-${idx}`}
                     onPress={() => handlePress('whatsapp', contact.number!)}
@@ -117,6 +121,7 @@ export function SupportScreen({
                     </View>
                     <Text style={[styles.actionText, { color: theme.emerald }]}>Message</Text>
                   </Pressable>
+                  </FadeInView>
                 ))}
               </View>
             )}
@@ -128,6 +133,7 @@ export function SupportScreen({
                   <Text style={[styles.sectionTitle, { color: theme.ink }]}>Email Support</Text>
                 </View>
                 {data.email.map((contact, idx) => (
+                  <FadeInView delay={Math.min(idx * 35, 250)} distance={12}>
                   <Pressable 
                     key={`email-${idx}`}
                     onPress={() => handlePress('email', contact.email!)}
@@ -139,6 +145,7 @@ export function SupportScreen({
                     </View>
                     <Text style={[styles.actionText, { color: theme.emerald }]}>Email</Text>
                   </Pressable>
+                  </FadeInView>
                 ))}
               </View>
             )}

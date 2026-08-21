@@ -1,35 +1,33 @@
-import React, {useCallback, useEffect, useRef, useState} from 'react';
-import {AppState, StatusBar, View} from 'react-native';
-import {
-  SafeAreaProvider,
-  SafeAreaView,
-} from 'react-native-safe-area-context';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState, StatusBar, View } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 
-import {AuthScreen} from './src/screens/AuthScreen';
-import {SplashScreen} from './src/components/SplashScreen';
-import {WorkspaceScreen} from './src/screens/WorkspaceScreen';
-import {ProjectPickerScreen} from './src/screens/ProjectPickerScreen';
+import { AuthScreen } from './src/screens/AuthScreen';
+import { SplashScreen } from './src/components/SplashScreen';
+import { WorkspaceScreen } from './src/screens/WorkspaceScreen';
+import { ProjectPickerScreen } from './src/screens/ProjectPickerScreen';
 
-import {getAccountProfile} from './src/api/auth';
+import { getAccountProfile } from './src/api/auth';
 import {
   Session,
   clearSession,
   loadSession,
   saveSession,
 } from './src/services/session';
-import {useTheme} from './src/theme/theme';
-import {socketManager} from './src/services/socketManager';
-import {notificationService} from './src/services/notificationService';
+import { useTheme } from './src/theme/theme';
+import { socketManager } from './src/services/socketManager';
+import { notificationService } from './src/services/notificationService';
+import { ScreenTransition } from './src/components/animations';
 
 export default function App() {
   const theme = useTheme();
-  const [session, setSession] = useState<Session | null | undefined>(
-    undefined,
-  );
+  const [session, setSession] = useState<Session | null | undefined>(undefined);
 
   // Ref for notification tap → navigate to chat
-  const notificationNavRef = useRef<((contactNumber: string, contactName: string) => void) | null>(null);
+  const notificationNavRef = useRef<
+    ((contactNumber: string, contactName: string) => void) | null
+  >(null);
 
   // Initialize notification service once
   useEffect(() => {
@@ -46,7 +44,7 @@ export default function App() {
     };
     init().catch(console.warn);
 
-    const subscription = AppState.addEventListener('change', (nextAppState) => {
+    const subscription = AppState.addEventListener('change', nextAppState => {
       if (nextAppState === 'active') {
         socketManager.ensureConnected();
       }
@@ -79,7 +77,11 @@ export default function App() {
           selectedProjectId: stored.selectedProjectId,
         };
 
-        if (!refreshed.selectedProjectId && refreshed.projects && refreshed.projects.length === 1) {
+        if (
+          !refreshed.selectedProjectId &&
+          refreshed.projects &&
+          refreshed.projects.length === 1
+        ) {
           refreshed.selectedProjectId = refreshed.projects[0].id;
         }
 
@@ -112,7 +114,10 @@ export default function App() {
     socketManager.setProjectId(projectId);
   };
 
-  const handleProjectCreated = async (newProject: { id: string; name: string }) => {
+  const handleProjectCreated = async (newProject: {
+    id: string;
+    name: string;
+  }) => {
     if (!session) return;
     const updated = {
       ...session,
@@ -138,41 +143,59 @@ export default function App() {
       />
 
       <SafeAreaView
-        style={{flex: 1, backgroundColor: statusBarColor}}
+        style={{ flex: 1, backgroundColor: statusBarColor }}
         edges={['top', 'bottom', 'left', 'right']}
       >
-        {session === undefined ? <SplashScreen /> : !session ? (
-          <AuthScreen
-            onAuthenticated={async authenticated => {
-              let sessionToSave = authenticated;
-              try {
-                const account = await getAccountProfile({
-                  token: authenticated.token,
-                  username: authenticated.username,
-                });
-                sessionToSave = {
-                  ...sessionToSave,
-                  ...account,
-                  username: account.username || sessionToSave.username,
-                };
-              } catch {
-                // ignore
-              }
-              if (!sessionToSave.selectedProjectId && sessionToSave.projects && sessionToSave.projects.length === 1) {
-                sessionToSave = { ...sessionToSave, selectedProjectId: sessionToSave.projects[0].id };
-              }
-              await saveSession(sessionToSave);
-              setSession(sessionToSave);
-              socketManager.connect(sessionToSave.token, sessionToSave.username);
-              socketManager.setProjectId(sessionToSave.selectedProjectId);
-              notificationService.startForegroundService();
-            }}
-          />
-        ) : !session.selectedProjectId && session.projects && session.projects.length > 1 ? (
-          <ProjectPickerScreen
-            projects={session.projects}
-            onSelect={selectProject}
-          />
+        {session === undefined ? (
+          <SplashScreen />
+        ) : !session ? (
+          <ScreenTransition>
+            <AuthScreen
+              onAuthenticated={async authenticated => {
+                let sessionToSave = authenticated;
+                try {
+                  const account = await getAccountProfile({
+                    token: authenticated.token,
+                    username: authenticated.username,
+                  });
+                  sessionToSave = {
+                    ...sessionToSave,
+                    ...account,
+                    username: account.username || sessionToSave.username,
+                  };
+                } catch {
+                  // ignore
+                }
+                if (
+                  !sessionToSave.selectedProjectId &&
+                  sessionToSave.projects &&
+                  sessionToSave.projects.length === 1
+                ) {
+                  sessionToSave = {
+                    ...sessionToSave,
+                    selectedProjectId: sessionToSave.projects[0].id,
+                  };
+                }
+                await saveSession(sessionToSave);
+                setSession(sessionToSave);
+                socketManager.connect(
+                  sessionToSave.token,
+                  sessionToSave.username,
+                );
+                socketManager.setProjectId(sessionToSave.selectedProjectId);
+                notificationService.startForegroundService();
+              }}
+            />
+          </ScreenTransition>
+        ) : !session.selectedProjectId &&
+          session.projects &&
+          session.projects.length > 1 ? (
+          <ScreenTransition>
+            <ProjectPickerScreen
+              projects={session.projects}
+              onSelect={selectProject}
+            />
+          </ScreenTransition>
         ) : (
           <WorkspaceScreen
             session={session}
@@ -190,7 +213,7 @@ export default function App() {
 
         <View
           pointerEvents="box-none"
-          style={{position: 'absolute', top: 0, right: 0, bottom: 0, left: 0}}
+          style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
         >
           <Toast />
         </View>

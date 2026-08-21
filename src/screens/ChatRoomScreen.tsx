@@ -1009,8 +1009,11 @@ export function ChatRoomScreen({
         animationType="fade"
         onRequestClose={() => setHeaderMenuOpen(false)}
       >
-        <Pressable style={styles.menuBackdrop} onPress={() => setHeaderMenuOpen(false)}>
-          <View style={[styles.headerDropdown, { backgroundColor: theme.header, borderColor: theme.border }]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={() => setHeaderMenuOpen(false)}>
+          <View
+            onStartShouldSetResponder={() => true}
+            style={[styles.headerDropdown, { backgroundColor: theme.header, borderColor: theme.border }]}
+          >
             <ScalePressable style={styles.headerDropdownItem} onPress={openAssignModal}>
               <View style={[styles.headerDropdownIconWrap, { backgroundColor: theme.inputBg }]}>
                 {isAssigned ? (
@@ -1626,13 +1629,13 @@ const styles = StyleSheet.create({
   },
   headerDropdown: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 92 : 68,
-    right: 12,
-    width: 240,
-    borderRadius: 16,
+    top: Platform.OS === 'ios' ? 92 :110,
+    right: 6,
+    width: 180,
+    borderRadius: 10,
     borderWidth: 1,
     paddingVertical: 6,
-    shadowColor: '#000',
+    shadowColor: 'transparent',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 10,

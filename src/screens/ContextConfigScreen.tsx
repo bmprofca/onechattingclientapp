@@ -490,11 +490,12 @@ export function ContextConfigScreen({
                 <Text style={[styles.emptyDesc, { color: theme.muted }]}>Start by adding a section below to train your AI.</Text>
               </View>
             ) : (
-              sections.map((section) => {
+              sections.map((section, sectionIndex) => {
                 const typeDef = SECTION_TYPES.find(t => t.id === section.type) || SECTION_TYPES[0];
                 const TypeIcon = typeDef.icon;
                 return (
-                  <View key={section.id} style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                  <FadeInView key={section.id} delay={Math.min(sectionIndex * 45, 300)} distance={14} duration={300}>
+                  <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                     <View style={[styles.sectionHeader, { borderBottomColor: theme.border }]}>
                       <View style={[styles.typeIconBg, { backgroundColor: theme.canvas }]}>
                         <TypeIcon size={16} color={theme.mint} />
@@ -528,7 +529,8 @@ export function ContextConfigScreen({
                     {!section.collapsed && (
                       <View style={styles.sectionBody}>
                         {section.items.map((item, index) => (
-                          <View key={item.id} style={styles.itemWrapper}>
+                          <FadeInView key={item.id} delay={Math.min(index * 35, 220)} distance={10} duration={260}>
+                          <View style={styles.itemWrapper}>
                             {renderSectionContent(section, item, index)}
                             {section.items.length > 1 && (
                               <Pressable
@@ -540,6 +542,7 @@ export function ContextConfigScreen({
                               </Pressable>
                             )}
                           </View>
+                          </FadeInView>
                         ))}
 
                         <Pressable
@@ -552,6 +555,7 @@ export function ContextConfigScreen({
                       </View>
                     )}
                   </View>
+                  </FadeInView>
                 );
               })
             )}

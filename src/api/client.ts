@@ -1,7 +1,7 @@
 import { encryptPayload } from '../crypto/encryptPayload';
 // import Toast from 'react-native-toast-message';
 
-export const API_BASE_URL = ('https://server.onechatting.com').replace(/\/$/, '');
+export const API_BASE_URL = ('http://10.76.20.76:6540').replace(/\/$/, '');
 export type ApiSession = { token: string; username: string };
 
 export class ApiError extends Error { constructor(message: string, public status?: number) { super(message); } }
