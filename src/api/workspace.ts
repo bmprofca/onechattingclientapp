@@ -614,14 +614,102 @@ export const getContactList = (
 export const getContactGroups = (session: ApiSession, projectId: string, page = 1, limit = 100) =>
   post<any>('/contact/group-list', {project_id: projectId, page_no: page, page, limit}, session);
 
+export const getContactAssignedGroups = (
+  session: ApiSession,
+  projectId: string,
+  contactId: string | number,
+) =>
+  post<any>(
+    '/contact/contact-groups-by-contact',
+    {project_id: projectId, contact_id: contactId},
+    session,
+  );
+
 export const addContactToGroup = (session: ApiSession, projectId: string, groupId: string, contactId: string | number) =>
   post<any>('/contact/group-contact-add', {project_id: projectId, group_id: groupId, contact_id: contactId}, session);
+
+export const bulkAddContactsToGroups = (
+  session: ApiSession,
+  projectId: string,
+  groupIds: string[] | string,
+  contactIds: Array<string | number> | string | number,
+) =>
+  post<any>(
+    '/contact/group-contact-add-bulk',
+    {
+      project_id: projectId,
+      group_ids: Array.isArray(groupIds) ? groupIds : [groupIds],
+      contact_ids: Array.isArray(contactIds) ? contactIds : [contactIds],
+    },
+    session,
+  );
+
+export const addContactsToGroups = async (
+  session: ApiSession,
+  projectId: string,
+  groupIds: string[] | string,
+  contactIds: Array<string | number> | string | number,
+) => {
+  const gList = (Array.isArray(groupIds) ? groupIds : [groupIds]).filter(Boolean);
+  const cList = (Array.isArray(contactIds) ? contactIds : [contactIds]).filter(Boolean);
+  if (!gList.length || !cList.length) return { error: false };
+
+  try {
+    return await bulkAddContactsToGroups(session, projectId, gList, cList);
+  } catch (err: any) {
+    // Fallback if bulk endpoint not yet available
+    const results = await Promise.all(
+      gList.flatMap((gid) =>
+        cList.map((cid) => addContactToGroup(session, projectId, gid, cid)),
+      ),
+    );
+    const anySuccess = results.some((r) => !r?.error);
+    return { error: !anySuccess, results };
+  }
+};
 
 export const getGroupContacts = (session: ApiSession, projectId: string, groupId: string, page = 1, limit = 20, search = '') =>
   post<any>('/contact/group-contact-list', {project_id: projectId, group_id: groupId, page_no: page, page, limit, search}, session);
 
-export const removeContactFromGroup = (session: ApiSession, projectId: string, groupId: string, contact: any) =>
-  post<any>('/contact/group-contact-delete', {project_id: projectId, group_id: groupId, all_contact_delete: false, unique_ids: contact?.unique_id ? [contact.unique_id] : [], contact_ids: contact?.contact_id || contact?.id ? [contact.contact_id || contact.id] : []}, session);
+export const removeContactFromGroup = (
+  session: ApiSession,
+  projectId: string,
+  groupId: string,
+  contactOrIds: any,
+) => {
+  const uniqueIds: string[] = [];
+  const contactIds: string[] = [];
+
+  if (Array.isArray(contactOrIds)) {
+    contactOrIds.forEach((item) => {
+      if (typeof item === 'object' && item !== null) {
+        if (item.unique_id) uniqueIds.push(String(item.unique_id));
+        if (item.contact_id || item.id) contactIds.push(String(item.contact_id || item.id));
+      } else if (item !== undefined && item !== null && item !== '') {
+        contactIds.push(String(item));
+      }
+    });
+  } else if (typeof contactOrIds === 'object' && contactOrIds !== null) {
+    if (contactOrIds.unique_id) uniqueIds.push(String(contactOrIds.unique_id));
+    if (contactOrIds.contact_id || contactOrIds.id) contactIds.push(String(contactOrIds.contact_id || contactOrIds.id));
+  } else if (contactOrIds !== undefined && contactOrIds !== null && contactOrIds !== '') {
+    contactIds.push(String(contactOrIds));
+  }
+
+  return post<any>(
+    '/contact/group-contact-delete',
+    {
+      project_id: projectId,
+      group_id: groupId,
+      all_contact_delete: false,
+      unique_ids: Array.from(new Set(uniqueIds)),
+      contact_ids: Array.from(new Set(contactIds)),
+    },
+    session,
+  );
+};
+
+export const removeContactsFromGroup = removeContactFromGroup;
 
 export const updateContact = (session: ApiSession, projectId: string, payload: Record<string, any>) =>
   post<any>('/contact/update-contact', {project_id: projectId, ...payload}, session);

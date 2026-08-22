@@ -9,13 +9,12 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
-import { X, Sparkles, Zap, Check, CheckCircle, ArrowRight, MessageSquare, Info } from 'lucide-react-native';
+import { X, Sparkles, Check, CheckCircle, MessageSquare, Info } from 'lucide-react-native';
 import Toast from 'react-native-toast-message';
 import { ApiSession } from '../api/client';
 import { generateAiTemplate, createTemplate } from '../api/workspace';
 import { useTheme } from '../theme/theme';
 import { KeyboardAvoidView } from './KeyboardAvoidView';
-import { SlideUpModal } from './animations';
 
 type AiTemplateModalProps = {
   visible: boolean;
@@ -63,6 +62,9 @@ const TONES = [
   { label: 'Promotional', value: 'exciting and promotional' },
   { label: 'Professional', value: 'polite and professional' },
 ];
+const LANGUAGES = ['en', 'hi', 'es', 'fr', 'de', 'ar'];
+const HEADER_TYPES = ['NONE', 'TEXT', 'IMAGE', 'VIDEO', 'DOCUMENT'];
+const AI_BUTTON_TYPES = ['NONE', 'QUICK_REPLY', 'URL', 'PHONE_NUMBER'];
 
 export function AiTemplateModal({
   visible,
@@ -78,6 +80,9 @@ export function AiTemplateModal({
   const [language, setLanguage] = useState('en');
   const [tone, setTone] = useState('friendly and persuasive');
   const [buttonType, setButtonType] = useState('QUICK_REPLY');
+  const [headerType, setHeaderType] = useState('NONE');
+  const [customInstructions, setCustomInstructions] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [savingDirectly, setSavingDirectly] = useState(false);
@@ -105,7 +110,9 @@ export function AiTemplateModal({
         category,
         language,
         tone,
+        header_type: headerType,
         button_type: buttonType,
+        custom_instructions: customInstructions.trim(),
       });
 
       if (response?.error) {
@@ -132,7 +139,7 @@ export function AiTemplateModal({
   const handleApply = () => {
     if (!generatedData) return;
     onApplyTemplate(generatedData);
-    Toast.show({ type: 'success', text1: 'Applied to template editor' });
+    Toast.show({ type: 'success', text1: 'Applied to template editor — you can keep editing it there' });
     onClose();
   };
 
@@ -215,7 +222,7 @@ export function AiTemplateModal({
               style={[styles.textarea, { color: theme.ink, backgroundColor: theme.surface, borderColor: theme.border }]}
             />
 
-            {/* Category and Tone */}
+            {/* Category and Language */}
             <View style={styles.row}>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.label, { color: theme.ink }]}>Category</Text>
@@ -240,6 +247,119 @@ export function AiTemplateModal({
                 </View>
               </View>
             </View>
+
+            <View style={styles.row}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.label, { color: theme.ink }]}>Language</Text>
+                <View style={styles.chipRow}>
+                  {LANGUAGES.map((lang) => (
+                    <Pressable
+                      key={lang}
+                      onPress={() => setLanguage(lang)}
+                      style={[
+                        styles.selectChip,
+                        {
+                          backgroundColor: language === lang ? theme.emerald : theme.surface,
+                          borderColor: theme.border,
+                        },
+                      ]}
+                    >
+                      <Text style={{ color: language === lang ? '#FFF' : theme.ink, fontSize: 10, fontWeight: '800' }}>
+                        {lang.toUpperCase()}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.row}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.label, { color: theme.ink }]}>Tone</Text>
+                <View style={styles.chipRow}>
+                  {TONES.map((t) => (
+                    <Pressable
+                      key={t.value}
+                      onPress={() => setTone(t.value)}
+                      style={[
+                        styles.selectChip,
+                        {
+                          backgroundColor: tone === t.value ? theme.emerald : theme.surface,
+                          borderColor: theme.border,
+                        },
+                      ]}
+                    >
+                      <Text style={{ color: tone === t.value ? '#FFF' : theme.ink, fontSize: 10, fontWeight: '800' }}>
+                        {t.label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            </View>
+
+            {/* Advanced toggle */}
+            <Pressable onPress={() => setShowAdvanced((v) => !v)} style={styles.advancedToggle}>
+              <Info size={13} color={theme.emerald} />
+              <Text style={[styles.advancedToggleText, { color: theme.emerald }]}>
+                {showAdvanced ? 'Hide advanced options' : 'Show advanced options (Header, Buttons, Instructions)'}
+              </Text>
+            </Pressable>
+
+            {showAdvanced && (
+              <View style={[styles.advancedBox, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <Text style={[styles.label, { color: theme.ink }]}>Header format</Text>
+                <View style={styles.chipRow}>
+                  {HEADER_TYPES.map((h) => (
+                    <Pressable
+                      key={h}
+                      onPress={() => setHeaderType(h)}
+                      style={[
+                        styles.selectChip,
+                        {
+                          backgroundColor: headerType === h ? theme.emerald : theme.canvas,
+                          borderColor: theme.border,
+                        },
+                      ]}
+                    >
+                      <Text style={{ color: headerType === h ? '#FFF' : theme.ink, fontSize: 10, fontWeight: '800' }}>
+                        {h}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+
+                <Text style={[styles.label, { color: theme.ink, marginTop: 10 }]}>Buttons preference</Text>
+                <View style={styles.chipRow}>
+                  {AI_BUTTON_TYPES.map((b) => (
+                    <Pressable
+                      key={b}
+                      onPress={() => setButtonType(b)}
+                      style={[
+                        styles.selectChip,
+                        {
+                          backgroundColor: buttonType === b ? theme.emerald : theme.canvas,
+                          borderColor: theme.border,
+                        },
+                      ]}
+                    >
+                      <Text style={{ color: buttonType === b ? '#FFF' : theme.ink, fontSize: 10, fontWeight: '800' }}>
+                        {b}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+
+                <Text style={[styles.label, { color: theme.ink, marginTop: 10 }]}>Custom instructions (optional)</Text>
+                <TextInput
+                  value={customInstructions}
+                  onChangeText={setCustomInstructions}
+                  placeholder="e.g., include an opt-out line, use 2 variables only..."
+                  placeholderTextColor={theme.muted}
+                  style={[styles.input, { color: theme.ink, backgroundColor: theme.canvas, borderColor: theme.border }]}
+                />
+              </View>
+            )}
 
             {/* Generate Button */}
             <Pressable
@@ -277,6 +397,10 @@ export function AiTemplateModal({
                   <View style={styles.bubble}>
                     {headerComp && headerComp.text ? (
                       <Text style={styles.bubbleHeader}>{headerComp.text}</Text>
+                    ) : headerComp && headerComp.format && headerComp.format !== 'NONE' && headerComp.format !== 'TEXT' ? (
+                      <View style={styles.bubbleMediaPlaceholder}>
+                        <Text style={styles.bubbleMediaPlaceholderText}>[{headerComp.format} Header]</Text>
+                      </View>
                     ) : null}
 
                     <Text style={styles.bubbleBody}>{bodyComp?.text || ''}</Text>
@@ -302,6 +426,10 @@ export function AiTemplateModal({
                     </Text>
                   </View>
                 ) : null}
+
+                <Text style={[styles.editHint, { color: theme.muted }]}>
+                  You can still edit the header, body, footer, variables and buttons after applying.
+                </Text>
 
                 {/* Action Buttons */}
                 <View style={styles.actionsRow}>
@@ -341,7 +469,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   container: {
-    height: '88%',
+    height: '90%',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     overflow: 'hidden',
@@ -413,12 +541,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlignVertical: 'top',
   },
+  input: {
+    height: 42,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    fontSize: 12,
+    marginTop: 6,
+  },
   row: {
     flexDirection: 'row',
     gap: 10,
   },
   chipRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 6,
     marginTop: 6,
   },
@@ -427,6 +564,22 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
+  },
+  advancedToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  advancedToggleText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  advancedBox: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 4,
   },
   generateBtn: {
     flexDirection: 'row',
@@ -486,6 +639,20 @@ const styles = StyleSheet.create({
     color: '#111827',
     marginBottom: 4,
   },
+  bubbleMediaPlaceholder: {
+    height: 60,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  bubbleMediaPlaceholderText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#9CA3AF',
+    letterSpacing: 0.5,
+  },
   bubbleBody: {
     fontSize: 12,
     color: '#1F2937',
@@ -518,6 +685,10 @@ const styles = StyleSheet.create({
   explanationText: {
     fontSize: 11,
     lineHeight: 15,
+  },
+  editHint: {
+    fontSize: 10,
+    fontStyle: 'italic',
   },
   actionsRow: {
     flexDirection: 'row',

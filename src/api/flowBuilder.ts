@@ -29,3 +29,6 @@ export const validateFlow = (session: ApiSession, projectId: string, graph: any)
 
 export const publishFlow = (session: ApiSession, projectId: string, flowId: string) =>
   post<any>('/flow-builder/publish', {project_id: projectId, flow_id: flowId}, session);
+
+export const deleteFlows = (session: ApiSession, projectId: string, flowIds: string[]) =>
+  post<any>('/flow-builder/delete', {project_id: projectId, flow_ids: flowIds}, session);

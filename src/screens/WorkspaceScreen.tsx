@@ -166,6 +166,7 @@ export function WorkspaceScreen({
   const [contactsTarget, setContactsTarget] = useState(false);
   const [groupsTarget, setGroupsTarget] = useState(false);
   const [groupDetailsTarget, setGroupDetailsTarget] = useState<any>(null);
+  const [groupDetailsPrevious, setGroupDetailsPrevious] = useState<'groups' | 'contacts'>('groups');
   const [templatesTarget, setTemplatesTarget] = useState(false);
   const [templateEditorTarget, setTemplateEditorTarget] = useState<any>(null);
   const [isMenuVisible, setIsMenuVisible] = useState(false);
@@ -591,6 +592,15 @@ export function WorkspaceScreen({
           projectId={projectId}
           session={apiSession}
           onBack={() => setContactsTarget(false)}
+          onOpenChat={(contactNumber, contactName) => {
+            setContactsTarget(false);
+            setChatTarget({ number: contactNumber, name: contactName });
+          }}
+          onOpenGroupDetails={(group) => {
+            setContactsTarget(false);
+            setGroupDetailsPrevious('contacts');
+            setGroupDetailsTarget(group);
+          }}
         />
       </ScreenTransition>
     );
@@ -605,6 +615,7 @@ export function WorkspaceScreen({
           onBack={() => setGroupsTarget(false)}
           onOpen={group => {
             setGroupsTarget(false);
+            setGroupDetailsPrevious('groups');
             setGroupDetailsTarget(group);
           }}
         />
@@ -621,7 +632,15 @@ export function WorkspaceScreen({
           group={groupDetailsTarget}
           onBack={() => {
             setGroupDetailsTarget(null);
-            setGroupsTarget(true);
+            if (groupDetailsPrevious === 'contacts') {
+              setContactsTarget(true);
+            } else {
+              setGroupsTarget(true);
+            }
+          }}
+          onOpenChat={(contactNumber, contactName) => {
+            setGroupDetailsTarget(null);
+            setChatTarget({ number: contactNumber, name: contactName });
           }}
         />
       </ScreenTransition>
