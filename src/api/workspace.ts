@@ -332,6 +332,28 @@ export const getTemplates = (
     session,
   );
 
+export const generateAiTemplate = (
+  session: ApiSession,
+  projectId: string,
+  payload: {
+    prompt: string;
+    category?: string;
+    language?: string;
+    tone?: string;
+    header_type?: string;
+    button_type?: string;
+    custom_instructions?: string;
+  },
+) =>
+  post<any>(
+    '/template/generate-ai-template',
+    {
+      project_id: projectId,
+      ...payload,
+    },
+    session,
+  );
+
 export const createTemplate = (session: ApiSession, projectId: string, template: Record<string, any>) =>
   post<any>('/template/create-template', {project_id: projectId, template}, session);
 
