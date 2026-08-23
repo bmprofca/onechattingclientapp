@@ -1,5 +1,5 @@
 import React, {useRef, useState} from 'react';
-import {ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View} from 'react-native';
+import {ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View} from 'react-native';
 import { ArrowLeft, Paperclip, Plus, Sparkles, Trash2, X } from 'lucide-react-native';
 import { AiTemplateModal } from '../components/AiTemplateModal';
 import Toast from 'react-native-toast-message';
@@ -30,9 +30,13 @@ function TemplatePreview({theme, headerFormat, header, headerMediaLink, body, fo
   });
   return <View style={[styles.previewCard, {backgroundColor: theme.surface, borderColor: theme.border}]}><Text style={[styles.previewTitle, {color: theme.ink}]}>Preview</Text><View style={styles.phone}><View style={styles.phoneTop}><Text style={styles.phoneTopText}>WhatsApp</Text></View><View style={styles.chat}><View style={styles.bubble}>
     {headerFormat === 'TEXT' && header ? <Text style={styles.previewHeader}>{header}</Text> : null}
-    {headerFormat !== 'NONE' && headerFormat !== 'TEXT' ? (
+    {headerFormat === 'IMAGE' && headerMediaLink ? (
+      <Image source={{uri: headerMediaLink}} style={styles.previewImage} resizeMode="cover" />
+    ) : null}
+    {headerFormat !== 'NONE' && headerFormat !== 'TEXT' && headerFormat !== 'IMAGE' ? (
       <View style={styles.previewMediaPlaceholder}>
-        <Text style={styles.previewMediaPlaceholderText}>{headerMediaLink ? `[${headerFormat} attached]` : `[${headerFormat} header]`}</Text>
+        <Text style={styles.previewMediaPlaceholderText}>{headerMediaLink ? `${headerFormat} attached` : `${headerFormat} header`}</Text>
+        {headerMediaLink ? <Text style={styles.previewMediaFileName} numberOfLines={1}>{decodeURIComponent(headerMediaLink.split('/').pop() || 'uploaded file')}</Text> : null}
       </View>
     ) : null}
     <Text style={styles.previewBody}>{sampleBody}</Text>{footer ? <Text style={styles.previewFooter}>{footer}</Text> : null}{buttonType !== 'NONE' && buttonText ? <View style={styles.previewButton}><Text style={styles.previewButtonText}>{buttonText}</Text></View> : null}</View><Text style={styles.previewTime}>10:32 AM ✓✓</Text></View></View></View>;
@@ -205,7 +209,8 @@ export function TemplateEditorScreen({projectId, session, template, onBack, onSa
     // Sync header format + content from the AI response. Media formats come back without an
     // actual uploaded file, so we set the format and let the user upload the file themselves.
     const aiHeaderComp = getComp('HEADER');
-    const aiHeaderFormat = (aiHeaderComp.format || (aiHeaderComp.text ? 'TEXT' : 'NONE')) as typeof headerFormat;
+    const rawHeaderFormat = String(aiHeaderComp.format || (aiHeaderComp.text ? 'TEXT' : 'NONE')).toUpperCase();
+    const aiHeaderFormat = (['NONE', 'TEXT', 'IMAGE', 'VIDEO', 'DOCUMENT'].includes(rawHeaderFormat) ? rawHeaderFormat : 'NONE') as typeof headerFormat;
     setHeaderFormat(aiHeaderFormat);
     if (aiHeaderFormat === 'TEXT') {
       setHeader(aiHeaderComp.text || '');
@@ -408,7 +413,9 @@ export function TemplateEditorScreen({projectId, session, template, onBack, onSa
 
 const styles = StyleSheet.create({container: {flex: 1}, header: {padding: 16, flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1}, back: {padding: 4, marginRight: 10}, title: {fontSize: 19, fontWeight: '800'}, subtitle: {fontSize: 11, marginTop: 2}, form: {padding: 17, gap: 10}, sectionTitle: {fontSize: 16, fontWeight: '900', marginTop: 2}, label: {fontSize: 11, fontWeight: '800', marginTop: 4}, input: {height: 46, borderWidth: 1, borderRadius: 11, paddingHorizontal: 12, fontSize: 14}, textarea: {minHeight: 120, borderWidth: 1, borderRadius: 11, padding: 12, fontSize: 14, textAlignVertical: 'top'}, select: {height: 46, borderWidth: 1, borderRadius: 11, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'}, overlay: {flex: 1, backgroundColor: 'rgba(0,0,0,.45)', justifyContent: 'flex-end'}, sheet: {padding: 18, borderTopLeftRadius: 22, borderTopRightRadius: 22}, option: {paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#E5E7EB'}, optionText: {fontSize: 14, fontWeight: '700'}, save: {paddingVertical: 15, borderRadius: 11, alignItems: 'center', marginTop: 10}, saveText: {color: '#FFF', fontWeight: '800'}, aiBanner: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, borderRadius: 12, borderWidth: 1, marginBottom: 4}, aiBannerText: {fontSize: 13, fontWeight: '900'}, aiBannerSub: {fontSize: 11, fontWeight: '800'}, previewCard: {borderWidth: 1, borderRadius: 16, padding: 12, marginBottom: 3}, previewTitle: {fontSize: 14, fontWeight: '900', marginBottom: 9}, phone: {borderRadius: 15, overflow: 'hidden', backgroundColor: '#E6DDD5', maxWidth: 360, alignSelf: 'center', width: '100%'}, phoneTop: {backgroundColor: '#075E54', paddingVertical: 9, paddingHorizontal: 12}, phoneTopText: {color: '#FFF', fontSize: 12, fontWeight: '800'}, chat: {padding: 13, minHeight: 155, justifyContent: 'flex-end'}, bubble: {backgroundColor: '#FFF', borderRadius: 10, borderTopLeftRadius: 3, padding: 10, alignSelf: 'flex-start', maxWidth: '94%', shadowColor: '#000', shadowOpacity: .08, shadowRadius: 3, elevation: 1}, previewHeader: {fontWeight: '900', color: '#111827', fontSize: 13}, previewBody: {color: '#1F2937', fontSize: 13, lineHeight: 18, marginTop: 5}, previewFooter: {color: '#6B7280', fontSize: 11, marginTop: 7}, previewButton: {borderTopWidth: 1, borderTopColor: '#E5E7EB', marginTop: 9, paddingTop: 8}, previewButtonText: {color: '#128C7E', textAlign: 'center', fontWeight: '800', fontSize: 12}, previewTime: {color: '#6B7280', fontSize: 9, alignSelf: 'flex-end', marginTop: 4},
   previewMediaPlaceholder: {height: 50, borderRadius: 7, backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center', marginBottom: 4},
+  previewImage: {width: '100%', height: 130, borderRadius: 7, marginBottom: 4, backgroundColor: '#F3F4F6'},
   previewMediaPlaceholderText: {fontSize: 9, fontWeight: '800', color: '#9CA3AF', letterSpacing: 0.4},
+  previewMediaFileName: {fontSize: 9, color: '#6B7280', maxWidth: '90%', marginTop: 3},
   bodyLabelRow: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6},
   addVarBtn: {flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8},
   addVarBtnText: {fontSize: 10, fontWeight: '800'},

@@ -10,22 +10,27 @@ import { useTheme } from '../theme/theme';
 export function WabaOnboardingScreen({
   session,
   projectId,
+  projectName,
   onBack,
 }: {
   session: ApiSession;
   projectId: string;
+  projectName?: string;
   onBack: () => void;
 }) {
   const theme = useTheme();
   const [loadingLink, setLoadingLink] = useState(false);
   const [submittingId, setSubmittingId] = useState(false);
   const [wabaId, setWabaId] = useState('');
+  const [authCode, setAuthCode] = useState('');
+  const [phoneNumberId, setPhoneNumberId] = useState('');
+  const [provider, setProvider] = useState<'aisensy' | 'own' | null>(null);
   const [wabaInfo, setWabaInfo] = useState<any>(null);
   const [loadingInfo, setLoadingInfo] = useState(false);
 
   useEffect(() => {
     loadWabaInfo();
-  }, []);
+  }, [projectId]);
 
   const loadWabaInfo = async () => {
     setLoadingInfo(true);
@@ -45,20 +50,40 @@ export function WabaOnboardingScreen({
     setLoadingLink(true);
     try {
       const res = await embedSignup(session, projectId);
-      if (res.error) throw new Error(res.msg || 'Failed to generate link');
-      
-      const url = res.url || res.data?.url;
-      if (url) {
-        Linking.openURL(url);
-        Toast.show({ type: 'success', text1: 'Browser Opened', text2: 'Please complete the Meta signup flow in your browser.' });
+      if (res.error) throw new Error(res.msg || 'Failed to start signup process');
+
+      const detectedProvider = res.provider || (res.url ? 'aisensy' : 'own');
+      setProvider(detectedProvider);
+
+      let targetUrl = res.url;
+
+      if (!targetUrl && detectedProvider === 'own') {
+        const appId = res.app_id;
+        const configId = res.config_id;
+        const graphVersion = res.graph_version || 'v21.0';
+
+        if (!appId || !configId) {
+          throw new Error('Meta App credentials not configured on server.');
+        }
+
+        targetUrl = `https://www.facebook.com/${graphVersion}/dialog/oauth?client_id=${appId}&config_id=${configId}&response_type=code&redirect_uri=${encodeURIComponent('https://www.facebook.com/connect/login_success.html')}`;
+      }
+
+      if (targetUrl) {
+        Linking.openURL(targetUrl);
+        Toast.show({
+          type: 'success',
+          text1: 'Browser Opened',
+          text2: 'Please complete the WhatsApp signup in your browser.',
+        });
       } else {
-        throw new Error('No URL returned from server');
+        throw new Error('No signup URL could be generated.');
       }
     } catch (error) {
       Toast.show({
         type: 'error',
         text1: 'Generation Failed',
-        text2: error instanceof Error ? error.message : 'Unable to generate signup link.',
+        text2: error instanceof Error ? error.message : 'Unable to start signup.',
       });
     } finally {
       setLoadingLink(false);
@@ -66,27 +91,45 @@ export function WabaOnboardingScreen({
   };
 
   const handleSubmitWabaId = async () => {
-    if (!wabaId.trim()) {
+    const isOwn = provider === 'own';
+    if (!isOwn && !wabaId.trim()) {
       Toast.show({ type: 'error', text1: 'Missing ID', text2: 'Please enter your WABA ID.' });
       return;
     }
+    if (isOwn && !wabaId.trim() && !authCode.trim()) {
+      Toast.show({ type: 'error', text1: 'Missing Information', text2: 'Please enter your WABA ID or Authorization Code.' });
+      return;
+    }
+
     setSubmittingId(true);
     try {
-      const res = await submitWabaId(session, projectId, wabaId.trim());
-      if (res.error) throw new Error(res.msg || 'Failed to connect WABA');
-      
+      const payload: { waba_id?: string; code?: string; phone_number_id?: string } = {};
+      if (wabaId.trim()) payload.waba_id = wabaId.trim();
+      if (authCode.trim()) payload.code = authCode.trim();
+      if (phoneNumberId.trim()) payload.phone_number_id = phoneNumberId.trim();
+
+      const res = await submitWabaId(session, projectId, payload);
+      if (res.error) throw new Error(res.msg || (typeof res.error === 'string' ? res.error : 'Failed to connect WABA'));
+
       Toast.show({ type: 'success', text1: 'WABA Connected', text2: 'Your WhatsApp Business Account is now linked.' });
       loadWabaInfo(); // Refresh the info
     } catch (error) {
       Toast.show({
         type: 'error',
         text1: 'Connection Failed',
-        text2: error instanceof Error ? error.message : 'Unable to connect WABA ID.',
+        text2: error instanceof Error ? error.message : 'Unable to connect WABA.',
       });
     } finally {
       setSubmittingId(false);
     }
   };
+
+  const isConnected = Boolean(
+    wabaInfo?.business_verification_status ||
+    wabaInfo?.account_review_status ||
+    wabaInfo?.name ||
+    wabaInfo?.business_info?.name
+  );
 
   return (
     <View style={[styles.safe, { backgroundColor: theme.canvas }]}>
@@ -94,44 +137,63 @@ export function WabaOnboardingScreen({
         <Pressable onPress={onBack} style={styles.backButton} hitSlop={8}>
           <ArrowLeft size={24} color={theme.ink} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: theme.ink }]}>WhatsApp Account</Text>
+        <View style={{ flex: 1, alignItems: 'center' }}>
+          <Text style={[styles.headerTitle, { color: theme.ink }]}>WhatsApp Business Account</Text>
+          {projectName && (
+            <Text style={{ fontSize: 12, color: theme.muted, fontWeight: '500' }} numberOfLines={1}>
+              {projectName}
+            </Text>
+          )}
+        </View>
         <View style={styles.headerRight} />
       </View>
 
       <KeyboardAvoidView style={styles.keyboardArea}>
         <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          
+
           <View style={[styles.heroIcon, { backgroundColor: '#E0F2FE' }]}>
             <MessageSquare size={32} color="#0284C7" strokeWidth={2} />
           </View>
-          
-          <Text style={[styles.title, { color: theme.ink }]}>Connect with Meta</Text>
-          <Text style={[styles.copy, { color: theme.muted }]}>Complete the Meta Embedded Signup to get your WhatsApp Business Account (WABA) verified and running.</Text>
+
+          <Text style={[styles.title, { color: theme.ink }]}>
+            {isConnected ? 'WABA Account Details' : 'Connect with Meta'}
+          </Text>
+          <Text style={[styles.copy, { color: theme.muted }]}>
+            {isConnected
+              ? 'Your WhatsApp Business Account is active and verified for this project.'
+              : 'Complete the Meta Embedded Signup to get your WhatsApp Business Account (WABA) verified and running.'}
+          </Text>
 
           {loadingInfo ? (
             <ActivityIndicator color={theme.emerald} style={{ marginVertical: 40 }} />
-          ) : wabaInfo?.business_verification_status ? (
+          ) : isConnected ? (
             <View style={[styles.statusCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <View style={styles.statusHeader}>
                 <CheckCircle2 size={24} color={theme.emerald} />
                 <Text style={[styles.statusTitle, { color: theme.ink }]}>Account Connected</Text>
               </View>
               <View style={styles.statusRow}>
-                <Text style={[styles.statusLabel, { color: theme.muted }]}>Name</Text>
-                <Text style={[styles.statusValue, { color: theme.ink }]}>{wabaInfo.name || wabaInfo.business_info?.name || 'Unknown'}</Text>
+                <Text style={[styles.statusLabel, { color: theme.muted }]}>Business Name</Text>
+                <Text style={[styles.statusValue, { color: theme.ink }]}>{wabaInfo.name || wabaInfo.business_info?.name || 'Linked'}</Text>
               </View>
-              <View style={styles.statusRow}>
-                <Text style={[styles.statusLabel, { color: theme.muted }]}>Verification</Text>
-                <Text style={[styles.statusValue, { color: wabaInfo.business_verification_status === 'VERIFIED' ? theme.emerald : theme.warning }]}>{wabaInfo.business_verification_status}</Text>
-              </View>
-              <View style={styles.statusRow}>
-                <Text style={[styles.statusLabel, { color: theme.muted }]}>Review Status</Text>
-                <Text style={[styles.statusValue, { color: theme.ink }]}>{wabaInfo.account_review_status}</Text>
-              </View>
+              {wabaInfo.business_verification_status && (
+                <View style={styles.statusRow}>
+                  <Text style={[styles.statusLabel, { color: theme.muted }]}>Verification</Text>
+                  <Text style={[styles.statusValue, { color: wabaInfo.business_verification_status === 'VERIFIED' ? theme.emerald : theme.warning }]}>
+                    {wabaInfo.business_verification_status}
+                  </Text>
+                </View>
+              )}
+              {wabaInfo.account_review_status && (
+                <View style={styles.statusRow}>
+                  <Text style={[styles.statusLabel, { color: theme.muted }]}>Review Status</Text>
+                  <Text style={[styles.statusValue, { color: theme.ink }]}>{wabaInfo.account_review_status}</Text>
+                </View>
+              )}
             </View>
           ) : (
             <View style={[styles.form, { backgroundColor: theme.surface, borderColor: theme.border, shadowColor: theme.shadow }]}>
-              
+
               <View style={styles.stepBlock}>
                 <View style={styles.stepHeader}>
                   <View style={[styles.stepNumber, { backgroundColor: theme.mint }]}><Text style={[styles.stepNumberText, { color: theme.emerald }]}>1</Text></View>
@@ -164,10 +226,10 @@ export function WabaOnboardingScreen({
               <View style={styles.stepBlock}>
                 <View style={styles.stepHeader}>
                   <View style={[styles.stepNumber, { backgroundColor: theme.mint }]}><Text style={[styles.stepNumberText, { color: theme.emerald }]}>2</Text></View>
-                  <Text style={[styles.stepTitle, { color: theme.ink }]}>Submit WABA ID</Text>
+                  <Text style={[styles.stepTitle, { color: theme.ink }]}>Connect Account</Text>
                 </View>
-                <Text style={[styles.stepDesc, { color: theme.muted }]}>After completing the signup, copy your new WABA ID and paste it below.</Text>
-                
+                <Text style={[styles.stepDesc, { color: theme.muted }]}>After completing the signup, enter your WABA ID{provider === 'own' ? ' or authorization details' : ''} below.</Text>
+
                 <View style={[styles.inputRow, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
                   <LinkIcon size={17} color={theme.muted} strokeWidth={2.25} />
                   <TextInput
@@ -178,6 +240,19 @@ export function WabaOnboardingScreen({
                     style={[styles.input, { color: theme.ink }]}
                   />
                 </View>
+
+                {provider === 'own' && (
+                  <View style={[styles.inputRow, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
+                    <LinkIcon size={17} color={theme.muted} strokeWidth={2.25} />
+                    <TextInput
+                      value={authCode}
+                      onChangeText={setAuthCode}
+                      placeholder="Enter Auth Code (optional if WABA ID given)"
+                      placeholderTextColor={theme.muted}
+                      style={[styles.input, { color: theme.ink }]}
+                    />
+                  </View>
+                )}
 
                 <Pressable
                   accessibilityRole="button"
@@ -193,7 +268,7 @@ export function WabaOnboardingScreen({
                   {submittingId ? (
                     <ActivityIndicator color="#FFF" />
                   ) : (
-                    <Text style={styles.buttonText}>Connect ID</Text>
+                    <Text style={styles.buttonText}>Connect WABA</Text>
                   )}
                 </Pressable>
               </View>

@@ -67,7 +67,9 @@ export function TemplateModal({
     try {
       const res = await getTemplates(session, projectId, 'APPROVED');
       const list = unwrapList(res);
-      setTemplates(list);
+      // A template can only be sent after Meta approves it. Keep this guard
+      // locally as well as passing APPROVED to the API.
+      setTemplates(list.filter((item: any) => String(item.status || '').toUpperCase() === 'APPROVED'));
     } catch (err) {
       console.warn('Failed to load templates', err);
     } finally {

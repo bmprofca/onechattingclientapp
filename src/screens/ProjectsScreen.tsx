@@ -24,12 +24,13 @@ import { ApiSession } from '../api/client';
 import { useTheme } from '../theme/theme';
 import { CreateProjectScreen } from './CreateProjectScreen';
 import { ManageProjectScreen } from './ManageProjectScreen';
+import { WabaOnboardingScreen } from './WabaOnboardingScreen';
 import { ProjectAvatar } from '../components/ProjectAvatar';
 import { ProjectQRModal } from '../components/Modals/ProjectQRModal';
 import { StaggeredCell } from '../components/animations';
 import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
 
-type Mode = 'list' | 'create' | 'manage';
+type Mode = 'list' | 'create' | 'manage' | 'waba';
 
 // --- Skeleton Components ---
 function SkeletonBar({ width, height = 14, style }: { width?: number | string; height?: number; style?: any }) {
@@ -111,7 +112,7 @@ export function ProjectsScreen({
   onProjectCreated: (newProject: Project) => void | Promise<void>;
   onClose?: () => void;
   onRechargeWallet?: () => void;
-  onOpenWaba?: () => void;
+  onOpenWaba?: (projectId?: string) => void;
   loadingProjects?: boolean;
 }) {
   const theme = useTheme();
@@ -124,6 +125,10 @@ export function ProjectsScreen({
     const handleBackPress = () => {
       if (mode === 'create') {
         setMode('list');
+        return true;
+      }
+      if (mode === 'waba') {
+        setMode('manage');
         return true;
       }
       if (mode === 'manage') {
@@ -156,16 +161,35 @@ export function ProjectsScreen({
     );
   }
 
+  if (mode === 'waba' && manageProjectId) {
+    const targetProj = projects.find(p => p.id === manageProjectId);
+    return (
+      <WabaOnboardingScreen
+        session={session}
+        projectId={manageProjectId}
+        projectName={targetProj?.name}
+        onBack={() => {
+          setMode('manage');
+        }}
+      />
+    );
+  }
+
   if (mode === 'manage' && manageProjectId) {
+    const targetProj = projects.find(p => p.id === manageProjectId);
     return (
       <ManageProjectScreen
         session={session}
         projectId={manageProjectId}
+        projectName={targetProj?.name}
         onBack={() => {
           setMode('list');
           setManageProjectId(null);
         }}
-        onOpenWaba={onOpenWaba}
+        onOpenWaba={(projId) => {
+          setManageProjectId(projId || manageProjectId);
+          setMode('waba');
+        }}
       />
     );
   }

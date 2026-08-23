@@ -82,15 +82,17 @@ const formatVerticalLabel = (value?: string) => (value || '').replace(/_/g, ' ')
 export function ManageProjectScreen({
   session,
   projectId,
+  projectName: initialProjectName,
   onBack,
   onUpdated,
   onOpenWaba,
 }: {
   session: ApiSession;
   projectId: string;
+  projectName?: string;
   onBack: () => void;
   onUpdated?: () => void;
-  onOpenWaba?: () => void;
+  onOpenWaba?: (projectId: string) => void;
 }) {
   const theme = useTheme();
 
@@ -102,7 +104,7 @@ export function ManageProjectScreen({
   const [loadingWaba, setLoadingWaba] = useState(false);
 
   // Project edit form
-  const [projectName, setProjectName] = useState('');
+  const [projectName, setProjectName] = useState(initialProjectName || '');
   const [companyName, setCompanyName] = useState('');
   const [profileImage, setProfileImage] = useState('');
   const [description, setDescription] = useState('');
@@ -149,7 +151,7 @@ export function ManageProjectScreen({
       const proj = data.project || {};
       const prof = data.profile || {};
 
-      setProjectName(proj.name || proj.project_name || '');
+      setProjectName(proj.name || proj.project_name || initialProjectName || '');
       setCompanyName(prof.firm_name || prof.company_name || proj.company_name || '');
       const rawImg =
         proj.profile_image ||
@@ -194,7 +196,7 @@ export function ManageProjectScreen({
     } finally {
       setLoadingMeta(false);
     }
-  }, [projectId, session.token, session.username]);
+  }, [projectId, initialProjectName, session.token, session.username]);
 
   useEffect(() => { loadMeta(); }, [loadMeta]);
 
@@ -421,49 +423,32 @@ export function ManageProjectScreen({
                 ================================================================ */}
             {!isWabaConnected ? (
               <FadeInView distance={8} duration={300}>
-                {/* Connect WhatsApp Card */}
+                {/* WhatsApp Connection Status Card (Disconnected) */}
                 <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                   <View style={styles.connectHeader}>
                     <View style={[styles.connectIconWrap, { backgroundColor: '#FEF3C7' }]}>
                       <WifiOff size={24} color="#D97706" />
                     </View>
                     <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text style={[styles.connectTitle, { color: theme.ink }]}>Connect WhatsApp</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={[styles.connectTitle, { color: theme.ink }]}>WhatsApp Status</Text>
+                        <View style={[styles.connectedBadge, { backgroundColor: '#FEF3C7' }]}>
+                          <Text style={[styles.connectedBadgeText, { color: '#D97706' }]}>NOT CONNECTED</Text>
+                        </View>
+                      </View>
                       <Text style={[styles.connectSubtitle, { color: theme.muted }]}>
-                        Link your Meta Business account to start sending messages
+                        No WhatsApp Business Account is linked to this project yet.
                       </Text>
                     </View>
                   </View>
 
-                  {/* Sync / Refresh state */}
-                  {isSyncing ? (
-                    <View style={styles.syncingArea}>
-                      <ActivityIndicator color={theme.emerald} size="large" />
-                      <Text style={[styles.syncingText, { color: theme.muted }]}>Updating / Syncing...</Text>
-                    </View>
-                  ) : showManualRefresh ? (
-                    <View style={styles.syncingArea}>
-                      <Text style={[styles.syncingText, { color: theme.muted, marginBottom: 12 }]}>
-                        Connection status not updated. Please refresh manually.
-                      </Text>
-                      <ScalePressable
-                        onPress={handleManualRefresh}
-                        style={[styles.refreshButton, { backgroundColor: theme.emerald }]}
-                      >
-                        <RefreshCw size={16} color="#FFF" />
-                        <Text style={styles.refreshButtonText}>Refresh Status</Text>
-                      </ScalePressable>
-                    </View>
-                  ) : (
-                    <ScalePressable
-                      onPress={onOpenWaba}
-                      disabled={!onOpenWaba}
-                      style={[styles.connectButton, { backgroundColor: theme.emerald, opacity: onOpenWaba ? 1 : 0.5 }]}
-                    >
-                      <Wifi size={18} color="#FFF" />
-                      <Text style={styles.connectButtonText}>Sign Up with Meta / Connect</Text>
-                    </ScalePressable>
-                  )}
+                  <ScalePressable
+                    onPress={() => onOpenWaba?.(projectId)}
+                    style={[styles.connectButton, { backgroundColor: theme.emerald }]}
+                  >
+                    <Globe size={18} color="#FFF" />
+                    <Text style={styles.connectButtonText}>Open WABA Setup & Connect</Text>
+                  </ScalePressable>
                 </View>
 
                 {/* Project Information (read-only) */}
@@ -488,6 +473,29 @@ export function ManageProjectScreen({
                  SECTION B: CONNECTED — WABA profile + edit + project info
                  ================================================================ */
               <FadeInView distance={8} duration={300}>
+                {/* WABA Account Info Banner */}
+                <Pressable
+                  onPress={() => onOpenWaba?.(projectId)}
+                  style={({ pressed }) => [
+                    styles.qrBanner,
+                    { backgroundColor: theme.surface, borderColor: theme.border, marginBottom: 14 },
+                    pressed && { backgroundColor: theme.cardHover },
+                  ]}
+                >
+                  <View style={[styles.qrBannerIcon, { backgroundColor: theme.mint }]}>
+                    <CheckCircle2 size={22} color={theme.emerald} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.qrBannerTitle, { color: theme.ink }]}>WABA Account Info</Text>
+                    <Text style={[styles.qrBannerSubtitle, { color: theme.muted }]}>
+                      View verification, review status & account details
+                    </Text>
+                  </View>
+                  <View style={[styles.qrBannerButton, { backgroundColor: theme.emerald }]}>
+                    <Text style={styles.qrBannerButtonText}>View Info</Text>
+                  </View>
+                </Pressable>
+
                 {/* QR Code banner */}
                 <Pressable
                   onPress={() => setShowQRModal(true)}

@@ -150,7 +150,7 @@ export function WorkspaceScreen({
   } | null>(null);
   const [createCampaignTarget, setCreateCampaignTarget] = useState(false);
   const [walletTarget, setWalletTarget] = useState(false); // full-screen wallet, used from full mode
-  const [wabaTarget, setWabaTarget] = useState(false);
+  const [wabaTarget, setWabaTarget] = useState<string | boolean | null>(null);
   const [supportTarget, setSupportTarget] = useState(false);
   const [contextConfigTarget, setContextConfigTarget] = useState(false);
   const [projectConfigTarget, setProjectConfigTarget] = useState(false);
@@ -385,7 +385,7 @@ export function WorkspaceScreen({
       return true;
     }
     if (wabaTarget) {
-      setWabaTarget(false);
+      setWabaTarget(null);
       return true;
     }
     if (scannedUsersTarget) {
@@ -562,12 +562,15 @@ export function WorkspaceScreen({
   }
 
   if (wabaTarget) {
+    const targetProjectId = typeof wabaTarget === 'string' ? wabaTarget : projectId;
+    const targetProjectName = projects.find(p => p.id === targetProjectId)?.name;
     return (
       <ScreenTransition>
         <WabaOnboardingScreen
           session={apiSession}
-          projectId={projectId}
-          onBack={() => setWabaTarget(false)}
+          projectId={targetProjectId}
+          projectName={targetProjectName}
+          onBack={() => setWabaTarget(null)}
         />
       </ScreenTransition>
     );
@@ -837,9 +840,9 @@ export function WorkspaceScreen({
             setProjectsTarget(false);
             setWalletTarget(true);
           }}
-          onOpenWaba={() => {
+          onOpenWaba={(targetId) => {
             setProjectsTarget(false);
-            setWabaTarget(true);
+            setWabaTarget(targetId || projectId);
           }}
         />
       </ScreenTransition>

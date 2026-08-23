@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   Modal,
+  Image,
   View,
   Text,
   StyleSheet,
@@ -12,7 +13,7 @@ import {
 import { X, Sparkles, Check, CheckCircle, MessageSquare, Info } from 'lucide-react-native';
 import Toast from 'react-native-toast-message';
 import { ApiSession } from '../api/client';
-import { generateAiTemplate, createTemplate } from '../api/workspace';
+import { generateAiTemplate, generateAiHeaderMedia, createTemplate } from '../api/workspace';
 import { useTheme } from '../theme/theme';
 import { KeyboardAvoidView } from './KeyboardAvoidView';
 
@@ -120,7 +121,36 @@ export function AiTemplateModal({
       }
 
       if (response?.data?.template) {
-        setGeneratedData(response.data);
+        let result = response.data;
+        const headerComp = result.template.components?.find((c: any) => String(c.type).toUpperCase() === 'HEADER');
+        const format = String(headerComp?.format || '').toUpperCase() as 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'NONE' | 'TEXT';
+        if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(format)) {
+          try {
+            const mediaFormat = format as 'IMAGE' | 'VIDEO' | 'DOCUMENT';
+            const media = await generateAiHeaderMedia(session, projectId, {
+              format: mediaFormat,
+              prompt: prompt.trim(),
+              body: result.template.components?.find((c: any) => String(c.type).toUpperCase() === 'BODY')?.text || '',
+              header_text: headerComp?.text || '',
+            });
+            if (media?.data?.url) {
+              result = {
+                ...result,
+                template: {
+                  ...result.template,
+                  components: result.template.components.map((component: any) =>
+                    String(component.type).toUpperCase() === 'HEADER'
+                      ? {...component, example: {header_handle: [media.data.url]}}
+                      : component,
+                  ),
+                },
+              };
+            }
+          } catch (mediaError: any) {
+            Toast.show({type: 'error', text1: 'Header media generation failed', text2: mediaError?.message || 'You can upload a file in the editor'});
+          }
+        }
+        setGeneratedData(result);
         Toast.show({ type: 'success', text1: '✨ Template generated with AI!' });
       } else {
         throw new Error('Could not generate template');
@@ -398,9 +428,13 @@ export function AiTemplateModal({
                     {headerComp && headerComp.text ? (
                       <Text style={styles.bubbleHeader}>{headerComp.text}</Text>
                     ) : headerComp && headerComp.format && headerComp.format !== 'NONE' && headerComp.format !== 'TEXT' ? (
-                      <View style={styles.bubbleMediaPlaceholder}>
-                        <Text style={styles.bubbleMediaPlaceholderText}>[{headerComp.format} Header]</Text>
-                      </View>
+                      headerComp.format === 'IMAGE' && headerComp.example?.header_handle?.[0] ? (
+                        <Image source={{uri: headerComp.example.header_handle[0]}} style={styles.bubbleMediaImage} resizeMode="cover" />
+                      ) : (
+                        <View style={styles.bubbleMediaPlaceholder}>
+                          <Text style={styles.bubbleMediaPlaceholderText}>{headerComp.example?.header_handle?.[0] ? `${headerComp.format} attached` : `[${headerComp.format} media unavailable]`}</Text>
+                        </View>
+                      )
                     ) : null}
 
                     <Text style={styles.bubbleBody}>{bodyComp?.text || ''}</Text>
@@ -647,6 +681,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 6,
   },
+  bubbleMediaImage: { height: 82, borderRadius: 8, marginBottom: 7, width: '100%' },
   bubbleMediaPlaceholderText: {
     fontSize: 10,
     fontWeight: '800',

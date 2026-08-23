@@ -354,6 +354,16 @@ export const generateAiTemplate = (
     session,
   );
 
+export const generateAiHeaderMedia = (
+  session: ApiSession,
+  projectId: string,
+  payload: {format: 'IMAGE' | 'VIDEO' | 'DOCUMENT'; prompt: string; body?: string; header_text?: string},
+) =>
+  post<any>('/template/generate-ai-header-media', {
+    project_id: projectId,
+    ...payload,
+  }, session);
+
 export const createTemplate = (session: ApiSession, projectId: string, template: Record<string, any>) =>
   post<any>('/template/create-template', {project_id: projectId, template}, session);
 
@@ -718,11 +728,27 @@ export const updateContact = (session: ApiSession, projectId: string, payload: R
 // WABA / Embed
 // --------------------------------------------------
 
+export type EmbedSignupResult = {
+  error: boolean;
+  provider?: 'aisensy' | 'own';
+  url?: string;
+  app_id?: string;
+  config_id?: string;
+  graph_version?: string;
+  msg?: string;
+};
+
+export type SubmitWabaPayload = {
+  waba_id?: string;
+  code?: string;
+  phone_number_id?: string;
+};
+
 export async function embedSignup(
   session: ApiSession,
   projectId: string,
-) {
-  return post<any>(
+): Promise<EmbedSignupResult> {
+  return post<EmbedSignupResult>(
     '/project/embed-signup',
     {
       project_id: projectId,
@@ -734,14 +760,24 @@ export async function embedSignup(
 export async function submitWabaId(
   session: ApiSession,
   projectId: string,
-  wabaId: string,
+  payloadOrWabaId: string | SubmitWabaPayload,
+  code?: string,
+  phoneNumberId?: string,
 ) {
+  const body: Record<string, any> = { project_id: projectId };
+  if (typeof payloadOrWabaId === 'string') {
+    if (payloadOrWabaId) body.waba_id = payloadOrWabaId;
+    if (code) body.code = code;
+    if (phoneNumberId) body.phone_number_id = phoneNumberId;
+  } else if (payloadOrWabaId && typeof payloadOrWabaId === 'object') {
+    if (payloadOrWabaId.waba_id) body.waba_id = payloadOrWabaId.waba_id;
+    if (payloadOrWabaId.code) body.code = payloadOrWabaId.code;
+    if (payloadOrWabaId.phone_number_id) body.phone_number_id = payloadOrWabaId.phone_number_id;
+  }
+
   return post<any>(
     '/project/submit-waba-id',
-    {
-      project_id: projectId,
-      waba_id: wabaId,
-    },
+    body,
     session,
   );
 }
