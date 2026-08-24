@@ -45,6 +45,7 @@ export function DashboardScreen({
   onOpenTemplates,
   onOpenGroups,
   onOpenContacts,
+  onOpenCases,
 }: {
   projectId: string;
   session: ApiSession;
@@ -60,6 +61,7 @@ export function DashboardScreen({
   onOpenTemplates?: () => void;
   onOpenGroups?: () => void;
   onOpenContacts?: () => void;
+  onOpenCases?: () => void;
 }) {
   const theme = useTheme();
   const [dashboardData, setDashboardData] = useState<any>(null);
@@ -152,6 +154,7 @@ export function DashboardScreen({
   ];
 
   const actions = [
+    { title: 'Open Cases', note: 'Manage customer cases', onPress: onOpenCases },
     { title: 'Scanned Users', note: 'QR scan audience', onPress: onOpenScannedUsers },
     { title: 'Projects', note: 'Switch workspace', onPress: onOpenProjectsHub },
     { title: 'Templates', note: 'Manage message templates', onPress: onOpenTemplates },

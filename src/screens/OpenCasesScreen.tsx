@@ -18,11 +18,9 @@ import {
   Search,
   Plus,
   Edit2,
-  X,
   MessageCircle,
   FileText,
   AlertCircle,
-  Phone,
   Check,
   CheckSquare,
 } from 'lucide-react-native';
@@ -30,10 +28,8 @@ import { ApiSession } from '../api/client';
 import {
   getOpenCases,
   getCaseList,
-  createCase,
   editCase,
   bulkCloseCases,
-  getContactList,
 } from '../api/workspace';
 import { LoadState } from '../components/LoadState';
 import { useTheme } from '../theme/theme';
@@ -113,11 +109,13 @@ export function OpenCasesScreen({
   session,
   onBack,
   onOpenChat,
+  onCreateCase,
 }: {
   projectId: string;
   session: ApiSession;
   onBack?: () => void;
   onOpenChat: (contactNumber: string, contactName: string) => void;
+  onCreateCase?: (contact?: { name?: string; number: string }) => void;
 }) {
   const theme = useTheme();
 
@@ -138,22 +136,6 @@ export function OpenCasesScreen({
   const [caseListError, setCaseListError] = useState('');
   const [caseListSearch, setCaseListSearch] = useState('');
   const [caseListStatusFilter, setCaseListStatusFilter] = useState<'' | 'open' | 'closed'>('');
-
-  // --- Create Case Screen State ---
-  const [showCaseCreateModal, setShowCaseCreateModal] = useState(false);
-  const [caseCreateSelectedContact, setCaseCreateSelectedContact] = useState<any>(null);
-  const [caseCreateName, setCaseCreateName] = useState('');
-  const [caseCreateRemark, setCaseCreateRemark] = useState('');
-  const [caseCreateStatus, setCaseCreateStatus] = useState<'open' | 'closed'>('open');
-  const [caseCreateLoading, setCaseCreateLoading] = useState(false);
-  const [caseCreateError, setCaseCreateError] = useState('');
-  const [manualNumberInput, setManualNumberInput] = useState(false);
-  const [manualNumber, setManualNumber] = useState('');
-
-  // Contact picker inside create screen
-  const [createContacts, setCreateContacts] = useState<any[]>([]);
-  const [createContactsLoading, setCreateContactsLoading] = useState(false);
-  const [createContactsQuery, setCreateContactsQuery] = useState('');
 
   // --- Edit Case Screen State ---
   const [showCaseEditModal, setShowCaseEditModal] = useState(false);
@@ -177,14 +159,12 @@ export function OpenCasesScreen({
   const createNewCaseName = async () => {
     const name = newCaseName.trim();
     if (!name) {
-      if (creatingCaseNameFor === 'create') setCaseCreateError('Case name is required');
-      else setCaseEditError('Case name is required');
+      setCaseEditError('Case name is required');
       return;
     }
     const names = await saveCustomCaseName(name);
     setCaseNames(names);
-    if (creatingCaseNameFor === 'create') setCaseCreateName(name);
-    if (creatingCaseNameFor === 'edit') setCaseEditName(name);
+    setCaseEditName(name);
     setNewCaseName('');
     setCreatingCaseNameFor(null);
   };
@@ -290,15 +270,11 @@ export function OpenCasesScreen({
     };
   }, [fetchOpenCases]);
 
-  // Back handler for screens (priority: edit > create > list > main)
+  // Back handler for screens (priority: edit > list > main)
   useEffect(() => {
     const onBackPress = () => {
       if (showCaseEditModal) {
         setShowCaseEditModal(false);
-        return true;
-      }
-      if (showCaseCreateModal) {
-        setShowCaseCreateModal(false);
         return true;
       }
       if (showCaseListModal) {
@@ -309,7 +285,7 @@ export function OpenCasesScreen({
     };
     const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
     return () => sub.remove();
-  }, [showCaseEditModal, showCaseCreateModal, showCaseListModal]);
+  }, [showCaseEditModal, showCaseListModal]);
 
   // --- Fetch Cases for a Number (Screen) ---
   const fetchCaseListForNumber = useCallback(
@@ -318,7 +294,6 @@ export function OpenCasesScreen({
       setCaseListLoading(true);
       setCaseListError('');
       try {
-        // FIX: getCaseList expects an options object, not positional args
         const res = await getCaseList(session, projectId, {
           number,
           search: searchQuery !== undefined ? searchQuery : caseListSearch,
@@ -352,91 +327,6 @@ export function OpenCasesScreen({
     setCaseListStatusFilter('');
     setShowCaseListModal(true);
     fetchCaseListForNumber(num, '', '');
-  };
-
-  // --- Contact Picker Search for Create Case ---
-  const searchContacts = useCallback(
-    async (query: string) => {
-      if (!projectId || !session?.token) return;
-      setCreateContactsLoading(true);
-      try {
-        const res = await getContactList(session, projectId, 1, 15, query);
-        const list = res?.data || res?.list || [];
-        setCreateContacts(
-          list.map((c: any) => ({
-            id: c.contact_id || c.id,
-            name: c.name || c.contact_name,
-            number: c.number || c.phone,
-            firm_name: c.firm_name,
-          })),
-        );
-      } catch {
-        setCreateContacts([]);
-      } finally {
-        setCreateContactsLoading(false);
-      }
-    },
-    [projectId, session.token, session.username],
-  );
-
-  const openCaseCreateModal = () => {
-    setCaseCreateSelectedContact(null);
-    setCaseCreateName('');
-    setCaseCreateRemark('');
-    setCaseCreateStatus('open');
-    setCaseCreateError('');
-    setManualNumberInput(false);
-    setManualNumber('');
-    setCreateContacts([]);
-    setCreateContactsQuery('');
-    setShowCaseCreateModal(true);
-    searchContacts('');
-  };
-
-  const handleCreateCase = async () => {
-    const num = manualNumberInput
-      ? manualNumber.trim()
-      : caseCreateSelectedContact?.number;
-    if (!num) {
-      setCaseCreateError('Please select or enter a contact number');
-      return;
-    }
-    const name = caseCreateName.trim();
-    if (!name) {
-      setCaseCreateError('Case name is required');
-      return;
-    }
-
-    setCaseCreateLoading(true);
-    setCaseCreateError('');
-    try {
-      // FIX: createCase takes positional args, not an object
-      const res = await createCase(
-        session,
-        projectId,
-        num,
-        name,
-        caseCreateRemark.trim(),
-        caseCreateStatus,
-      );
-
-      if (res?.error) {
-        setCaseCreateError(typeof res.error === 'string' ? res.error : res.msg || 'Failed to create case');
-        return;
-      }
-
-      Toast.show({
-        type: 'success',
-        text1: 'Case Created',
-        text2: 'New case created successfully',
-      });
-      setShowCaseCreateModal(false);
-      fetchOpenCases();
-    } catch (err: any) {
-      setCaseCreateError(err?.message || 'Failed to create case');
-    } finally {
-      setCaseCreateLoading(false);
-    }
   };
 
   // --- Edit Case ---
@@ -607,220 +497,7 @@ export function OpenCasesScreen({
     );
   }
 
-  // =========================================================================
-  // SCREEN: CREATE CASE (full screen)
-  // =========================================================================
-  if (showCaseCreateModal) {
-    return (
-      <KeyboardAvoidView style={[styles.container, { backgroundColor: theme.canvas }]}>
-        <View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
-          <View style={styles.headerLeft}>
-            <ScalePressable onPress={() => setShowCaseCreateModal(false)} style={styles.backBtn} hitSlop={8}>
-              <ArrowLeft size={22} color={theme.ink} strokeWidth={2.5} />
-            </ScalePressable>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.headerTitle, { color: theme.ink }]} numberOfLines={1}>
-                Create Case
-              </Text>
-              <Text style={[styles.headerSubtitle, { color: theme.muted }]} numberOfLines={1}>
-                Select a contact and enter case details
-              </Text>
-            </View>
-          </View>
-        </View>
 
-        <ScrollView contentContainerStyle={{ padding: 18, gap: 16 }} keyboardShouldPersistTaps="handled">
-          {caseCreateError ? (
-            <View style={[styles.errorBox, { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' }]}>
-              <AlertCircle size={16} color="#DC2626" />
-              <Text style={[styles.errorBoxText, { color: '#B91C1C' }]}>{caseCreateError}</Text>
-            </View>
-          ) : null}
-
-          {/* Step 1: Contact Selection */}
-          <View>
-            <Text style={[styles.formLabel, { color: theme.muted }]}>CONTACT *</Text>
-            {caseCreateSelectedContact && !manualNumberInput ? (
-              <View style={[styles.selectedContactCard, { backgroundColor: theme.canvas, borderColor: theme.emerald }]}>
-                <View style={[styles.contactAvatar, { backgroundColor: theme.mint }]}>
-                  <Text style={[styles.contactAvatarText, { color: theme.mintText }]}>
-                    {caseCreateSelectedContact.name?.charAt(0).toUpperCase() || 'C'}
-                  </Text>
-                </View>
-                <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={[styles.contactName, { color: theme.ink }]}>
-                    {caseCreateSelectedContact.name || 'Contact'}
-                  </Text>
-                  <Text style={[styles.contactPhone, { color: theme.muted }]}>
-                    {caseCreateSelectedContact.number}
-                  </Text>
-                </View>
-                <Pressable
-                  onPress={() => setCaseCreateSelectedContact(null)}
-                  style={[styles.changeContactBtn, { borderColor: theme.border }]}
-                >
-                  <Text style={[styles.changeContactBtnText, { color: theme.emerald }]}>Change</Text>
-                </Pressable>
-              </View>
-            ) : manualNumberInput ? (
-              <View style={{ gap: 10 }}>
-                <View style={[styles.inputRow, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
-                  <Phone size={16} color={theme.muted} />
-                  <TextInput
-                    value={manualNumber}
-                    onChangeText={setManualNumber}
-                    keyboardType="phone-pad"
-                    placeholder="Phone number e.g. +919876543210"
-                    placeholderTextColor={theme.muted}
-                    style={[styles.input, { color: theme.ink }]}
-                  />
-                </View>
-                <Pressable
-                  onPress={() => setManualNumberInput(false)}
-                  style={{ alignSelf: 'flex-start' }}
-                >
-                  <Text style={{ fontSize: 12, color: theme.emerald, fontWeight: '700' }}>
-                    ← Select from contacts list
-                  </Text>
-                </Pressable>
-              </View>
-            ) : (
-              <View style={{ gap: 8 }}>
-                <View style={[styles.inputRow, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
-                  <Search size={16} color={theme.muted} />
-                  <TextInput
-                    value={createContactsQuery}
-                    onChangeText={(q) => {
-                      setCreateContactsQuery(q);
-                      searchContacts(q);
-                    }}
-                    placeholder="Search contact name or number..."
-                    placeholderTextColor={theme.muted}
-                    style={[styles.input, { color: theme.ink }]}
-                  />
-                </View>
-
-                {createContactsLoading ? (
-                  <ActivityIndicator color={theme.emerald} style={{ padding: 12 }} />
-                ) : (
-                  <ScrollView style={styles.contactsPickerList} nestedScrollEnabled>
-                    {createContacts.map((c) => (
-                      <Pressable
-                        key={c.id || c.number}
-                        onPress={() => setCaseCreateSelectedContact(c)}
-                        style={[styles.contactPickerItem, { borderBottomColor: theme.border }]}
-                      >
-                        <View style={[styles.contactPickerAvatar, { backgroundColor: theme.mint }]}>
-                          <Text style={{ fontSize: 13, fontWeight: '800', color: theme.mintText }}>
-                            {c.name?.charAt(0).toUpperCase() || 'C'}
-                          </Text>
-                        </View>
-                        <View style={{ flex: 1, marginLeft: 10 }}>
-                          <Text style={[styles.contactPickerName, { color: theme.ink }]}>
-                            {c.name || 'Contact'}
-                          </Text>
-                          <Text style={[styles.contactPickerPhone, { color: theme.muted }]}>
-                            {c.number} {c.firm_name ? `· ${c.firm_name}` : ''}
-                          </Text>
-                        </View>
-                      </Pressable>
-                    ))}
-                  </ScrollView>
-                )}
-
-                <Pressable
-                  onPress={() => setManualNumberInput(true)}
-                  style={{ alignSelf: 'flex-start', marginTop: 4 }}
-                >
-                  <Text style={{ fontSize: 12, color: theme.emerald, fontWeight: '700' }}>
-                    + Enter phone number manually
-                  </Text>
-                </Pressable>
-              </View>
-            )}
-          </View>
-
-          {/* Step 2: Case Details */}
-          <View>
-            <Text style={[styles.formLabel, { color: theme.muted }]}>CASE NAME *</Text>
-            <CaseNameSelect value={caseCreateName} options={caseNames} onChange={(value: string) => { setCaseCreateName(value); setCaseCreateError(''); }} onCreateNew={() => { setNewCaseName(''); setCreatingCaseNameFor('create'); }} theme={theme} />
-            {creatingCaseNameFor === 'create' && <View style={styles.newNameRow}>
-              <TextInput value={newCaseName} onChangeText={setNewCaseName} placeholder="New case name" placeholderTextColor={theme.muted} style={[styles.newNameInput, {color: theme.ink, borderColor: theme.border, backgroundColor: theme.canvas}]} />
-              <Pressable onPress={createNewCaseName} style={[styles.newNameButton, {backgroundColor: theme.emerald}]}><Text style={styles.newNameButtonText}>Add</Text></Pressable>
-            </View>}
-          </View>
-
-          <View>
-            <Text style={[styles.formLabel, { color: theme.muted }]}>REMARK</Text>
-            <View style={[styles.inputRow, styles.textAreaRow, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
-              <TextInput
-                value={caseCreateRemark}
-                onChangeText={setCaseCreateRemark}
-                multiline
-                numberOfLines={3}
-                placeholder="Details or notes about this case..."
-                placeholderTextColor={theme.muted}
-                style={[styles.input, styles.textArea, { color: theme.ink }]}
-              />
-            </View>
-          </View>
-
-          <View>
-            <Text style={[styles.formLabel, { color: theme.muted }]}>INITIAL STATUS</Text>
-            <View style={styles.statusToggleRow}>
-              <Pressable
-                onPress={() => setCaseCreateStatus('open')}
-                style={[
-                  styles.statusToggleBtn,
-                  { borderColor: theme.border, backgroundColor: theme.canvas },
-                  caseCreateStatus === 'open' && { backgroundColor: '#F59E0B', borderColor: '#F59E0B' },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.statusToggleBtnText,
-                    { color: caseCreateStatus === 'open' ? '#FFF' : theme.muted },
-                  ]}
-                >
-                  Open
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setCaseCreateStatus('closed')}
-                style={[
-                  styles.statusToggleBtn,
-                  { borderColor: theme.border, backgroundColor: theme.canvas },
-                  caseCreateStatus === 'closed' && { backgroundColor: '#10B981', borderColor: '#10B981' },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.statusToggleBtnText,
-                    { color: caseCreateStatus === 'closed' ? '#FFF' : theme.muted },
-                  ]}
-                >
-                  Closed
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-
-          {/* Submit Button */}
-          <ScalePressable
-            onPress={handleCreateCase}
-            disabled={caseCreateLoading}
-            style={[styles.submitButton, { backgroundColor: theme.emerald }]}
-          >
-            {caseCreateLoading ? (
-              <ActivityIndicator color="#FFF" />
-            ) : (
-              <Text style={styles.submitButtonText}>Create Case</Text>
-            )}
-          </ScalePressable>
-        </ScrollView>
-      </KeyboardAvoidView>
-    );
-  }
 
   // =========================================================================
   // SCREEN: CASE LIST FOR A CONTACT (full screen)
@@ -846,21 +523,12 @@ export function OpenCasesScreen({
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <ScalePressable
               onPress={() => {
-                // Open create case pre-filled with this contact
-                setCaseCreateSelectedContact(
+                setShowCaseListModal(false);
+                onCreateCase?.(
                   caseModalContact
                     ? { name: caseModalContact.name, number: caseModalNumber }
-                    : null,
+                    : { number: caseModalNumber },
                 );
-                setCaseCreateName('');
-                setCaseCreateRemark('');
-                setCaseCreateStatus('open');
-                setCaseCreateError('');
-                setManualNumberInput(!caseModalContact);
-                setManualNumber(caseModalContact ? '' : caseModalNumber);
-                setCreateContacts([]);
-                setCreateContactsQuery('');
-                setShowCaseCreateModal(true);
               }}
               style={[styles.chatHeaderBtn, { backgroundColor: theme.inputBg ?? theme.surface }]}
               hitSlop={6}
@@ -1163,7 +831,7 @@ export function OpenCasesScreen({
 
       {!selectionMode && <ScalePressable
         accessibilityRole="button"
-        onPress={openCaseCreateModal}
+        onPress={() => onCreateCase?.()}
         style={[styles.fab, { backgroundColor: theme.emerald }]}
       >
         <Plus size={24} color="#FFF" strokeWidth={2.5} />

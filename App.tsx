@@ -20,6 +20,8 @@ import { socketManager } from './src/services/socketManager';
 import { notificationService } from './src/services/notificationService';
 import { ScreenTransition } from './src/components/animations';
 
+import { KeyboardProvider } from './src/contexts/KeyboardContext';
+
 export default function App() {
   const theme = useTheme();
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -135,89 +137,91 @@ export default function App() {
     session && session.selectedProjectId ? theme.header : theme.canvas;
 
   return (
-    <SafeAreaProvider>
-      <StatusBar
-        translucent={false}
-        backgroundColor={statusBarColor}
-        barStyle={theme.isDark ? 'light-content' : 'dark-content'}
-      />
+    <KeyboardProvider>
+      <SafeAreaProvider>
+        <StatusBar
+          translucent={false}
+          backgroundColor={statusBarColor}
+          barStyle={theme.isDark ? 'light-content' : 'dark-content'}
+        />
 
-      <SafeAreaView
-        style={{ flex: 1, backgroundColor: statusBarColor }}
-        edges={['top', 'bottom', 'left', 'right']}
-      >
-        {session === undefined ? (
-          <SplashScreen />
-        ) : !session ? (
-          <ScreenTransition>
-            <AuthScreen
-              onAuthenticated={async authenticated => {
-                let sessionToSave = authenticated;
-                try {
-                  const account = await getAccountProfile({
-                    token: authenticated.token,
-                    username: authenticated.username,
-                  });
-                  sessionToSave = {
-                    ...sessionToSave,
-                    ...account,
-                    username: account.username || sessionToSave.username,
-                  };
-                } catch {
-                  // ignore
-                }
-                if (
-                  !sessionToSave.selectedProjectId &&
-                  sessionToSave.projects &&
-                  sessionToSave.projects.length === 1
-                ) {
-                  sessionToSave = {
-                    ...sessionToSave,
-                    selectedProjectId: sessionToSave.projects[0].id,
-                  };
-                }
-                await saveSession(sessionToSave);
-                setSession(sessionToSave);
-                socketManager.connect(
-                  sessionToSave.token,
-                  sessionToSave.username,
-                );
-                socketManager.setProjectId(sessionToSave.selectedProjectId);
-                notificationService.startForegroundService();
+        <SafeAreaView
+          style={{ flex: 1, backgroundColor: statusBarColor }}
+          edges={['top', 'bottom', 'left', 'right']}
+        >
+          {session === undefined ? (
+            <SplashScreen />
+          ) : !session ? (
+            <ScreenTransition>
+              <AuthScreen
+                onAuthenticated={async authenticated => {
+                  let sessionToSave = authenticated;
+                  try {
+                    const account = await getAccountProfile({
+                      token: authenticated.token,
+                      username: authenticated.username,
+                    });
+                    sessionToSave = {
+                      ...sessionToSave,
+                      ...account,
+                      username: account.username || sessionToSave.username,
+                    };
+                  } catch {
+                    // ignore
+                  }
+                  if (
+                    !sessionToSave.selectedProjectId &&
+                    sessionToSave.projects &&
+                    sessionToSave.projects.length === 1
+                  ) {
+                    sessionToSave = {
+                      ...sessionToSave,
+                      selectedProjectId: sessionToSave.projects[0].id,
+                    };
+                  }
+                  await saveSession(sessionToSave);
+                  setSession(sessionToSave);
+                  socketManager.connect(
+                    sessionToSave.token,
+                    sessionToSave.username,
+                  );
+                  socketManager.setProjectId(sessionToSave.selectedProjectId);
+                  notificationService.startForegroundService();
+                }}
+              />
+            </ScreenTransition>
+          ) : !session.selectedProjectId &&
+            session.projects &&
+            session.projects.length > 1 ? (
+            <ScreenTransition>
+              <ProjectPickerScreen
+                projects={session.projects}
+                onSelect={selectProject}
+              />
+            </ScreenTransition>
+          ) : (
+            <WorkspaceScreen
+              session={session}
+              onSelectProject={selectProject}
+              onProjectCreated={handleProjectCreated}
+              notificationNavRef={notificationNavRef}
+              onSignOut={async () => {
+                await clearSession();
+                setSession(null);
+                socketManager.disconnect();
+                notificationService.stopForegroundService();
               }}
             />
-          </ScreenTransition>
-        ) : !session.selectedProjectId &&
-          session.projects &&
-          session.projects.length > 1 ? (
-          <ScreenTransition>
-            <ProjectPickerScreen
-              projects={session.projects}
-              onSelect={selectProject}
-            />
-          </ScreenTransition>
-        ) : (
-          <WorkspaceScreen
-            session={session}
-            onSelectProject={selectProject}
-            onProjectCreated={handleProjectCreated}
-            notificationNavRef={notificationNavRef}
-            onSignOut={async () => {
-              await clearSession();
-              setSession(null);
-              socketManager.disconnect();
-              notificationService.stopForegroundService();
-            }}
-          />
-        )}
+          )}
 
-        <View
-          pointerEvents="box-none"
-          style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
-        >
-          <Toast />
-        </View>
-      </SafeAreaView>
-    </SafeAreaProvider>
+          <View
+            pointerEvents="box-none"
+            style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+          >
+            <Toast />
+          </View>
+        </SafeAreaView>
+      </SafeAreaProvider>
+    </KeyboardProvider>
   );
 }

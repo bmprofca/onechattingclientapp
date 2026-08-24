@@ -37,10 +37,12 @@ export function LiveChatScreen({
   projectId,
   session,
   onOpenChat,
+  onNewChat,
 }: {
   projectId: string;
   session: ApiSession;
   onOpenChat: (contactNumber: string, contactName: string) => void;
+  onNewChat?: () => void;
 }) {
   const theme = useTheme();
   const [activeFilter, setActiveFilter] = useState<ChatFilterType>('all');
@@ -51,9 +53,6 @@ export function LiveChatScreen({
 
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
-
-  // Controls whether the full-screen "New Chat" view is shown instead of the list.
-  const [isNewChatVisible, setIsNewChatVisible] = useState(false);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -173,22 +172,6 @@ export function LiveChatScreen({
     };
   }, [load, loadUnreadCount]);
 
-  // Full-screen "New Chat" view replaces the whole page while active.
-  // This avoids the bottom-sheet-modal problem where the keyboard can cover
-  // the input if the sheet's maxHeight is smaller than the keyboard height.
-  if (isNewChatVisible) {
-    return (
-      <NewChatScreen
-        theme={theme}
-        onClose={() => setIsNewChatVisible(false)}
-        onStart={(number, name) => {
-          setIsNewChatVisible(false);
-          onOpenChat(number, name);
-        }}
-      />
-    );
-  }
-
   return (
     <KeyboardAvoidView style={{ flex: 1, backgroundColor: theme.canvas }}>
       <FadeInView direction="down" distance={10} duration={300} style={styles.heading}>
@@ -279,7 +262,7 @@ export function LiveChatScreen({
       {/* FAB */}
       <ScalePressable
         accessibilityRole="button"
-        onPress={() => setIsNewChatVisible(true)}
+        onPress={() => onNewChat?.()}
         style={[
           styles.fab,
           { backgroundColor: theme.emerald },
@@ -291,295 +274,7 @@ export function LiveChatScreen({
   );
 }
 
-function NewChatScreen({
-  theme,
-  onClose,
-  onStart,
-}: {
-  theme: ReturnType<typeof useTheme>;
-  onClose: () => void;
-  onStart: (contactNumber: string, contactName: string) => void;
-}) {
-  const [newChatNumber, setNewChatNumber] = useState('');
-  const [newChatName, setNewChatName] = useState('');
-  const [deviceContactsModalOpen, setDeviceContactsModalOpen] = useState(false);
-  const [deviceContactsList, setDeviceContactsList] = useState<Array<{ id: string; name: string; number: string }>>([]);
-  const [loadingDeviceContacts, setLoadingDeviceContacts] = useState(false);
-  const [deviceContactsSearch, setDeviceContactsSearch] = useState('');
 
-  const loadDeviceContacts = useCallback(async () => {
-    setLoadingDeviceContacts(true);
-    try {
-      let hasPermission = false;
-      if (Platform.OS === 'android') {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.READ_CONTACTS,
-          {
-            title: 'Contacts Permission',
-            message: 'OneChat needs access to your device contacts to start direct chats easily.',
-            buttonPositive: 'Allow',
-            buttonNegative: 'Deny',
-          },
-        );
-        hasPermission = granted === PermissionsAndroid.RESULTS.GRANTED;
-      } else {
-        hasPermission = true;
-      }
-
-      if (!hasPermission) {
-        Toast.show({
-          type: 'error',
-          text1: 'Permission Denied',
-          text2: 'Please grant contacts permission to select from device contacts.',
-        });
-        return;
-      }
-
-      const raw = await Contacts.getAllWithoutPhotos();
-      const parsed: Array<{ id: string; name: string; number: string }> = [];
-      const seen = new Set<string>();
-
-      raw.forEach((c) => {
-        const fullName = [c.givenName, c.middleName, c.familyName]
-          .filter(Boolean)
-          .join(' ')
-          .trim() || c.displayName || 'Unnamed Contact';
-
-        if (Array.isArray(c.phoneNumbers)) {
-          c.phoneNumbers.forEach((pn) => {
-            const rawNum = pn.number || '';
-            const cleaned = rawNum.replace(/[^0-9+]/g, '');
-            if (cleaned.length >= 7) {
-              const key = `${fullName}-${cleaned}`;
-              if (!seen.has(key)) {
-                seen.add(key);
-                parsed.push({
-                  id: `${c.recordID || ''}-${pn.label || ''}-${cleaned}`,
-                  name: fullName,
-                  number: cleaned,
-                });
-              }
-            }
-          });
-        }
-      });
-
-      parsed.sort((a, b) => a.name.localeCompare(b.name));
-      setDeviceContactsList(parsed);
-      setDeviceContactsModalOpen(true);
-    } catch (err: any) {
-      Toast.show({
-        type: 'error',
-        text1: 'Could not load contacts',
-        text2: err?.message || 'Failed to read contacts from device.',
-      });
-    } finally {
-      setLoadingDeviceContacts(false);
-    }
-  }, []);
-
-  const filteredDeviceContacts = useMemo(() => {
-    if (!deviceContactsSearch.trim()) return deviceContactsList;
-    const q = deviceContactsSearch.toLowerCase().trim();
-    return deviceContactsList.filter(
-      (c) =>
-        c.name.toLowerCase().includes(q) ||
-        c.number.toLowerCase().includes(q),
-    );
-  }, [deviceContactsList, deviceContactsSearch]);
-
-  const handleDirectChat = () => {
-    if (!newChatNumber.trim()) return;
-    onStart(newChatNumber.trim(), newChatName.trim() || newChatNumber.trim());
-  };
-
-  const handleSelectDeviceContact = (contact: { name: string; number: string }) => {
-    setDeviceContactsModalOpen(false);
-    onStart(contact.number, contact.name || contact.number);
-  };
-
-  return (
-    <KeyboardAvoidingView
-      style={[styles.fullScreen, { backgroundColor: theme.canvas }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <FadeInView direction="up" distance={12} duration={250} style={{ flex: 1 }}>
-        <View style={[styles.fullScreenHeader, { borderBottomColor: theme.border }]}>
-          <ScalePressable onPress={onClose} hitSlop={8}>
-            <X size={24} color={theme.muted} />
-          </ScalePressable>
-          <Text style={[styles.modalTitle, { color: theme.ink }]}>New Chat</Text>
-          <View style={{ width: 24 }} />
-        </View>
-
-        <View style={styles.fullScreenBody}>
-          {/* Option: Pick from Device Contacts */}
-          <ScalePressable
-            style={[
-              styles.deviceContactBtn,
-              {
-                backgroundColor: theme.surface,
-                borderColor: theme.emerald,
-              },
-            ]}
-            onPress={loadDeviceContacts}
-            disabled={loadingDeviceContacts}
-          >
-            <View style={[styles.deviceContactIconWrap, { backgroundColor: theme.mint }]}>
-              {loadingDeviceContacts ? (
-                <ActivityIndicator size="small" color={theme.emerald} />
-              ) : (
-                <Smartphone size={22} color={theme.emerald} />
-              )}
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.deviceContactBtnTitle, { color: theme.ink }]}>
-                Choose from Device Contacts
-              </Text>
-              <Text style={[styles.deviceContactBtnSubtitle, { color: theme.muted }]}>
-                Select a contact directly from your phonebook
-              </Text>
-            </View>
-            <Text style={{ color: theme.emerald, fontSize: 20, fontWeight: '700' }}>›</Text>
-          </ScalePressable>
-
-          <View style={styles.dividerContainer}>
-            <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
-            <Text style={[styles.dividerText, { color: theme.muted, backgroundColor: theme.canvas }]}>
-              OR ENTER MANUALLY
-            </Text>
-            <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
-          </View>
-
-          <Text style={[styles.modalSubtitle, { color: theme.muted }]}>
-            Enter a phone number with country code to start a new direct chat.
-          </Text>
-
-          <View style={[styles.inputWrapper, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <TextInput
-              style={[styles.modalInput, { color: theme.ink }]}
-              placeholder="Phone Number (e.g. 919876543210)"
-              placeholderTextColor={theme.muted}
-              keyboardType="phone-pad"
-              value={newChatNumber}
-              onChangeText={setNewChatNumber}
-              returnKeyType="next"
-            />
-          </View>
-
-          <View style={[styles.inputWrapper, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <TextInput
-              style={[styles.modalInput, { color: theme.ink }]}
-              placeholder="Contact Name (Optional)"
-              placeholderTextColor={theme.muted}
-              value={newChatName}
-              onChangeText={setNewChatName}
-              returnKeyType="done"
-              onSubmitEditing={handleDirectChat}
-            />
-          </View>
-
-          <ScalePressable
-            style={[styles.modalButton, { backgroundColor: theme.emerald }]}
-            onPress={handleDirectChat}
-          >
-            <Text style={styles.modalButtonText}>Start Conversation</Text>
-          </ScalePressable>
-        </View>
-      </FadeInView>
-
-      {/* Device Contacts Selection Modal */}
-      <Modal
-        visible={deviceContactsModalOpen}
-        animationType="slide"
-        onRequestClose={() => setDeviceContactsModalOpen(false)}
-      >
-        <View style={[styles.deviceModalContainer, { backgroundColor: theme.canvas }]}>
-          <View style={[styles.deviceModalHeader, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
-            <ScalePressable
-              onPress={() => setDeviceContactsModalOpen(false)}
-              hitSlop={8}
-              style={styles.deviceModalBackBtn}
-            >
-              <X size={22} color={theme.ink} />
-            </ScalePressable>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.deviceModalTitle, { color: theme.ink }]}>
-                Device Contacts
-              </Text>
-              <Text style={[styles.deviceModalSubtitle, { color: theme.muted }]}>
-                {deviceContactsList.length} contacts found
-              </Text>
-            </View>
-          </View>
-
-          {/* Search bar */}
-          <View style={[styles.deviceSearchRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <Search size={16} color={theme.muted} />
-            <TextInput
-              style={[styles.deviceSearchInput, { color: theme.ink }]}
-              placeholder="Search by name or number..."
-              placeholderTextColor={theme.muted}
-              value={deviceContactsSearch}
-              onChangeText={setDeviceContactsSearch}
-            />
-            {deviceContactsSearch.length > 0 && (
-              <Pressable onPress={() => setDeviceContactsSearch('')} hitSlop={8}>
-                <X size={16} color={theme.muted} />
-              </Pressable>
-            )}
-          </View>
-
-          <FlatList
-            data={filteredDeviceContacts}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.deviceListContent}
-            keyboardShouldPersistTaps="handled"
-            ListEmptyComponent={
-              <View style={styles.deviceEmptyWrap}>
-                <Smartphone size={36} color={theme.muted} />
-                <Text style={[styles.deviceEmptyTitle, { color: theme.ink }]}>
-                  {deviceContactsSearch ? 'No matching contacts' : 'No contacts found'}
-                </Text>
-                <Text style={[styles.deviceEmptySubtitle, { color: theme.muted }]}>
-                  {deviceContactsSearch
-                    ? 'Try searching with a different name or number.'
-                    : 'No valid phone numbers found in your device contacts.'}
-                </Text>
-              </View>
-            }
-            renderItem={({ item }) => (
-              <ScalePressable
-                style={[
-                  styles.deviceContactCard,
-                  { backgroundColor: theme.surface, borderColor: theme.border },
-                ]}
-                onPress={() => handleSelectDeviceContact(item)}
-              >
-                <View style={[styles.deviceContactAvatar, { backgroundColor: theme.mint }]}>
-                  <Text style={[styles.deviceContactAvatarText, { color: theme.mintText }]}>
-                    {item.name.charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.deviceContactName, { color: theme.ink }]} numberOfLines={1}>
-                    {item.name}
-                  </Text>
-                  <Text style={[styles.deviceContactNumber, { color: theme.muted }]} numberOfLines={1}>
-                    {item.number}
-                  </Text>
-                </View>
-                <View style={[styles.deviceChatBadge, { backgroundColor: theme.mint }]}>
-                  <Text style={[styles.deviceChatBadgeText, { color: theme.emerald }]}>Chat</Text>
-                </View>
-              </ScalePressable>
-            )}
-          />
-        </View>
-      </Modal>
-    </KeyboardAvoidingView>
-  );
-}
 
 function ChatCard({ item, onPress }: { item: ListItem; onPress: (contactNumber: string, contactName: string) => void }) {
   const theme = useTheme();

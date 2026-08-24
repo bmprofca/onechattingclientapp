@@ -119,6 +119,11 @@ export function ChatRoomScreen({
     setViewerVisible(true);
   };
 
+  // Interactive list picker modal state
+  const [interactiveModalOpen, setInteractiveModalOpen] = useState(false);
+  const [activeInteractiveMsg, setActiveInteractiveMsg] = useState<any | null>(null);
+  const [activeInteractiveOptions, setActiveInteractiveOptions] = useState<any[]>([]);
+
   // Reply state
   const [replyingTo, setReplyingTo] = useState<any | null>(null);
   const [interactiveSelections, setInteractiveSelections] = useState<Record<string, string>>({});
@@ -970,26 +975,48 @@ export function ChatRoomScreen({
           : (interactive.action?.sections || []).flatMap((section: any) => (section?.rows || []).map((row: any) => ({ ...row, kind: 'list' })));
         const messageKey = String(msg.wamid || msg.message_id || msg.id || msg.create_date);
         const selectedOptionId = interactiveSelections[messageKey];
+        const buttonLabel = interactive.action?.button || 'Choose an option';
+
         return (
-          <View style={[styles.interactiveCard, { borderColor: isOut ? theme.emerald + '55' : theme.border }]}>
-            {interactive.header?.text ? <Text style={[styles.interactiveHeader, { color: textColor }]}>{interactive.header.text}</Text> : null}
-            <Text style={[styles.messageText, { color: textColor }]}>{interactive.body?.text || msg.message || 'Interactive message'}</Text>
-            {interactive.footer?.text ? <Text style={[styles.interactiveFooter, { color: theme.muted }]}>{interactive.footer.text}</Text> : null}
+          <View style={styles.cleanInteractiveWrap}>
+            {interactive.header?.text ? (
+              <Text style={[styles.interactiveCleanHeader, { color: textColor }]}>
+                {interactive.header.text}
+              </Text>
+            ) : null}
+            <View style={{ paddingVertical: 2 }}>
+              {renderWhatsAppText(interactive.body?.text || msg.message || 'Interactive message', [styles.messageText, { color: textColor }])}
+            </View>
+            {interactive.footer?.text ? (
+              <Text style={[styles.interactiveCleanFooter, { color: isOut ? (theme.isDark ? '#AEBAC1' : '#667781') : theme.muted }]}>
+                {interactive.footer.text}
+              </Text>
+            ) : null}
+
+            {/* Clean action button or chosen response (No harsh borders) */}
             {reply ? (
-              <View style={[styles.interactiveReply, { borderTopColor: theme.border }]}>
-                <Text style={[styles.interactiveReplyTitle, { color: theme.emerald }]}>{reply.title || reply.id}</Text>
-                {reply.description ? <Text style={[styles.interactiveFooter, { color: theme.muted }]}>{reply.description}</Text> : null}
+              <View style={[styles.cleanReplyBox, theme.isDark && { backgroundColor: 'rgba(255,255,255,0.08)' }]}>
+                <Text style={[styles.cleanReplyTitle, { color: theme.isDark ? '#25D366' : '#00A884' }]}>{reply.title || reply.id}</Text>
+                {reply.description ? <Text style={[styles.cleanReplySub, { color: theme.isDark ? '#AEBAC1' : theme.muted }]}>{reply.description}</Text> : null}
               </View>
             ) : options.length ? (
-              <View style={[styles.interactiveOptions, { borderTopColor: theme.border }]}>
-                {interactive.action?.button ? <Text style={[styles.interactiveFooter, { color: theme.muted }]}>{interactive.action.button}</Text> : null}
-                {options.map((option: any, index: number) => (
-                  <Pressable key={`${option.id || option.title}-${index}`} disabled={Boolean(selectedOptionId)} onPress={() => handleInteractiveSelection(msg, option)} style={[styles.interactiveOption, { borderTopColor: theme.border, opacity: selectedOptionId && selectedOptionId !== option.id ? 0.45 : 1 }]}>
-                    <Text style={[styles.interactiveOptionTitle, { color: theme.emerald }]}>{option.title}{selectedOptionId === option.id ? '  ✓' : ''}</Text>
-                    {option.description ? <Text style={[styles.interactiveFooter, { color: theme.muted }]}>{option.description}</Text> : null}
-                  </Pressable>
-                ))}
-              </View>
+              <ScalePressable
+                disabled={Boolean(selectedOptionId)}
+                onPress={() => {
+                  setActiveInteractiveMsg(msg);
+                  setActiveInteractiveOptions(options);
+                  setInteractiveModalOpen(true);
+                }}
+                style={[
+                  styles.cleanChooseBtn,
+                  theme.isDark && { backgroundColor: isOut ? 'rgba(255,255,255,0.12)' : 'rgba(37,211,102,0.15)' }
+                ]}
+              >
+                <LayoutTemplate size={18} color={theme.isDark ? '#25D366' : '#00A884'} />
+                <Text style={[styles.cleanChooseBtnText, { color: theme.isDark ? '#25D366' : '#00A884' }]}>
+                  {buttonLabel}
+                </Text>
+              </ScalePressable>
             ) : null}
           </View>
         );
@@ -1597,6 +1624,55 @@ export function ChatRoomScreen({
         mediaType={viewerType}
         mediaName={viewerName}
       />
+
+      {/* Interactive Options Modal Sheet */}
+      <Modal
+        visible={interactiveModalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setInteractiveModalOpen(false)}
+      >
+        <Pressable style={styles.sheetBackdrop} onPress={() => setInteractiveModalOpen(false)}>
+          <Pressable style={[styles.sheet, { backgroundColor: theme.surface }]} onPress={() => {}}>
+            <View style={styles.sheetHeader}>
+              <Text style={[styles.sheetTitle, { color: theme.ink }]}>
+                {activeInteractiveMsg?.interactive?.header?.text || activeInteractiveMsg?.interactive?.action?.button || 'Select an Option'}
+              </Text>
+              <ScalePressable onPress={() => setInteractiveModalOpen(false)} hitSlop={8}>
+                <X size={20} color={theme.muted} />
+              </ScalePressable>
+            </View>
+
+            <ScrollView style={{ maxHeight: 340, marginTop: 12 }}>
+              {activeInteractiveOptions.map((option: any, index: number) => (
+                <ScalePressable
+                  key={`${option.id || option.title}-${index}`}
+                  style={[
+                    styles.cleanModalOptionRow,
+                    { backgroundColor: theme.inputContainerBg },
+                    index > 0 && { marginTop: 10 }
+                  ]}
+                  onPress={() => {
+                    setInteractiveModalOpen(false);
+                    if (activeInteractiveMsg) {
+                      handleInteractiveSelection(activeInteractiveMsg, option);
+                    }
+                  }}
+                >
+                  <Text style={[styles.cleanModalOptionTitle, { color: '#00A884' }]}>
+                    {option.title || option.id}
+                  </Text>
+                  {!!option.description && (
+                    <Text style={[styles.cleanModalOptionSub, { color: theme.muted }]}>
+                      {option.description}
+                    </Text>
+                  )}
+                </ScalePressable>
+              ))}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </Animated.View>
   );
 }
@@ -1924,49 +2000,61 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     paddingBottom: 0,
   },
-  interactiveCard: {
-    minWidth: 220,
-    maxWidth: 320,
-    borderWidth: 1,
-    borderRadius: 10,
-    overflow: 'hidden',
-    paddingTop: 10,
+  cleanInteractiveWrap: {
+    paddingVertical: 2,
   },
-  interactiveHeader: {
-    fontSize: 14,
-    fontWeight: '800',
-    paddingHorizontal: 11,
-    paddingBottom: 7,
+  interactiveCleanHeader: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 4,
   },
-  interactiveFooter: {
+  interactiveCleanFooter: {
     fontSize: 12,
-    lineHeight: 16,
-    paddingHorizontal: 11,
-    paddingTop: 5,
-    paddingBottom: 6,
+    marginTop: 4,
   },
-  interactiveReply: {
-    borderTopWidth: 1,
-    marginTop: 9,
-    paddingHorizontal: 11,
-    paddingVertical: 8,
-  },
-  interactiveReplyTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  interactiveOptions: {
-    borderTopWidth: 1,
-    marginTop: 9,
-  },
-  interactiveOption: {
-    borderTopWidth: 1,
-    paddingHorizontal: 11,
+  cleanChooseBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
     paddingVertical: 9,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 168, 132, 0.08)',
+    gap: 8,
   },
-  interactiveOptionTitle: {
+  cleanChooseBtnText: {
     fontSize: 14,
     fontWeight: '700',
+    color: '#00A884',
+  },
+  cleanReplyBox: {
+    marginTop: 8,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,0,0,0.04)',
+  },
+  cleanReplyTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#00A884',
+  },
+  cleanReplySub: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  cleanModalOptionRow: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+  },
+  cleanModalOptionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  cleanModalOptionSub: {
+    fontSize: 13,
+    marginTop: 2,
   },
   captionPad: {
     paddingHorizontal: 10,

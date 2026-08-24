@@ -42,6 +42,8 @@ import { useTheme } from '../theme/theme';
 import { CampaignsScreen } from './CampaignsScreen';
 import { CampaignDetailsScreen } from './CampaignDetailsScreen';
 import { CreateCampaignScreen } from './CreateCampaignScreen';
+import { NewChatScreen } from './NewChatScreen';
+import { CreateCaseScreen } from './CreateCaseScreen';
 import { DashboardScreen } from './DashboardScreen';
 import { LiveChatScreen } from './LiveChatScreen';
 import { OpenCasesScreen } from './OpenCasesScreen';
@@ -149,6 +151,9 @@ export function WorkspaceScreen({
     name: string;
   } | null>(null);
   const [createCampaignTarget, setCreateCampaignTarget] = useState(false);
+  const [newChatTarget, setNewChatTarget] = useState(false);
+  const [createCaseTarget, setCreateCaseTarget] = useState<{ name?: string; number: string } | boolean | null>(null);
+  const [casesTarget, setCasesTarget] = useState(false);
   const [walletTarget, setWalletTarget] = useState(false); // full-screen wallet, used from full mode
   const [wabaTarget, setWabaTarget] = useState<string | boolean | null>(null);
   const [supportTarget, setSupportTarget] = useState(false);
@@ -380,6 +385,18 @@ export function WorkspaceScreen({
       setCreateCampaignTarget(false);
       return true;
     }
+    if (newChatTarget) {
+      setNewChatTarget(false);
+      return true;
+    }
+    if (createCaseTarget) {
+      setCreateCaseTarget(null);
+      return true;
+    }
+    if (casesTarget) {
+      setCasesTarget(false);
+      return true;
+    }
     if (walletTarget) {
       setWalletTarget(false);
       return true;
@@ -539,6 +556,54 @@ export function WorkspaceScreen({
           onCreated={() => {
             setCreateCampaignTarget(false);
             setPage('campaigns');
+          }}
+        />
+      </ScreenTransition>
+    );
+  }
+
+  if (newChatTarget) {
+    return (
+      <ScreenTransition>
+        <NewChatScreen
+          onBack={() => setNewChatTarget(false)}
+          onStartChat={(number, name) => {
+            setNewChatTarget(false);
+            setChatTarget({ number, name });
+          }}
+        />
+      </ScreenTransition>
+    );
+  }
+
+  if (createCaseTarget) {
+    const initialContact = typeof createCaseTarget === 'object' ? createCaseTarget : null;
+    return (
+      <ScreenTransition>
+        <CreateCaseScreen
+          projectId={projectId}
+          session={apiSession}
+          initialContact={initialContact}
+          onBack={() => setCreateCaseTarget(null)}
+          onCreated={() => {
+            setCreateCaseTarget(null);
+            setPage('cases');
+          }}
+        />
+      </ScreenTransition>
+    );
+  }
+
+  if (casesTarget) {
+    return (
+      <ScreenTransition>
+        <OpenCasesScreen
+          projectId={projectId}
+          session={apiSession}
+          onBack={() => setCasesTarget(false)}
+          onOpenChat={(contactNumber, contactName) => {
+            setCasesTarget(false);
+            setChatTarget({ number: contactNumber, name: contactName });
           }}
         />
       </ScreenTransition>
@@ -1098,6 +1163,7 @@ export function WorkspaceScreen({
               onOpenTemplates={() => setTemplatesTarget(true)}
               onOpenGroups={() => setGroupsTarget(true)}
               onOpenContacts={() => setContactsTarget(true)}
+              onOpenCases={() => setCasesTarget(true)}
             />
           ) : page === 'inbox' ? (
             <LiveChatScreen
@@ -1106,6 +1172,7 @@ export function WorkspaceScreen({
               onOpenChat={(contactNumber, contactName) =>
                 setChatTarget({ number: contactNumber, name: contactName })
               }
+              onNewChat={() => setNewChatTarget(true)}
             />
           ) : page === 'cases' ? (
             <OpenCasesScreen
@@ -1114,6 +1181,7 @@ export function WorkspaceScreen({
               onOpenChat={(contactNumber, contactName) =>
                 setChatTarget({ number: contactNumber, name: contactName })
               }
+              onCreateCase={(contact) => setCreateCaseTarget(contact || true)}
             />
           ) : page === 'campaigns' ? (
             <CampaignsScreen
