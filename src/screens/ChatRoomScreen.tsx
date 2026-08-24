@@ -50,6 +50,7 @@ import {
   getChatHistory,
   markAsRead,
   sendMessage,
+  sendInteractiveMessage,
   sendImageMessage,
   sendVideoMessage,
   sendDocumentMessage,
@@ -120,6 +121,7 @@ export function ChatRoomScreen({
 
   // Reply state
   const [replyingTo, setReplyingTo] = useState<any | null>(null);
+  const [interactiveSelections, setInteractiveSelections] = useState<Record<string, string>>({});
 
   // ── Chat assign + case status/menu state (mirrors the web app) ─────────
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
@@ -722,6 +724,66 @@ export function ChatRoomScreen({
     }
   };
 
+  const handleInteractiveSelection = async (message: any, option: any) => {
+    const messageKey = String(message.wamid || message.message_id || message.id || message.create_date);
+    const optionId = String(option?.id || option?.title || '');
+    if (!messageKey || !optionId || interactiveSelections[messageKey]) return;
+
+    setInteractiveSelections((prev) => ({ ...prev, [messageKey]: optionId }));
+    const tempId = `temp-interactive-${Date.now()}`;
+    const selectedMessage = {
+      id: tempId,
+      message_id: tempId,
+      create_date: new Date().toISOString(),
+      type: 'out',
+      message_type: 'interactive',
+      message: option.title || option.id,
+      status: 'pending',
+      interactive: {
+        type: option.kind === 'list' ? 'list' : 'button',
+        body: { text: option.title || option.id },
+      },
+      interactive_reply: {
+        type: option.kind === 'list' ? 'list_reply' : 'button_reply',
+        id: option.id || '',
+        title: option.title || '',
+        description: option.description || '',
+      },
+      is_reply: true,
+      reply_wamid: message.wamid || null,
+    };
+    setMessages((prev) => [selectedMessage, ...prev]);
+
+    try {
+      const interactive = message.interactive || {};
+      const response = await sendInteractiveMessage(
+        session,
+        projectId,
+        contactNumber,
+        interactive,
+        message.wamid,
+      );
+      setMessages((prev) => prev.map((item) => item.id === tempId || item.message_id === tempId
+        ? { ...item, ...response, interactive_reply: response?.interactive_reply || item.interactive_reply, status: response?.status || 'sent', message_id: response?.message_id || response?.data?.message_id || tempId }
+        : item));
+    } catch (err) {
+      setMessages((prev) => prev.map((item) => item.id === tempId
+        ? { ...item, status: 'failed', failed_reason: err instanceof Error ? err.message : String(err) }
+        : item));
+      setInteractiveSelections((prev) => {
+        const next = { ...prev };
+        delete next[messageKey];
+        return next;
+      });
+      Toast.show({
+        type: 'error',
+        text1: 'Could not send interactive reply',
+        text2: err instanceof Error ? err.message : String(err),
+        visibilityTime: 6000,
+      });
+    }
+  };
+
   // Parses WhatsApp-style markup: *bold*, _italic_, ~strikethrough~
   function renderWhatsAppText(text: string, baseStyle: any): React.ReactNode {
     // Split on *...*, _..._, ~...~ markers
@@ -899,6 +961,39 @@ export function ChatRoomScreen({
 
       const mediaUrl = templateMedia?.url || msg.media_url;
       const mediaName = templateMedia?.filename || msg.media_name || 'Document';
+
+      if (type.toLowerCase() === 'interactive') {
+        const interactive = msg.interactive || {};
+        const reply = msg.interactive_reply || interactive.reply || interactive.button_reply || interactive.list_reply;
+        const options = interactive.type === 'button'
+          ? (interactive.action?.buttons || []).map((button: any) => ({ ...button?.reply, kind: 'button' })).filter((option: any) => option?.id || option?.title)
+          : (interactive.action?.sections || []).flatMap((section: any) => (section?.rows || []).map((row: any) => ({ ...row, kind: 'list' })));
+        const messageKey = String(msg.wamid || msg.message_id || msg.id || msg.create_date);
+        const selectedOptionId = interactiveSelections[messageKey];
+        return (
+          <View style={[styles.interactiveCard, { borderColor: isOut ? theme.emerald + '55' : theme.border }]}>
+            {interactive.header?.text ? <Text style={[styles.interactiveHeader, { color: textColor }]}>{interactive.header.text}</Text> : null}
+            <Text style={[styles.messageText, { color: textColor }]}>{interactive.body?.text || msg.message || 'Interactive message'}</Text>
+            {interactive.footer?.text ? <Text style={[styles.interactiveFooter, { color: theme.muted }]}>{interactive.footer.text}</Text> : null}
+            {reply ? (
+              <View style={[styles.interactiveReply, { borderTopColor: theme.border }]}>
+                <Text style={[styles.interactiveReplyTitle, { color: theme.emerald }]}>{reply.title || reply.id}</Text>
+                {reply.description ? <Text style={[styles.interactiveFooter, { color: theme.muted }]}>{reply.description}</Text> : null}
+              </View>
+            ) : options.length ? (
+              <View style={[styles.interactiveOptions, { borderTopColor: theme.border }]}>
+                {interactive.action?.button ? <Text style={[styles.interactiveFooter, { color: theme.muted }]}>{interactive.action.button}</Text> : null}
+                {options.map((option: any, index: number) => (
+                  <Pressable key={`${option.id || option.title}-${index}`} disabled={Boolean(selectedOptionId)} onPress={() => handleInteractiveSelection(msg, option)} style={[styles.interactiveOption, { borderTopColor: theme.border, opacity: selectedOptionId && selectedOptionId !== option.id ? 0.45 : 1 }]}>
+                    <Text style={[styles.interactiveOptionTitle, { color: theme.emerald }]}>{option.title}{selectedOptionId === option.id ? '  ✓' : ''}</Text>
+                    {option.description ? <Text style={[styles.interactiveFooter, { color: theme.muted }]}>{option.description}</Text> : null}
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        );
+      }
 
       if (isImg && mediaUrl) {
         return (
@@ -1828,6 +1923,50 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     paddingTop: 0,
     paddingBottom: 0,
+  },
+  interactiveCard: {
+    minWidth: 220,
+    maxWidth: 320,
+    borderWidth: 1,
+    borderRadius: 10,
+    overflow: 'hidden',
+    paddingTop: 10,
+  },
+  interactiveHeader: {
+    fontSize: 14,
+    fontWeight: '800',
+    paddingHorizontal: 11,
+    paddingBottom: 7,
+  },
+  interactiveFooter: {
+    fontSize: 12,
+    lineHeight: 16,
+    paddingHorizontal: 11,
+    paddingTop: 5,
+    paddingBottom: 6,
+  },
+  interactiveReply: {
+    borderTopWidth: 1,
+    marginTop: 9,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+  },
+  interactiveReplyTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  interactiveOptions: {
+    borderTopWidth: 1,
+    marginTop: 9,
+  },
+  interactiveOption: {
+    borderTopWidth: 1,
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+  },
+  interactiveOptionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
   },
   captionPad: {
     paddingHorizontal: 10,

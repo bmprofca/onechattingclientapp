@@ -284,6 +284,24 @@ export const sendMessage = (
     session,
   );
 
+export const sendInteractiveMessage = (
+  session: ApiSession,
+  projectId: string,
+  contactNumber: string,
+  interactive: any,
+  replyWamid?: string,
+) =>
+  post<any>(
+    '/message/send-interactive-message',
+    {
+      project_id: projectId,
+      number: contactNumber,
+      interactive,
+      ...(replyWamid ? { is_reply: true, reply_wamid: replyWamid } : {}),
+    },
+    session,
+  );
+
 export const getContactDetails = (
   session: ApiSession,
   projectId: string,
