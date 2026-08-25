@@ -16,7 +16,8 @@ import Contacts from 'react-native-contacts';
 import Toast from 'react-native-toast-message';
 import { ArrowLeft, Search, Smartphone, X } from 'lucide-react-native';
 import { useTheme } from '../theme/theme';
-import { ScalePressable, FadeInView } from '../components/animations';
+import { ScalePressable, FadeInView, SlideUpModal } from '../components/animations';
+import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
 
 type Props = {
   onBack: () => void;
@@ -218,94 +219,97 @@ export function NewChatScreen({ onBack, onStartChat }: Props) {
       </FadeInView>
 
       {/* Device Contacts Selection Modal */}
-      <Modal
+      <SlideUpModal
         visible={deviceContactsModalOpen}
-        animationType="slide"
-        onRequestClose={() => setDeviceContactsModalOpen(false)}
+        onClose={() => setDeviceContactsModalOpen(false)}
+        maxHeight="85%"
       >
-        <View style={[styles.deviceModalContainer, { backgroundColor: theme.canvas }]}>
-          <View style={[styles.deviceModalHeader, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
-            <ScalePressable
-              onPress={() => setDeviceContactsModalOpen(false)}
-              hitSlop={8}
-              style={styles.deviceModalBackBtn}
-            >
-              <ArrowLeft size={22} color={theme.ink} strokeWidth={2.5} />
-            </ScalePressable>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.deviceModalTitle, { color: theme.ink }]}>
-                Device Contacts
-              </Text>
-              <Text style={[styles.deviceModalSubtitle, { color: theme.muted }]}>
-                {deviceContactsList.length} contacts found
-              </Text>
-            </View>
-          </View>
-
-          {/* Search bar */}
-          <View style={[styles.deviceSearchRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <Search size={16} color={theme.muted} />
-            <TextInput
-              style={[styles.deviceSearchInput, { color: theme.ink }]}
-              placeholder="Search by name or number..."
-              placeholderTextColor={theme.muted}
-              value={deviceContactsSearch}
-              onChangeText={setDeviceContactsSearch}
-            />
-            {deviceContactsSearch.length > 0 && (
-              <Pressable onPress={() => setDeviceContactsSearch('')} hitSlop={8}>
-                <X size={16} color={theme.muted} />
-              </Pressable>
-            )}
-          </View>
-
-          <FlatList
-            data={filteredDeviceContacts}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.deviceListContent}
-            keyboardShouldPersistTaps="handled"
-            ListEmptyComponent={
-              <View style={styles.deviceEmptyWrap}>
-                <Smartphone size={36} color={theme.muted} />
-                <Text style={[styles.deviceEmptyTitle, { color: theme.ink }]}>
-                  {deviceContactsSearch ? 'No matching contacts' : 'No contacts found'}
+        <KeyboardAvoidView style={{ flex: 0 }}>
+          <View style={[styles.deviceModalContainer, { backgroundColor: theme.surface }]}>
+            <View style={[styles.deviceModalHeader, { borderBottomColor: theme.border }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.deviceModalTitle, { color: theme.ink }]}>
+                  Device Contacts
                 </Text>
-                <Text style={[styles.deviceEmptySubtitle, { color: theme.muted }]}>
-                  {deviceContactsSearch
-                    ? 'Try searching with a different name or number.'
-                    : 'No valid phone numbers found in your device contacts.'}
+                <Text style={[styles.deviceModalSubtitle, { color: theme.muted }]}>
+                  {deviceContactsList.length} contacts found
                 </Text>
               </View>
-            }
-            renderItem={({ item }) => (
               <ScalePressable
-                style={[
-                  styles.deviceContactCard,
-                  { backgroundColor: theme.surface, borderColor: theme.border },
-                ]}
-                onPress={() => handleSelectDeviceContact(item)}
+                onPress={() => setDeviceContactsModalOpen(false)}
+                hitSlop={8}
+                style={styles.deviceModalBackBtn}
               >
-                <View style={[styles.deviceContactAvatar, { backgroundColor: theme.mint }]}>
-                  <Text style={[styles.deviceContactAvatarText, { color: theme.mintText }]}>
-                    {item.name.charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.deviceContactName, { color: theme.ink }]} numberOfLines={1}>
-                    {item.name}
-                  </Text>
-                  <Text style={[styles.deviceContactNumber, { color: theme.muted }]} numberOfLines={1}>
-                    {item.number}
-                  </Text>
-                </View>
-                <View style={[styles.deviceChatBadge, { backgroundColor: theme.mint }]}>
-                  <Text style={[styles.deviceChatBadgeText, { color: theme.emerald }]}>Chat</Text>
-                </View>
+                <X size={20} color={theme.muted} />
               </ScalePressable>
-            )}
-          />
-        </View>
-      </Modal>
+            </View>
+
+            {/* Search bar */}
+            <View style={[styles.deviceSearchRow, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
+              <Search size={16} color={theme.muted} />
+              <TextInput
+                style={[styles.deviceSearchInput, { color: theme.ink }]}
+                placeholder="Search by name or number..."
+                placeholderTextColor={theme.muted}
+                value={deviceContactsSearch}
+                onChangeText={setDeviceContactsSearch}
+              />
+              {deviceContactsSearch.length > 0 && (
+                <Pressable onPress={() => setDeviceContactsSearch('')} hitSlop={8}>
+                  <X size={16} color={theme.muted} />
+                </Pressable>
+              )}
+            </View>
+
+            <FlatList
+              data={filteredDeviceContacts}
+              keyExtractor={(item) => item.id}
+              style={{ maxHeight: 380 }}
+              contentContainerStyle={styles.deviceListContent}
+              keyboardShouldPersistTaps="handled"
+              ListEmptyComponent={
+                <View style={styles.deviceEmptyWrap}>
+                  <Smartphone size={36} color={theme.muted} />
+                  <Text style={[styles.deviceEmptyTitle, { color: theme.ink }]}>
+                    {deviceContactsSearch ? 'No matching contacts' : 'No contacts found'}
+                  </Text>
+                  <Text style={[styles.deviceEmptySubtitle, { color: theme.muted }]}>
+                    {deviceContactsSearch
+                      ? 'Try searching with a different name or number.'
+                      : 'No valid phone numbers found in your device contacts.'}
+                  </Text>
+                </View>
+              }
+              renderItem={({ item }) => (
+                <ScalePressable
+                  style={[
+                    styles.deviceContactCard,
+                    { backgroundColor: theme.canvas, borderColor: theme.border },
+                  ]}
+                  onPress={() => handleSelectDeviceContact(item)}
+                >
+                  <View style={[styles.deviceContactAvatar, { backgroundColor: theme.mint }]}>
+                    <Text style={[styles.deviceContactAvatarText, { color: theme.mintText }]}>
+                      {item.name.charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.deviceContactName, { color: theme.ink }]} numberOfLines={1}>
+                      {item.name}
+                    </Text>
+                    <Text style={[styles.deviceContactNumber, { color: theme.muted }]} numberOfLines={1}>
+                      {item.number}
+                    </Text>
+                  </View>
+                  <View style={[styles.deviceChatBadge, { backgroundColor: theme.mint }]}>
+                    <Text style={[styles.deviceChatBadgeText, { color: theme.emerald }]}>Chat</Text>
+                  </View>
+                </ScalePressable>
+              )}
+            />
+          </View>
+        </KeyboardAvoidView>
+      </SlideUpModal>
     </KeyboardAvoidingView>
   );
 }
@@ -401,7 +405,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   deviceModalContainer: {
-    flex: 1,
+    width: '100%',
+    paddingBottom: 16,
   },
   deviceModalHeader: {
     flexDirection: 'row',

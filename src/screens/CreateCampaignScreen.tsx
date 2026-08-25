@@ -991,72 +991,75 @@ export function CreateCampaignScreen({
         visible={templatePickerOpen}
         onClose={() => setTemplatePickerOpen(false)}
         maxHeight="90%"
-        contentStyle={{ height: '82%' }}
       >
-        <View style={[styles.modalInner, { backgroundColor: theme.surface }]}>
-          <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
-            <Text style={[styles.modalTitle, { color: theme.ink }]}>Select Approved Template</Text>
-            <Pressable onPress={() => setTemplatePickerOpen(false)} hitSlop={8}>
-              <X size={22} color={theme.muted} />
-            </Pressable>
-          </View>
-
-          <View style={[styles.searchBox, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
-            <Search size={18} color={theme.muted} />
-            <TextInput
-              value={templateSearch}
-              onChangeText={setTemplateSearch}
-              placeholder="Search templates..."
-              placeholderTextColor={theme.muted}
-              style={[styles.searchInput, { color: theme.ink }]}
-            />
-          </View>
-
-          {loadingTemplates ? (
-            <View style={styles.centerBox}>
-              <ActivityIndicator size="large" color={theme.emerald} />
+        <KeyboardAvoidView style={{ flex: 0 }}>
+          <View style={[styles.modalInner, { backgroundColor: theme.surface }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+              <Text style={[styles.modalTitle, { color: theme.ink }]}>Select Approved Template</Text>
+              <Pressable onPress={() => setTemplatePickerOpen(false)} hitSlop={8}>
+                <X size={22} color={theme.muted} />
+              </Pressable>
             </View>
-          ) : (
-            <FlatList
-              data={filteredTemplates}
-              keyExtractor={(item) => String(item.template_id || item.id || item.template_name)}
-              contentContainerStyle={{ padding: 16 }}
-              ListEmptyComponent={
-                <View style={styles.centerBox}>
-                  <Layers size={36} color={theme.border} />
-                  <Text style={[styles.emptyModalText, { color: theme.muted }]}>No templates found</Text>
-                </View>
-              }
-              renderItem={({ item }) => (
-                <ScalePressable
-                  onPress={() => handleSelectTemplate(item)}
-                  style={[styles.templateModalItem, { backgroundColor: theme.canvas, borderColor: theme.border }]}
-                >
-                  <View style={styles.templateModalItemTop}>
-                    <Text style={[styles.templateModalItemName, { color: theme.ink }]}>
-                      {item.template_name || item.name}
-                    </Text>
-                    <View style={[styles.categoryPill, { backgroundColor: theme.mint }]}>
-                      <Text style={[styles.categoryPillText, { color: theme.emerald }]}>
-                        {item.category || 'APPROVED'}
-                      </Text>
-                    </View>
+
+            <View style={[styles.searchBox, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
+              <Search size={18} color={theme.muted} />
+              <TextInput
+                value={templateSearch}
+                onChangeText={setTemplateSearch}
+                placeholder="Search templates..."
+                placeholderTextColor={theme.muted}
+                style={[styles.searchInput, { color: theme.ink }]}
+              />
+            </View>
+
+            {loadingTemplates ? (
+              <View style={styles.centerBox}>
+                <ActivityIndicator size="large" color={theme.emerald} />
+              </View>
+            ) : (
+              <FlatList
+                data={filteredTemplates}
+                keyExtractor={(item) => String(item.template_id || item.id || item.template_name)}
+                style={{ maxHeight: 380 }}
+                contentContainerStyle={{ padding: 16 }}
+                keyboardShouldPersistTaps="handled"
+                ListEmptyComponent={
+                  <View style={styles.centerBox}>
+                    <Layers size={36} color={theme.border} />
+                    <Text style={[styles.emptyModalText, { color: theme.muted }]}>No templates found</Text>
                   </View>
-                  {item.template?.components?.map((c: any, idx: number) => {
-                    if (c.type === 'BODY') {
-                      return (
-                        <Text key={idx} style={[styles.templateModalItemBody, { color: theme.muted }]} numberOfLines={2}>
-                          {c.text}
+                }
+                renderItem={({ item }) => (
+                  <ScalePressable
+                    onPress={() => handleSelectTemplate(item)}
+                    style={[styles.templateModalItem, { backgroundColor: theme.canvas, borderColor: theme.border }]}
+                  >
+                    <View style={styles.templateModalItemTop}>
+                      <Text style={[styles.templateModalItemName, { color: theme.ink }]}>
+                        {item.template_name || item.name}
+                      </Text>
+                      <View style={[styles.categoryPill, { backgroundColor: theme.mint }]}>
+                        <Text style={[styles.categoryPillText, { color: theme.emerald }]}>
+                          {item.category || 'APPROVED'}
                         </Text>
-                      );
-                    }
-                    return null;
-                  })}
-                </ScalePressable>
-              )}
-            />
-          )}
-        </View>
+                      </View>
+                    </View>
+                    {item.template?.components?.map((c: any, idx: number) => {
+                      if (c.type === 'BODY') {
+                        return (
+                          <Text key={idx} style={[styles.templateModalItemBody, { color: theme.muted }]} numberOfLines={2}>
+                            {c.text}
+                          </Text>
+                        );
+                      }
+                      return null;
+                    })}
+                  </ScalePressable>
+                )}
+              />
+            )}
+          </View>
+        </KeyboardAvoidView>
       </SlideUpModal>
 
       {/* Contacts Multi-Select Modal */}
@@ -1064,81 +1067,84 @@ export function CreateCampaignScreen({
         visible={contactsModalOpen}
         onClose={() => setContactsModalOpen(false)}
         maxHeight="90%"
-        contentStyle={{ height: '82%' }}
       >
-        <View style={[styles.modalInner, { backgroundColor: theme.surface }]}>
-          <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
-            <Text style={[styles.modalTitle, { color: theme.ink }]}>Select Contacts</Text>
-            <Pressable onPress={() => setContactsModalOpen(false)} hitSlop={8}>
-              <X size={22} color={theme.muted} />
-            </Pressable>
-          </View>
-
-          <View style={[styles.searchBox, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
-            <Search size={18} color={theme.muted} />
-            <TextInput
-              value={contactsSearch}
-              onChangeText={setContactsSearch}
-              placeholder="Search contacts by name or phone..."
-              placeholderTextColor={theme.muted}
-              style={[styles.searchInput, { color: theme.ink }]}
-            />
-          </View>
-
-          {loadingContacts ? (
-            <View style={styles.centerBox}>
-              <ActivityIndicator size="large" color={theme.emerald} />
-              <Text style={[styles.emptyModalText, { color: theme.muted, marginTop: 10 }]}>Loading contacts...</Text>
+        <KeyboardAvoidView style={{ flex: 0 }}>
+          <View style={[styles.modalInner, { backgroundColor: theme.surface }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+              <Text style={[styles.modalTitle, { color: theme.ink }]}>Select Contacts</Text>
+              <Pressable onPress={() => setContactsModalOpen(false)} hitSlop={8}>
+                <X size={22} color={theme.muted} />
+              </Pressable>
             </View>
-          ) : (
-            <FlatList
-              data={filteredContacts}
-              keyExtractor={(item, index) => String(item.number || item.phone || item.id || index)}
-              contentContainerStyle={{ padding: 16 }}
-              ListEmptyComponent={
-                <View style={styles.centerBox}>
-                  <Users size={36} color={theme.border} />
-                  <Text style={[styles.emptyModalText, { color: theme.muted }]}>
-                    {contactsSearch ? 'No matching contacts found' : 'No contacts available in workspace'}
-                  </Text>
-                </View>
-              }
-              renderItem={({ item }) => {
-                const num = String(item.number || item.phone || '');
-                const isSelected = selectedContacts.includes(num);
-                return (
-                  <Pressable
-                    onPress={() => {
-                      if (isSelected) {
-                        setSelectedContacts(selectedContacts.filter((n) => n !== num));
-                      } else {
-                        setSelectedContacts([...selectedContacts, num]);
-                      }
-                    }}
-                    style={[styles.contactItem, { borderColor: theme.border }]}
-                  >
-                    <View style={[styles.checkbox, isSelected && { backgroundColor: theme.emerald, borderColor: theme.emerald }, { borderColor: theme.border }]}>
-                      {isSelected && <Check size={14} color="#FFF" />}
-                    </View>
-                    <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text style={[styles.contactName, { color: theme.ink }]}>{item.name || item.contact_name || 'Unnamed'}</Text>
-                      <Text style={[styles.contactNumber, { color: theme.muted }]}>{num}</Text>
-                    </View>
-                  </Pressable>
-                );
-              }}
-            />
-          )}
 
-          <View style={[styles.modalFooter, { borderTopColor: theme.border }]}>
-            <ScalePressable
-              onPress={() => setContactsModalOpen(false)}
-              style={[styles.doneBtn, { backgroundColor: theme.emerald }]}
-            >
-              <Text style={styles.doneBtnText}>Done ({selectedContacts.length} selected)</Text>
-            </ScalePressable>
+            <View style={[styles.searchBox, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
+              <Search size={18} color={theme.muted} />
+              <TextInput
+                value={contactsSearch}
+                onChangeText={setContactsSearch}
+                placeholder="Search contacts by name or phone..."
+                placeholderTextColor={theme.muted}
+                style={[styles.searchInput, { color: theme.ink }]}
+              />
+            </View>
+
+            {loadingContacts ? (
+              <View style={styles.centerBox}>
+                <ActivityIndicator size="large" color={theme.emerald} />
+                <Text style={[styles.emptyModalText, { color: theme.muted, marginTop: 10 }]}>Loading contacts...</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={filteredContacts}
+                keyExtractor={(item, index) => String(item.number || item.phone || item.id || index)}
+                style={{ maxHeight: 360 }}
+                contentContainerStyle={{ padding: 16 }}
+                keyboardShouldPersistTaps="handled"
+                ListEmptyComponent={
+                  <View style={styles.centerBox}>
+                    <Users size={36} color={theme.border} />
+                    <Text style={[styles.emptyModalText, { color: theme.muted }]}>
+                      {contactsSearch ? 'No matching contacts found' : 'No contacts available in workspace'}
+                    </Text>
+                  </View>
+                }
+                renderItem={({ item }) => {
+                  const num = String(item.number || item.phone || '');
+                  const isSelected = selectedContacts.includes(num);
+                  return (
+                    <Pressable
+                      onPress={() => {
+                        if (isSelected) {
+                          setSelectedContacts(selectedContacts.filter((n) => n !== num));
+                        } else {
+                          setSelectedContacts([...selectedContacts, num]);
+                        }
+                      }}
+                      style={[styles.contactItem, { borderColor: theme.border }]}
+                    >
+                      <View style={[styles.checkbox, isSelected && { backgroundColor: theme.emerald, borderColor: theme.emerald }, { borderColor: theme.border }]}>
+                        {isSelected && <Check size={14} color="#FFF" />}
+                      </View>
+                      <View style={{ flex: 1, marginLeft: 12 }}>
+                        <Text style={[styles.contactName, { color: theme.ink }]}>{item.name || item.contact_name || 'Unnamed'}</Text>
+                        <Text style={[styles.contactNumber, { color: theme.muted }]}>{num}</Text>
+                      </View>
+                    </Pressable>
+                  );
+                }}
+              />
+            )}
+
+            <View style={[styles.modalFooter, { borderTopColor: theme.border }]}>
+              <ScalePressable
+                onPress={() => setContactsModalOpen(false)}
+                style={[styles.doneBtn, { backgroundColor: theme.emerald }]}
+              >
+                <Text style={styles.doneBtnText}>Done ({selectedContacts.length} selected)</Text>
+              </ScalePressable>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidView>
       </SlideUpModal>
 
       {/* Device / SIM Contacts Multi-Select Modal */}
@@ -1146,141 +1152,144 @@ export function CreateCampaignScreen({
         visible={deviceContactsModalOpen}
         onClose={() => setDeviceContactsModalOpen(false)}
         maxHeight="92%"
-        contentStyle={{ height: '86%' }}
       >
-        <View style={[styles.modalInner, { backgroundColor: theme.surface }]}>
-          {/* Header row with Select All */}
-          <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.modalTitle, { color: theme.ink }]}>Device & SIM Contacts</Text>
-              {deviceContactsList.length > 0 && (
-                <Text style={[{ fontSize: 11, color: theme.muted, marginTop: 2 }]}>
-                  {deviceContactsList.length} contacts found
-                </Text>
-              )}
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              {deviceContactsList.length > 0 && (
-                <ScalePressable onPress={handleToggleSelectAllDeviceContacts} hitSlop={8}>
-                  <Text style={[{ fontSize: 12, fontWeight: '700', color: theme.emerald }]}>
-                    {filteredDeviceContacts.every((c) => selectedDeviceContacts.includes(c.number))
-                      ? 'Deselect All'
-                      : 'Select All'}
+        <KeyboardAvoidView style={{ flex: 0 }}>
+          <View style={[styles.modalInner, { backgroundColor: theme.surface }]}>
+            {/* Header row with Select All */}
+            <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.modalTitle, { color: theme.ink }]}>Device & SIM Contacts</Text>
+                {deviceContactsList.length > 0 && (
+                  <Text style={[{ fontSize: 11, color: theme.muted, marginTop: 2 }]}>
+                    {deviceContactsList.length} contacts found
                   </Text>
-                </ScalePressable>
-              )}
-              <Pressable onPress={() => setDeviceContactsModalOpen(false)} hitSlop={8}>
-                <X size={22} color={theme.muted} />
-              </Pressable>
+                )}
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                {deviceContactsList.length > 0 && (
+                  <ScalePressable onPress={handleToggleSelectAllDeviceContacts} hitSlop={8}>
+                    <Text style={[{ fontSize: 12, fontWeight: '700', color: theme.emerald }]}>
+                      {filteredDeviceContacts.every((c) => selectedDeviceContacts.includes(c.number))
+                        ? 'Deselect All'
+                        : 'Select All'}
+                    </Text>
+                  </ScalePressable>
+                )}
+                <Pressable onPress={() => setDeviceContactsModalOpen(false)} hitSlop={8}>
+                  <X size={22} color={theme.muted} />
+                </Pressable>
+              </View>
             </View>
-          </View>
 
-          {/* Search */}
-          <View style={[styles.searchBox, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
-            <Search size={18} color={theme.muted} />
-            <TextInput
-              value={deviceContactsSearch}
-              onChangeText={setDeviceContactsSearch}
-              placeholder="Search contacts by name or number..."
-              placeholderTextColor={theme.muted}
-              style={[styles.searchInput, { color: theme.ink }]}
-            />
-            {deviceContactsSearch.length > 0 && (
-              <Pressable onPress={() => setDeviceContactsSearch('')} hitSlop={8}>
-                <X size={16} color={theme.muted} />
-              </Pressable>
+            {/* Search */}
+            <View style={[styles.searchBox, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
+              <Search size={18} color={theme.muted} />
+              <TextInput
+                value={deviceContactsSearch}
+                onChangeText={setDeviceContactsSearch}
+                placeholder="Search contacts by name or number..."
+                placeholderTextColor={theme.muted}
+                style={[styles.searchInput, { color: theme.ink }]}
+              />
+              {deviceContactsSearch.length > 0 && (
+                <Pressable onPress={() => setDeviceContactsSearch('')} hitSlop={8}>
+                  <X size={16} color={theme.muted} />
+                </Pressable>
+              )}
+            </View>
+
+            {/* Permission denied state */}
+            {devicePermissionDenied ? (
+              <View style={styles.centerBox}>
+                <Smartphone size={40} color={theme.border} />
+                <Text style={[styles.emptyModalText, { color: theme.muted, marginTop: 12 }]}>
+                  Contacts permission was denied.
+                </Text>
+                <ScalePressable
+                  onPress={loadDeviceContacts}
+                  style={[styles.doneBtn, { backgroundColor: theme.emerald, marginTop: 16, paddingHorizontal: 24 }]}
+                >
+                  <Text style={styles.doneBtnText}>Grant Permission & Retry</Text>
+                </ScalePressable>
+              </View>
+            ) : loadingDeviceContacts ? (
+              <View style={styles.centerBox}>
+                <ActivityIndicator size="large" color={theme.emerald} />
+                <Text style={[styles.emptyModalText, { color: theme.muted, marginTop: 10 }]}>
+                  Loading contacts from device...
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={filteredDeviceContacts}
+                keyExtractor={(item) => item.id}
+                style={{ maxHeight: 360 }}
+                contentContainerStyle={{ padding: 16 }}
+                initialNumToRender={30}
+                maxToRenderPerBatch={30}
+                windowSize={10}
+                keyboardShouldPersistTaps="handled"
+                getItemLayout={(_, index) => ({ length: 54, offset: 54 * index, index })}
+                ListEmptyComponent={
+                  <View style={styles.centerBox}>
+                    <Smartphone size={36} color={theme.border} />
+                    <Text style={[styles.emptyModalText, { color: theme.muted, marginTop: 10 }]}>
+                      {deviceContactsSearch
+                        ? 'No matching contacts found'
+                        : 'No contacts found on device / SIM'}
+                    </Text>
+                    {!deviceContactsSearch && (
+                      <ScalePressable onPress={loadDeviceContacts} style={{ marginTop: 16 }}>
+                        <Text style={[{ fontSize: 13, fontWeight: '700', color: theme.emerald }]}>
+                          Retry
+                        </Text>
+                      </ScalePressable>
+                    )}
+                  </View>
+                }
+                renderItem={({ item }) => {
+                  const isSelected = selectedDeviceContacts.includes(item.number);
+                  return (
+                    <Pressable
+                      onPress={() => {
+                        if (isSelected) {
+                          setSelectedDeviceContacts((prev) => prev.filter((n) => n !== item.number));
+                        } else {
+                          setSelectedDeviceContacts((prev) => [...prev, item.number]);
+                        }
+                      }}
+                      style={[styles.contactItem, { borderColor: theme.border }]}
+                    >
+                      <View
+                        style={[
+                          styles.checkbox,
+                          isSelected && { backgroundColor: theme.emerald, borderColor: theme.emerald },
+                          { borderColor: theme.border },
+                        ]}
+                      >
+                        {isSelected && <Check size={14} color="#FFF" />}
+                      </View>
+                      <View style={{ flex: 1, marginLeft: 12 }}>
+                        <Text style={[styles.contactName, { color: theme.ink }]}>{item.name}</Text>
+                        <Text style={[styles.contactNumber, { color: theme.muted }]}>{item.number}</Text>
+                      </View>
+                      <Smartphone size={14} color={theme.muted} />
+                    </Pressable>
+                  );
+                }}
+              />
             )}
-          </View>
 
-          {/* Permission denied state */}
-          {devicePermissionDenied ? (
-            <View style={styles.centerBox}>
-              <Smartphone size={40} color={theme.border} />
-              <Text style={[styles.emptyModalText, { color: theme.muted, marginTop: 12 }]}>
-                Contacts permission was denied.
-              </Text>
+            <View style={[styles.modalFooter, { borderTopColor: theme.border }]}>
               <ScalePressable
-                onPress={loadDeviceContacts}
-                style={[styles.doneBtn, { backgroundColor: theme.emerald, marginTop: 16, paddingHorizontal: 24 }]}
+                onPress={() => setDeviceContactsModalOpen(false)}
+                style={[styles.doneBtn, { backgroundColor: theme.emerald }]}
               >
-                <Text style={styles.doneBtnText}>Grant Permission & Retry</Text>
+                <Text style={styles.doneBtnText}>Done ({selectedDeviceContacts.length} selected)</Text>
               </ScalePressable>
             </View>
-          ) : loadingDeviceContacts ? (
-            <View style={styles.centerBox}>
-              <ActivityIndicator size="large" color={theme.emerald} />
-              <Text style={[styles.emptyModalText, { color: theme.muted, marginTop: 10 }]}>
-                Loading contacts from device...
-              </Text>
-            </View>
-          ) : (
-            <FlatList
-              data={filteredDeviceContacts}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={{ padding: 16 }}
-              initialNumToRender={30}
-              maxToRenderPerBatch={30}
-              windowSize={10}
-              getItemLayout={(_, index) => ({ length: 54, offset: 54 * index, index })}
-              ListEmptyComponent={
-                <View style={styles.centerBox}>
-                  <Smartphone size={36} color={theme.border} />
-                  <Text style={[styles.emptyModalText, { color: theme.muted, marginTop: 10 }]}>
-                    {deviceContactsSearch
-                      ? 'No matching contacts found'
-                      : 'No contacts found on device / SIM'}
-                  </Text>
-                  {!deviceContactsSearch && (
-                    <ScalePressable onPress={loadDeviceContacts} style={{ marginTop: 16 }}>
-                      <Text style={[{ fontSize: 13, fontWeight: '700', color: theme.emerald }]}>
-                        Retry
-                      </Text>
-                    </ScalePressable>
-                  )}
-                </View>
-              }
-              renderItem={({ item }) => {
-                const isSelected = selectedDeviceContacts.includes(item.number);
-                return (
-                  <Pressable
-                    onPress={() => {
-                      if (isSelected) {
-                        setSelectedDeviceContacts((prev) => prev.filter((n) => n !== item.number));
-                      } else {
-                        setSelectedDeviceContacts((prev) => [...prev, item.number]);
-                      }
-                    }}
-                    style={[styles.contactItem, { borderColor: theme.border }]}
-                  >
-                    <View
-                      style={[
-                        styles.checkbox,
-                        isSelected && { backgroundColor: theme.emerald, borderColor: theme.emerald },
-                        { borderColor: theme.border },
-                      ]}
-                    >
-                      {isSelected && <Check size={14} color="#FFF" />}
-                    </View>
-                    <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text style={[styles.contactName, { color: theme.ink }]}>{item.name}</Text>
-                      <Text style={[styles.contactNumber, { color: theme.muted }]}>{item.number}</Text>
-                    </View>
-                    <Smartphone size={14} color={theme.muted} />
-                  </Pressable>
-                );
-              }}
-            />
-          )}
-
-          <View style={[styles.modalFooter, { borderTopColor: theme.border }]}>
-            <ScalePressable
-              onPress={() => setDeviceContactsModalOpen(false)}
-              style={[styles.doneBtn, { backgroundColor: theme.emerald }]}
-            >
-              <Text style={styles.doneBtnText}>Done ({selectedDeviceContacts.length} selected)</Text>
-            </ScalePressable>
           </View>
-        </View>
+        </KeyboardAvoidView>
       </SlideUpModal>
     </View>
   );
@@ -1536,7 +1545,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   launchBtnText: { color: '#FFF', fontSize: 16, fontWeight: '800' },
-  modalInner: { flex: 1, paddingBottom: 20 },
+  modalInner: { width: '100%', paddingBottom: 10 },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',

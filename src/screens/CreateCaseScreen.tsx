@@ -24,7 +24,7 @@ import {
 import { ApiSession } from '../api/client';
 import { createCase, getContactList } from '../api/workspace';
 import { useTheme } from '../theme/theme';
-import { ScalePressable } from '../components/animations';
+import { ScalePressable, SlideUpModal } from '../components/animations';
 import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
 import { loadCaseNames, saveCustomCaseName } from '../services/caseNames';
 
@@ -136,10 +136,10 @@ export function CreateCaseScreen({
       if (!projectId || !session?.token) return;
       setContactsLoading(true);
       try {
-        const res = await getContactList(session, projectId, 1, 15, query);
+        const res = await getContactList(session, projectId, 1, 30, query);
         const list = res?.data || res?.list || [];
         setContacts(
-          list.map((c: any) => ({
+          (Array.isArray(list) ? list : []).map((c: any) => ({
             id: c.contact_id || c.id,
             name: c.name || c.contact_name,
             number: c.number || c.phone,
@@ -152,10 +152,20 @@ export function CreateCaseScreen({
         setContactsLoading(false);
       }
     },
-    [projectId, session.token, session.username],
+    [projectId, session],
   );
 
+  // Debounced search when query changes while modal is open
+  useEffect(() => {
+    if (!contactSearchModalOpen) return;
+    const timer = setTimeout(() => {
+      searchContacts(contactsQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [contactsQuery, contactSearchModalOpen, searchContacts]);
+
   const openContactPicker = () => {
+    setContactsQuery('');
     setContactSearchModalOpen(true);
     searchContacts('');
   };
@@ -403,14 +413,13 @@ export function CreateCaseScreen({
       </ScrollView>
 
       {/* Contact Picker Modal */}
-      <Modal
+      <SlideUpModal
         visible={contactSearchModalOpen}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setContactSearchModalOpen(false)}
+        onClose={() => setContactSearchModalOpen(false)}
+        maxHeight="80%"
       >
-        <Pressable style={styles.sheetBackdrop} onPress={() => setContactSearchModalOpen(false)}>
-          <Pressable style={[styles.sheet, { backgroundColor: theme.surface }]} onPress={() => {}}>
+        <KeyboardAvoidView style={{ flex: 0 }}>
+          <View style={[styles.sheet, { backgroundColor: theme.surface }]}>
             <View style={styles.sheetHeader}>
               <Text style={[styles.sheetTitle, { color: theme.ink }]}>Select Contact</Text>
               <ScalePressable onPress={() => setContactSearchModalOpen(false)} hitSlop={8}>
@@ -422,10 +431,7 @@ export function CreateCaseScreen({
               <Search size={16} color={theme.muted} />
               <TextInput
                 value={contactsQuery}
-                onChangeText={(q) => {
-                  setContactsQuery(q);
-                  searchContacts(q);
-                }}
+                onChangeText={setContactsQuery}
                 placeholder="Search contact name or number..."
                 placeholderTextColor={theme.muted}
                 style={[styles.input, { color: theme.ink }]}
@@ -470,9 +476,9 @@ export function CreateCaseScreen({
                 )}
               />
             )}
-          </Pressable>
-        </Pressable>
-      </Modal>
+          </View>
+        </KeyboardAvoidView>
+      </SlideUpModal>
     </KeyboardAvoidView>
   );
 }
@@ -662,10 +668,8 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheet: {
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
     padding: 18,
-    maxHeight: '80%',
+    width: '100%',
   },
   sheetHeader: {
     flexDirection: 'row',
