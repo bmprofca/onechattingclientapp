@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  BackHandler,
   FlatList,
   Modal,
   Pressable,
@@ -14,13 +13,8 @@ import {
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import {
-  ArrowLeft,
   Search,
   Plus,
-  Edit2,
-  MessageCircle,
-  FileText,
-  AlertCircle,
   Check,
   CheckSquare,
   Filter,
@@ -28,7 +22,6 @@ import {
 import { ApiSession } from '../api/client';
 import {
   getOpenCases,
-  getCaseList,
   editCase,
   bulkCloseCases,
 } from '../api/workspace';
@@ -37,46 +30,8 @@ import { useTheme } from '../theme/theme';
 import { socketManager } from '../services/socketManager';
 import { ScalePressable, FadeInView } from '../components/animations';
 import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
-import { loadCaseNames, saveCustomCaseName } from '../services/caseNames';
 import defaultCaseNames from '../data/caseNames.json';
 
-function CaseNameSelect({value, options, onChange, onCreateNew, theme}: any) {
-  const [visible, setVisible] = useState(false);
-  return (
-    <>
-      <Pressable
-        onPress={() => setVisible(true)}
-        style={[styles.inputRow, {backgroundColor: theme.canvas, borderColor: theme.border}]}
-      >
-        <FileText size={16} color={theme.muted} />
-        <Text style={[styles.input, {color: value ? theme.ink : theme.muted}]} numberOfLines={1}>
-          {value || 'Select a case name'}
-        </Text>
-      </Pressable>
-      <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
-        <Pressable style={styles.namePickerOverlay} onPress={() => setVisible(false)}>
-          <View style={[styles.namePicker, {backgroundColor: theme.surface, borderColor: theme.border}]}>
-            <Text style={[styles.namePickerTitle, {color: theme.ink}]}>Select case name</Text>
-            <ScrollView>
-              {options.map((option: string) => (
-                <Pressable key={option} onPress={() => { onChange(option); setVisible(false); }} style={styles.namePickerOption}>
-                  {option === value ? <Check size={16} color={theme.emerald} /> : <View style={{width: 16}} />}
-                  <Text style={[styles.namePickerOptionText, {color: theme.ink}]}>{option}</Text>
-                </Pressable>
-              ))}
-              <Pressable onPress={() => { setVisible(false); onCreateNew(); }} style={[styles.namePickerOption, {borderTopWidth: 1, borderTopColor: theme.border}]}>
-                <Plus size={16} color={theme.emerald} />
-                <Text style={[styles.namePickerOptionText, {color: theme.emerald}]}>Create new case name</Text>
-              </Pressable>
-            </ScrollView>
-          </View>
-        </Pressable>
-      </Modal>
-    </>
-  );
-}
-
-// --- Date Formatters matching web OpenCaseList.js ---
 const parseServerDate = (value: any): Date | null => {
   if (!value) return null;
   const d = new Date(value);
@@ -95,30 +50,19 @@ const formatShortDateTime = (value: any): string => {
   });
 };
 
-const formatDateOnly = (value: any): string => {
-  if (!value) return '-';
-  const d = parseServerDate(value);
-  if (!d) return '-';
-  return d.toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
+type Props = {
+  projectId: string;
+  session: ApiSession;
+  onOpenDetails: (contact: { number: string; name?: string }) => void;
+  onCreateCase?: (contact?: { name?: string; number: string }) => void;
 };
 
 export function OpenCasesScreen({
   projectId,
   session,
-  onBack,
-  onOpenChat,
+  onOpenDetails,
   onCreateCase,
-}: {
-  projectId: string;
-  session: ApiSession;
-  onBack?: () => void;
-  onOpenChat: (contactNumber: string, contactName: string) => void;
-  onCreateCase?: (contact?: { name?: string; number: string }) => void;
-}) {
+}: Props) {
   const theme = useTheme();
 
   // --- Main List State ---
@@ -131,100 +75,10 @@ export function OpenCasesScreen({
   const [caseNameFilter, setCaseNameFilter] = useState('');
   const [caseNameFilterOpen, setCaseNameFilterOpen] = useState(false);
 
-  // --- View Cases Screen State ---
-  const [showCaseListModal, setShowCaseListModal] = useState(false);
-  const [caseModalNumber, setCaseModalNumber] = useState('');
-  const [caseModalContact, setCaseModalContact] = useState<any>(null);
-  const [caseList, setCaseList] = useState<any[]>([]);
-  const [caseListLoading, setCaseListLoading] = useState(false);
-  const [caseListError, setCaseListError] = useState('');
-  const [caseListSearch, setCaseListSearch] = useState('');
-  const [caseListStatusFilter, setCaseListStatusFilter] = useState<'' | 'open' | 'closed'>('');
-
-  // --- Edit Case Screen State ---
-  const [showCaseEditModal, setShowCaseEditModal] = useState(false);
-  const [caseEditRow, setCaseEditRow] = useState<any>(null);
-  const [caseEditName, setCaseEditName] = useState('');
-  const [caseEditRemark, setCaseEditRemark] = useState('');
-  const [caseEditStatus, setCaseEditStatus] = useState<'open' | 'closed'>('open');
-  const [caseEditLoading, setCaseEditLoading] = useState(false);
-  const [caseEditError, setCaseEditError] = useState('');
-  const [caseNames, setCaseNames] = useState<string[]>([]);
-  const [newCaseName, setNewCaseName] = useState('');
-  const [creatingCaseNameFor, setCreatingCaseNameFor] = useState<'create' | 'edit' | null>(null);
+  // --- Multi-Select / Bulk Close State ---
   const [selectedNumbers, setSelectedNumbers] = useState<string[]>([]);
   const [selectionMode, setSelectionMode] = useState(false);
   const [bulkCloseLoading, setBulkCloseLoading] = useState(false);
-
-  useEffect(() => {
-    loadCaseNames().then(setCaseNames);
-  }, []);
-
-  const createNewCaseName = async () => {
-    const name = newCaseName.trim();
-    if (!name) {
-      setCaseEditError('Case name is required');
-      return;
-    }
-    const names = await saveCustomCaseName(name);
-    setCaseNames(names);
-    setCaseEditName(name);
-    setNewCaseName('');
-    setCreatingCaseNameFor(null);
-  };
-
-  const closeSelectedCases = async () => {
-    if (!selectedNumbers.length) return;
-    const selectedOpenCases = casesByNumber
-      .filter(row => selectedNumbers.includes(String(row.number || row.phone || '')))
-      .flatMap(row => (Array.isArray(row.cases) ? row.cases : []))
-      .filter((item: any) => item?.status === true || item?.status === 1 || item?.status === '1' || String(item?.status).toLowerCase() === 'open');
-    const caseIds = selectedOpenCases
-      .map((item: any) => item.case_id || item.id)
-      .filter(Boolean);
-    if (!caseIds.length) {
-      Toast.show({type: 'error', text1: 'Nothing to close', text2: 'No valid open case IDs were found.'});
-      return;
-    }
-    setBulkCloseLoading(true);
-    try {
-      try {
-        const res = await bulkCloseCases(session, projectId, caseIds);
-        if (res?.error) throw new Error(typeof res.error === 'string' ? res.error : 'Bulk close endpoint failed');
-      } catch {
-        await Promise.all(
-          selectedOpenCases.map((item: any) =>
-            editCase(
-              session,
-              projectId,
-              item.case_id || item.id,
-              item.name || '',
-              item.remark || '',
-              'closed',
-            ),
-          ),
-        );
-      }
-      Toast.show({type: 'success', text1: 'Cases closed', text2: `${caseIds.length} case(s) closed successfully`});
-      setSelectedNumbers([]);
-      setSelectionMode(false);
-      fetchOpenCases();
-    } catch (err: any) {
-      Toast.show({type: 'error', text1: 'Bulk close failed', text2: err?.message || 'Please try again'});
-    } finally {
-      setBulkCloseLoading(false);
-    }
-  };
-
-  const toggleAllCases = () => {
-    const numbers = casesByNumber.map(row => String(row.number || row.phone || '')).filter(Boolean);
-    setSelectedNumbers(selectedNumbers.length === numbers.length ? [] : numbers);
-  };
-
-  const cancelSelection = () => {
-    setSelectedNumbers([]);
-    setSelectionMode(false);
-  };
 
   // Debounce search
   useEffect(() => {
@@ -234,7 +88,7 @@ export function OpenCasesScreen({
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Fetch main open cases list
+  // Fetch open cases
   const fetchOpenCases = useCallback(async () => {
     if (!projectId || !session?.token) return;
     setLoading(true);
@@ -250,12 +104,20 @@ export function OpenCasesScreen({
         Array.isArray(defaultCaseNames) ? defaultCaseNames : [],
       );
       if (res?.error) {
-        setError(typeof res.error === 'string' ? res.error : res.msg || 'Failed to get open cases');
+        setError(
+          typeof res.error === 'string'
+            ? res.error
+            : res.msg || 'Failed to get open cases',
+        );
         setCasesByNumber([]);
         setTotal(0);
         return;
       }
-      const list = Array.isArray(res?.data) ? res.data : Array.isArray(res?.list) ? res.list : [];
+      const list = Array.isArray(res?.data)
+        ? res.data
+        : Array.isArray(res?.list)
+        ? res.list
+        : [];
       const meta = res?.meta || {};
       setCasesByNumber(list);
       setTotal(Number(meta.total) || list.length);
@@ -282,438 +144,112 @@ export function OpenCasesScreen({
     };
   }, [fetchOpenCases]);
 
-  // Back handler for screens (priority: edit > list > main)
-  useEffect(() => {
-    const onBackPress = () => {
-      if (showCaseEditModal) {
-        setShowCaseEditModal(false);
-        return true;
-      }
-      if (showCaseListModal) {
-        setShowCaseListModal(false);
-        return true;
-      }
-      return false;
-    };
-    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-    return () => sub.remove();
-  }, [showCaseEditModal, showCaseListModal]);
-
-  // --- Fetch Cases for a Number (Screen) ---
-  const fetchCaseListForNumber = useCallback(
-    async (number: string, searchQuery?: string, statusFilter?: string) => {
-      if (!projectId || !session?.token || !number) return;
-      setCaseListLoading(true);
-      setCaseListError('');
-      try {
-        const res = await getCaseList(session, projectId, {
-          number,
-          search: searchQuery !== undefined ? searchQuery : caseListSearch,
-          status: statusFilter !== undefined ? statusFilter : caseListStatusFilter,
-        });
-        if (res?.error) {
-          setCaseListError(typeof res.error === 'string' ? res.error : res.message || 'Failed to load cases');
-          setCaseList([]);
-          return;
-        }
-        const list = res?.data ?? res?.list ?? [];
-        setCaseList(Array.isArray(list) ? list : []);
-      } catch (err: any) {
-        setCaseListError(err?.message || 'Failed to load case list');
-        setCaseList([]);
-      } finally {
-        setCaseListLoading(false);
-      }
-    },
-    [projectId, session.token, session.username, caseListSearch, caseListStatusFilter],
-  );
-
-  const openCaseModal = (item: any) => {
-    const num = item.number || item.phone || '';
-    const contact = item.contact || null;
-    setCaseModalNumber(num);
-    setCaseModalContact(contact);
-    setCaseList([]);
-    setCaseListError('');
-    setCaseListSearch('');
-    setCaseListStatusFilter('');
-    setShowCaseListModal(true);
-    fetchCaseListForNumber(num, '', '');
-  };
-
-  // --- Edit Case ---
-  const openEditCase = (row: any) => {
-    setCaseEditRow(row);
-    setCaseEditName(row?.name || '');
-    setCaseEditRemark(row?.remark || '');
-    setCaseEditStatus(row?.status === true || row?.status === '1' || row?.status === 'open' ? 'open' : 'closed');
-    setCaseEditError('');
-    setShowCaseEditModal(true);
-  };
-
-  const handleSaveEditCase = async () => {
-    const caseId = caseEditRow?.case_id || caseEditRow?.id;
-    if (!caseId) return;
-    const name = caseEditName.trim();
-    if (!name) {
-      setCaseEditError('Case name is required');
+  const closeSelectedCases = async () => {
+    if (!selectedNumbers.length) return;
+    const selectedOpenCases = casesByNumber
+      .filter((row) =>
+        selectedNumbers.includes(String(row.number || row.phone || '')),
+      )
+      .flatMap((row) => (Array.isArray(row.cases) ? row.cases : []))
+      .filter(
+        (item: any) =>
+          item?.status === true ||
+          item?.status === 1 ||
+          item?.status === '1' ||
+          String(item?.status).toLowerCase() === 'open',
+      );
+    const caseIds = selectedOpenCases
+      .map((item: any) => item.case_id || item.id)
+      .filter(Boolean);
+    if (!caseIds.length) {
+      Toast.show({
+        type: 'error',
+        text1: 'Nothing to close',
+        text2: 'No valid open case IDs were found.',
+      });
       return;
     }
-
-    setCaseEditLoading(true);
-    setCaseEditError('');
+    setBulkCloseLoading(true);
     try {
-      // FIX: editCase takes positional args, not an object
-      const res = await editCase(
-        session,
-        projectId,
-        caseId,
-        name,
-        caseEditRemark.trim(),
-        caseEditStatus,
-      );
-
-      if (res?.error) {
-        setCaseEditError(typeof res.error === 'string' ? res.error : res.msg || 'Failed to update case');
-        return;
+      try {
+        const res = await bulkCloseCases(session, projectId, caseIds);
+        if (res?.error)
+          throw new Error(
+            typeof res.error === 'string'
+              ? res.error
+              : 'Bulk close endpoint failed',
+          );
+      } catch {
+        await Promise.all(
+          selectedOpenCases.map((item: any) =>
+            editCase(
+              session,
+              projectId,
+              item.case_id || item.id,
+              item.name || '',
+              item.remark || '',
+              'closed',
+            ),
+          ),
+        );
       }
-
       Toast.show({
         type: 'success',
-        text1: 'Case Updated',
-        text2: 'Case updated successfully',
+        text1: 'Cases closed',
+        text2: `${caseIds.length} case(s) closed successfully`,
       });
-      setShowCaseEditModal(false);
-      // Refresh case list screen (if it's the return destination)
-      if (caseModalNumber) {
-        fetchCaseListForNumber(caseModalNumber);
-      }
-      // Refresh main open cases
+      setSelectedNumbers([]);
+      setSelectionMode(false);
       fetchOpenCases();
     } catch (err: any) {
-      setCaseEditError(err?.message || 'Failed to update case');
+      Toast.show({
+        type: 'error',
+        text1: 'Bulk close failed',
+        text2: err?.message || 'Please try again',
+      });
     } finally {
-      setCaseEditLoading(false);
+      setBulkCloseLoading(false);
     }
   };
 
-  // =========================================================================
-  // SCREEN: EDIT CASE (full screen — replaces the whole page while active)
-  // Checked first so it takes priority over the case-list / create screens,
-  // and "back" naturally returns to whichever screen was open before it.
-  // =========================================================================
-  if (showCaseEditModal) {
-    return (
-      <KeyboardAvoidView style={[styles.container, { backgroundColor: theme.canvas }]}>
-        <View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
-          <View style={styles.headerLeft}>
-            <ScalePressable onPress={() => setShowCaseEditModal(false)} style={styles.backBtn} hitSlop={8}>
-              <ArrowLeft size={22} color={theme.ink} strokeWidth={2.5} />
-            </ScalePressable>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.headerTitle, { color: theme.ink }]} numberOfLines={1}>
-                Edit Case
-              </Text>
-              <Text style={[styles.headerSubtitle, { color: theme.muted }]} numberOfLines={1}>
-                {caseEditRow?.name || 'Update case details'}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <ScrollView contentContainerStyle={{ padding: 18, gap: 14 }} keyboardShouldPersistTaps="handled">
-          {caseEditError ? (
-            <View style={[styles.errorBox, { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' }]}>
-              <AlertCircle size={16} color="#DC2626" />
-              <Text style={[styles.errorBoxText, { color: '#B91C1C' }]}>{caseEditError}</Text>
-            </View>
-          ) : null}
-
-          <View>
-            <Text style={[styles.formLabel, { color: theme.muted }]}>CASE NAME *</Text>
-            <CaseNameSelect value={caseEditName} options={caseNames} onChange={(value: string) => { setCaseEditName(value); setCaseEditError(''); }} onCreateNew={() => { setNewCaseName(''); setCreatingCaseNameFor('edit'); }} theme={theme} />
-            {creatingCaseNameFor === 'edit' && <View style={styles.newNameRow}>
-              <TextInput value={newCaseName} onChangeText={setNewCaseName} placeholder="New case name" placeholderTextColor={theme.muted} style={[styles.newNameInput, {color: theme.ink, borderColor: theme.border, backgroundColor: theme.canvas}]} />
-              <Pressable onPress={createNewCaseName} style={[styles.newNameButton, {backgroundColor: theme.emerald}]}><Text style={styles.newNameButtonText}>Add</Text></Pressable>
-            </View>}
-          </View>
-
-          <View>
-            <Text style={[styles.formLabel, { color: theme.muted }]}>REMARK</Text>
-            <View style={[styles.inputRow, styles.textAreaRow, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
-              <TextInput
-                value={caseEditRemark}
-                onChangeText={setCaseEditRemark}
-                multiline
-                numberOfLines={3}
-                placeholder="Remark"
-                placeholderTextColor={theme.muted}
-                style={[styles.input, styles.textArea, { color: theme.ink }]}
-              />
-            </View>
-          </View>
-
-          <View>
-            <Text style={[styles.formLabel, { color: theme.muted }]}>STATUS</Text>
-            <View style={styles.statusToggleRow}>
-              <Pressable
-                onPress={() => setCaseEditStatus('open')}
-                style={[
-                  styles.statusToggleBtn,
-                  { borderColor: theme.border, backgroundColor: theme.canvas },
-                  caseEditStatus === 'open' && { backgroundColor: '#F59E0B', borderColor: '#F59E0B' },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.statusToggleBtnText,
-                    { color: caseEditStatus === 'open' ? '#FFF' : theme.muted },
-                  ]}
-                >
-                  Open
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setCaseEditStatus('closed')}
-                style={[
-                  styles.statusToggleBtn,
-                  { borderColor: theme.border, backgroundColor: theme.canvas },
-                  caseEditStatus === 'closed' && { backgroundColor: '#10B981', borderColor: '#10B981' },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.statusToggleBtnText,
-                    { color: caseEditStatus === 'closed' ? '#FFF' : theme.muted },
-                  ]}
-                >
-                  Closed
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-
-          <ScalePressable
-            onPress={handleSaveEditCase}
-            disabled={caseEditLoading}
-            style={[styles.submitButton, { backgroundColor: theme.emerald }]}
-          >
-            {caseEditLoading ? (
-              <ActivityIndicator color="#FFF" />
-            ) : (
-              <Text style={styles.submitButtonText}>Save Changes</Text>
-            )}
-          </ScalePressable>
-        </ScrollView>
-      </KeyboardAvoidView>
+  const toggleAllCases = () => {
+    const numbers = casesByNumber
+      .map((row) => String(row.number || row.phone || ''))
+      .filter(Boolean);
+    setSelectedNumbers(
+      selectedNumbers.length === numbers.length ? [] : numbers,
     );
-  }
+  };
 
+  const cancelSelection = () => {
+    setSelectedNumbers([]);
+    setSelectionMode(false);
+  };
 
-
-  // =========================================================================
-  // SCREEN: CASE LIST FOR A CONTACT (full screen)
-  // =========================================================================
-  if (showCaseListModal) {
-    return (
-      <View style={[styles.container, { backgroundColor: theme.canvas }]}>
-        <View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
-          <View style={styles.headerLeft}>
-            <ScalePressable onPress={() => setShowCaseListModal(false)} style={styles.backBtn} hitSlop={8}>
-              <ArrowLeft size={22} color={theme.ink} strokeWidth={2.5} />
-            </ScalePressable>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.headerTitle, { color: theme.ink }]} numberOfLines={1}>
-                {caseModalContact?.name || caseModalNumber}
-              </Text>
-              <Text style={[styles.headerSubtitle, { color: theme.muted }]}>
-                {caseModalNumber} · Case History
-              </Text>
-            </View>
-          </View>
-
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <ScalePressable
-              onPress={() => {
-                setShowCaseListModal(false);
-                onCreateCase?.(
-                  caseModalContact
-                    ? { name: caseModalContact.name, number: caseModalNumber }
-                    : { number: caseModalNumber },
-                );
-              }}
-              style={[styles.chatHeaderBtn, { backgroundColor: theme.inputBg ?? theme.surface }]}
-              hitSlop={6}
-            >
-              <Plus size={16} color={theme.emerald} />
-              <Text style={[styles.chatHeaderBtnText, { color: theme.emerald }]}>New</Text>
-            </ScalePressable>
-            <ScalePressable
-              onPress={() => {
-                setShowCaseListModal(false);
-                onOpenChat(caseModalNumber, caseModalContact?.name || caseModalNumber);
-              }}
-              style={[styles.chatHeaderBtn, { backgroundColor: theme.mint }]}
-              hitSlop={6}
-            >
-              <MessageCircle size={16} color={theme.emerald} />
-              <Text style={[styles.chatHeaderBtnText, { color: theme.emerald }]}>Chat</Text>
-            </ScalePressable>
-          </View>
-        </View>
-
-        <View style={[styles.modalFiltersRow, { backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border, paddingBottom: 12 }]}>
-          <View style={[styles.modalSearchContainer, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
-            <Search size={15} color={theme.muted} />
-            <TextInput
-              value={caseListSearch}
-              onChangeText={(val) => {
-                setCaseListSearch(val);
-                fetchCaseListForNumber(caseModalNumber, val, caseListStatusFilter);
-              }}
-              placeholder="Filter cases by title, remark..."
-              placeholderTextColor={theme.muted}
-              style={[styles.modalSearchInput, { color: theme.ink }]}
-            />
-            {caseListSearch.length > 0 && (
-              <Pressable hitSlop={8} onPress={() => {
-                setCaseListSearch('');
-                fetchCaseListForNumber(caseModalNumber, '', caseListStatusFilter);
-              }}>
-                <Text style={{ color: theme.muted, fontSize: 14 }}>✕</Text>
-              </Pressable>
-            )}
-          </View>
-
-          <View style={styles.filterChipsRow}>
-            {(['', 'open', 'closed'] as const).map((st) => {
-              const active = caseListStatusFilter === st;
-              const label = st === '' ? 'All' : st === 'open' ? 'Open' : 'Closed';
-              return (
-                <Pressable
-                  key={st}
-                  onPress={() => {
-                    setCaseListStatusFilter(st);
-                    fetchCaseListForNumber(caseModalNumber, caseListSearch, st);
-                  }}
-                  style={[
-                    styles.filterChip,
-                    { borderColor: theme.border, backgroundColor: theme.canvas },
-                    active && { backgroundColor: theme.emerald, borderColor: theme.emerald },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      { color: active ? '#FFF' : theme.muted },
-                    ]}
-                  >
-                    {label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
-        {caseListLoading && caseList.length === 0 ? (
-          <View style={{ paddingVertical: 40, alignItems: 'center' }}>
-            <ActivityIndicator size="large" color={theme.emerald} />
-          </View>
-        ) : caseListError ? (
-          <View style={{ padding: 20, alignItems: 'center' }}>
-            <Text style={{ color: theme.danger }}>{caseListError}</Text>
-          </View>
-        ) : caseList.length === 0 ? (
-          <View style={{ paddingVertical: 50, alignItems: 'center' }}>
-            <FileText size={36} color={theme.muted} />
-            <Text style={[styles.emptyTitle, { color: theme.ink, marginTop: 12 }]}>No cases found</Text>
-            <Text style={[styles.emptyCopy, { color: theme.muted }]}>
-              No cases match the selected filter.
-            </Text>
-          </View>
-        ) : (
-          <ScrollView
-            contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 40 }}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={caseListLoading}
-                onRefresh={() => fetchCaseListForNumber(caseModalNumber, caseListSearch, caseListStatusFilter)}
-                tintColor={theme.emerald}
-              />
-            }
-          >
-            {caseList.map((row: any, idx: number) => {
-              const isOpen = row.status === true || row.status === '1' || row.status === 'open';
-              const createDate = row.created_at || row.create_date || row.createdAt || row.created_date;
-
-              return (
-                <View
-                  key={row.id || row.case_id || idx}
-                  style={[styles.modalCaseCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                >
-                  <View style={styles.modalCaseCardHeader}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.modalCaseCardTitle, { color: theme.ink }]}>
-                        {row.name || 'Untitled Case'}
-                      </Text>
-                      <Text style={[styles.modalCaseDate, { color: theme.muted }]}>
-                        Created: {formatDateOnly(createDate)}
-                      </Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <View
-                        style={[
-                          styles.statusPill,
-                          { backgroundColor: isOpen ? '#FEF3C7' : '#DCFCE7' },
-                        ]}
-                      >
-                        <Text style={[styles.statusPillText, { color: isOpen ? '#B45309' : '#15803D' }]}>
-                          {isOpen ? 'OPEN' : 'CLOSED'}
-                        </Text>
-                      </View>
-                      <ScalePressable
-                        onPress={() => openEditCase(row)}
-                        style={[styles.editCaseBtn, { backgroundColor: theme.canvas, borderColor: theme.border }]}
-                        hitSlop={6}
-                      >
-                        <Edit2 size={13} color={theme.emerald} />
-                      </ScalePressable>
-                    </View>
-                  </View>
-
-                  {row.remark ? (
-                    <View style={[styles.remarkBox, { backgroundColor: theme.canvas }]}>
-                      <Text style={[styles.remarkText, { color: theme.ink }]}>
-                        {row.remark}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-              );
-            })}
-          </ScrollView>
-        )}
-      </View>
-    );
-  }
-
-  // =========================================================================
-  // SCREEN: MAIN OPEN CASES LIST
-  // =========================================================================
   return (
     <KeyboardAvoidView style={[styles.container, { backgroundColor: theme.canvas }]}>
+      {/* Search and Category Filter */}
       <View style={styles.searchSection}>
-        <View style={[styles.searchContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+        <View
+          style={[
+            styles.searchContainer,
+            { backgroundColor: theme.surface, borderColor: theme.border },
+          ]}
+        >
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Filter cases by name"
             onPress={() => setCaseNameFilterOpen(true)}
-            style={[styles.caseFilterButton, caseNameFilter && { backgroundColor: theme.mint }]}
+            style={[
+              styles.caseFilterButton,
+              caseNameFilter && { backgroundColor: theme.mint },
+            ]}
             hitSlop={6}
           >
-            <Filter size={17} color={caseNameFilter ? theme.emerald : theme.muted} />
+            <Filter
+              size={17}
+              color={caseNameFilter ? theme.emerald : theme.muted}
+            />
           </Pressable>
           <Search size={18} color={theme.muted} />
           <TextInput
@@ -731,38 +267,72 @@ export function OpenCasesScreen({
             </Pressable>
           )}
         </View>
-         {selectionMode && <View style={styles.selectionActions}>
-          <Text style={[styles.count, { color: theme.ink }]}>{selectedNumbers.length} selected</Text>
-          <Pressable onPress={toggleAllCases} style={[styles.selectAllButton, {borderColor: theme.border}]}> 
-            <Text style={[styles.selectAllText, {color: theme.emerald}]}>{selectedNumbers.length === casesByNumber.length && casesByNumber.length ? 'Clear' : 'Select all'}</Text>
-          </Pressable>
-          <Pressable onPress={cancelSelection} style={[styles.cancelButton, {borderColor: theme.border}]}>
-            <Text style={[styles.selectAllText, {color: theme.muted}]}>Cancel</Text>
-          </Pressable>
-        </View>}
+
+        {selectionMode && (
+          <View style={styles.selectionActions}>
+            <Text style={[styles.count, { color: theme.ink }]}>
+              {selectedNumbers.length} selected
+            </Text>
+            <Pressable
+              onPress={toggleAllCases}
+              style={[styles.selectAllButton, { borderColor: theme.border }]}
+            >
+              <Text style={[styles.selectAllText, { color: theme.emerald }]}>
+                {selectedNumbers.length === casesByNumber.length &&
+                casesByNumber.length
+                  ? 'Clear'
+                  : 'Select all'}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={cancelSelection}
+              style={[styles.cancelButton, { borderColor: theme.border }]}
+            >
+              <Text style={[styles.selectAllText, { color: theme.muted }]}>
+                Cancel
+              </Text>
+            </Pressable>
+          </View>
+        )}
       </View>
 
+      {/* Case Name Filter Modal */}
       <Modal
         visible={caseNameFilterOpen}
         transparent
         animationType="fade"
         onRequestClose={() => setCaseNameFilterOpen(false)}
       >
-        <Pressable style={styles.caseFilterOverlay} onPress={() => setCaseNameFilterOpen(false)}>
+        <Pressable
+          style={styles.caseFilterOverlay}
+          onPress={() => setCaseNameFilterOpen(false)}
+        >
           <Pressable
-            style={[styles.caseFilterModal, { backgroundColor: theme.surface, borderColor: theme.border }]}
+            style={[
+              styles.caseFilterModal,
+              { backgroundColor: theme.surface, borderColor: theme.border },
+            ]}
             onPress={(event) => event.stopPropagation()}
           >
             <View style={styles.caseFilterHeader}>
-              <Text style={[styles.caseFilterTitle, { color: theme.ink }]}>Filter by case name</Text>
+              <Text style={[styles.caseFilterTitle, { color: theme.ink }]}>
+                Filter by case name
+              </Text>
               <Pressable onPress={() => setCaseNameFilterOpen(false)} hitSlop={8}>
-                <Text style={[styles.caseFilterClose, { color: theme.muted }]}>×</Text>
+                <Text style={[styles.caseFilterClose, { color: theme.muted }]}>
+                  ×
+                </Text>
               </Pressable>
             </View>
-            <ScrollView style={styles.caseFilterList} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={styles.caseFilterList}
+              showsVerticalScrollIndicator={false}
+            >
               {[
                 { label: 'All cases', value: '' },
-                ...(Array.isArray(defaultCaseNames) ? defaultCaseNames : []).map((name: string) => ({ label: name, value: name })),
+                ...(Array.isArray(defaultCaseNames) ? defaultCaseNames : []).map(
+                  (name: string) => ({ label: name, value: name }),
+                ),
                 { label: 'Others', value: 'others' },
               ].map((option) => (
                 <Pressable
@@ -771,10 +341,19 @@ export function OpenCasesScreen({
                     setCaseNameFilter(option.value);
                     setCaseNameFilterOpen(false);
                   }}
-                  style={[styles.caseFilterOption, { borderBottomColor: theme.border }]}
+                  style={[
+                    styles.caseFilterOption,
+                    { borderBottomColor: theme.border },
+                  ]}
                 >
-                  <Text style={[styles.caseFilterOptionText, { color: theme.ink }]}>{option.label}</Text>
-                  {caseNameFilter === option.value ? <Check size={17} color={theme.emerald} /> : null}
+                  <Text
+                    style={[styles.caseFilterOptionText, { color: theme.ink }]}
+                  >
+                    {option.label}
+                  </Text>
+                  {caseNameFilter === option.value ? (
+                    <Check size={17} color={theme.emerald} />
+                  ) : null}
                 </Pressable>
               ))}
             </ScrollView>
@@ -782,10 +361,15 @@ export function OpenCasesScreen({
         </Pressable>
       </Modal>
 
+      {/* List of Cases */}
       <FlatList
         data={casesByNumber}
-        keyExtractor={(item, index) => String(item.number || item.phone || index) + '-' + index}
-        contentContainerStyle={casesByNumber.length ? styles.listContent : styles.emptyListContent}
+        keyExtractor={(item, index) =>
+          String(item.number || item.phone || index) + '-' + index
+        }
+        contentContainerStyle={
+          casesByNumber.length ? styles.listContent : styles.emptyListContent
+        }
         keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
@@ -809,15 +393,23 @@ export function OpenCasesScreen({
           const contactName = item.contact?.name || item.name || contactNum;
           const rawCases = Array.isArray(item.cases) ? item.cases : [];
           const sortedCases = [...rawCases].sort((a, b) => {
-            const dateA = new Date(a?.create_date || a?.created_at || a?.createdAt || 0).getTime();
-            const dateB = new Date(b?.create_date || b?.created_at || b?.createdAt || 0).getTime();
+            const dateA = new Date(
+              a?.create_date || a?.created_at || a?.createdAt || 0,
+            ).getTime();
+            const dateB = new Date(
+              b?.create_date || b?.created_at || b?.createdAt || 0,
+            ).getTime();
             return dateB - dateA;
           });
           const latestCase = item.latest_case || sortedCases[0];
           const openCount = rawCases.filter(
-            (c: any) => c?.status === true || c?.status === '1' || c?.status === 'open',
+            (c: any) =>
+              c?.status === true || c?.status === '1' || c?.status === 'open',
           ).length;
-          const latestDate = latestCase?.create_date || latestCase?.created_at || latestCase?.createdAt;
+          const latestDate =
+            latestCase?.create_date ||
+            latestCase?.created_at ||
+            latestCase?.createdAt;
 
           return (
             <FadeInView delay={Math.min(index * 35, 250)} distance={12}>
@@ -830,28 +422,65 @@ export function OpenCasesScreen({
                 delayLongPress={450}
                 onPress={() => {
                   if (selectionMode) {
-                    setSelectedNumbers(prev => prev.includes(contactNum) ? prev.filter(value => value !== contactNum) : [...prev, contactNum]);
+                    setSelectedNumbers((prev) =>
+                      prev.includes(contactNum)
+                        ? prev.filter((value) => value !== contactNum)
+                        : [...prev, contactNum],
+                    );
                   } else {
-                    openCaseModal(item);
+                    onOpenDetails({
+                      number: contactNum,
+                      name: item.contact?.name || item.name,
+                    });
                   }
                 }}
                 style={styles.card}
               >
-                {selectionMode && <Pressable onPress={() => {
-                  const number = String(item.number || item.phone || '');
-                  setSelectedNumbers(prev => prev.includes(number) ? prev.filter(value => value !== number) : [...prev, number]);
-                }} style={[styles.selectCircle, {borderColor: theme.border, backgroundColor: selectedNumbers.includes(contactNum) ? theme.emerald : theme.canvas}]}> 
-                  {selectedNumbers.includes(contactNum) && <Check size={13} color="#FFF" />}
-                </Pressable>}
+                {selectionMode && (
+                  <Pressable
+                    onPress={() => {
+                      const number = String(item.number || item.phone || '');
+                      setSelectedNumbers((prev) =>
+                        prev.includes(number)
+                          ? prev.filter((value) => value !== number)
+                          : [...prev, number],
+                      );
+                    }}
+                    style={[
+                      styles.selectCircle,
+                      {
+                        borderColor: theme.border,
+                        backgroundColor: selectedNumbers.includes(contactNum)
+                          ? theme.emerald
+                          : theme.canvas,
+                      },
+                    ]}
+                  >
+                    {selectedNumbers.includes(contactNum) && (
+                      <Check size={13} color="#FFF" />
+                    )}
+                  </Pressable>
+                )}
                 <View style={[styles.avatar, { backgroundColor: theme.mint }]}>
-                  <Text style={[styles.avatarText, { color: theme.mintText }]}>
+                  <Text
+                    style={[styles.avatarText, { color: theme.mintText }]}
+                  >
                     {contactName.trim().charAt(0).toUpperCase() || 'C'}
                   </Text>
                 </View>
 
                 <View style={styles.cardBody}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <Text numberOfLines={1} style={[styles.cardTitle, { color: theme.ink, flex: 1 }]}>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start',
+                    }}
+                  >
+                    <Text
+                      numberOfLines={1}
+                      style={[styles.cardTitle, { color: theme.ink, flex: 1 }]}
+                    >
                       {contactName}
                     </Text>
                     {latestDate && (
@@ -861,17 +490,32 @@ export function OpenCasesScreen({
                     )}
                   </View>
 
-                  
                   {latestCase && (
                     <View style={styles.latestCasePreview}>
                       <View style={styles.latestCaseTitleRow}>
-                        <Text style={[styles.latestCaseLabel, { color: theme.muted }]}>Latest:</Text>
-                        <Text style={[styles.latestCaseName, { color: theme.ink }]} numberOfLines={1}>
-                      {latestCase.name || 'Untitled Case'}
+                        <Text
+                          style={[styles.latestCaseLabel, { color: theme.muted }]}
+                        >
+                          Latest:
+                        </Text>
+                        <Text
+                          style={[
+                            styles.latestCaseName,
+                            { color: theme.ink },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {latestCase.name || 'Untitled Case'}
                         </Text>
                       </View>
                       {latestCase.remark ? (
-                        <Text style={[styles.latestCaseRemark, { color: theme.muted }]} numberOfLines={1}>
+                        <Text
+                          style={[
+                            styles.latestCaseRemark,
+                            { color: theme.muted },
+                          ]}
+                          numberOfLines={1}
+                        >
                           {latestCase.remark}
                         </Text>
                       ) : null}
@@ -879,12 +523,28 @@ export function OpenCasesScreen({
                   )}
 
                   {openCount > 0 && (
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text style={[styles.cardMeta, { color: theme.muted }]}>
-                        {rawCases.length} case{rawCases.length === 1 ? '' : 's'}
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Text
+                        style={[styles.cardMeta, { color: theme.muted }]}
+                      >
+                        {rawCases.length} case
+                        {rawCases.length === 1 ? '' : 's'}
                       </Text>
-                      <View style={[styles.unreadBadge, { backgroundColor: theme.emerald }]}>
-                        <Text style={styles.unreadText}>{openCount} open</Text>
+                      <View
+                        style={[
+                          styles.unreadBadge,
+                          { backgroundColor: theme.emerald },
+                        ]}
+                      >
+                        <Text style={styles.unreadText}>
+                          {openCount} open
+                        </Text>
                       </View>
                     </View>
                   )}
@@ -897,80 +557,54 @@ export function OpenCasesScreen({
         }}
       />
 
-      {selectionMode && <ScalePressable
-        accessibilityRole="button"
-        accessibilityLabel="Close selected cases"
-        onPress={closeSelectedCases}
-        disabled={!selectedNumbers.length || bulkCloseLoading}
-        style={[styles.bulkFab, {backgroundColor: selectedNumbers.length ? '#E11D48' : theme.muted}]}
-      >
-        {bulkCloseLoading ? <ActivityIndicator color="#FFF" size="small" /> : <><CheckSquare size={21} color="#FFF" /><Text style={styles.bulkFabText}>Close {selectedNumbers.length}</Text></>}
-      </ScalePressable>}
+      {selectionMode && (
+        <ScalePressable
+          accessibilityRole="button"
+          accessibilityLabel="Close selected cases"
+          onPress={closeSelectedCases}
+          disabled={!selectedNumbers.length || bulkCloseLoading}
+          style={[
+            styles.bulkFab,
+            {
+              backgroundColor: selectedNumbers.length
+                ? '#E11D48'
+                : theme.muted,
+            },
+          ]}
+        >
+          {bulkCloseLoading ? (
+            <ActivityIndicator color="#FFF" size="small" />
+          ) : (
+            <>
+              <CheckSquare size={21} color="#FFF" />
+              <Text style={styles.bulkFabText}>
+                Close {selectedNumbers.length}
+              </Text>
+            </>
+          )}
+        </ScalePressable>
+      )}
 
-      {!selectionMode && <ScalePressable
-        accessibilityRole="button"
-        onPress={() => onCreateCase?.()}
-        style={[styles.fab, { backgroundColor: theme.emerald }]}
-      >
-        <Plus size={24} color="#FFF" strokeWidth={2.5} />
-      </ScalePressable>}
+      {!selectionMode && (
+        <ScalePressable
+          accessibilityRole="button"
+          onPress={() => onCreateCase?.()}
+          style={[styles.fab, { backgroundColor: theme.emerald }]}
+        >
+          <Plus size={24} color="#FFF" strokeWidth={2.5} />
+        </ScalePressable>
+      )}
     </KeyboardAvoidView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  bulkBar: { paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1 },
-  bulkTitle: { fontSize: 18, fontWeight: '800' },
-  bulkSubtitle: { fontSize: 11, marginTop: 2 },
-  selectAllButton: { paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderRadius: 9, marginLeft: 8 },
-  selectionActions: { flexDirection: 'row', alignItems: 'center', justifyContent: "space-between", gap: 6 },
-  cancelButton: { paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderRadius: 9 },
-  selectAllText: { fontSize: 11, fontWeight: '800' },
-  bulkCloseButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 9, borderRadius: 10 },
-  bulkCloseText: { color: '#FFF', fontSize: 11, fontWeight: '800' },
-  bulkFab: { position: 'absolute', right: 22, bottom: 24, minWidth: 126, height: 56, borderRadius: 28, paddingHorizontal: 17, flexDirection: 'row', gap: 7, alignItems: 'center', justifyContent: 'center', elevation: 5, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: {width: 0, height: 4} },
-  bulkFabText: { color: '#FFF', fontSize: 14, fontWeight: '900' },
-  selectCircle: { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', marginRight: 8 },
-  namePickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-  namePicker: { maxHeight: '70%', borderTopLeftRadius: 22, borderTopRightRadius: 22, borderWidth: 1, paddingTop: 16, paddingBottom: 24 },
-  namePickerTitle: { fontSize: 16, fontWeight: '800', paddingHorizontal: 20, paddingBottom: 10 },
-  namePickerOption: { minHeight: 46, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  namePickerOptionText: { fontSize: 14, fontWeight: '600' },
-  newNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
-  newNameInput: { flex: 1, height: 42, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, fontSize: 13 },
-  newNameButton: { height: 42, borderRadius: 10, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center' },
-  newNameButtonText: { color: '#FFF', fontSize: 12, fontWeight: '800' },
-  header: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderBottomWidth: 1,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  backBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 18,
-    marginRight: 8,
-  },
-  headerTitle: { fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
-  headerSubtitle: { fontSize: 11, marginTop: 1 },
-
-  // Search
   searchSection: {
     paddingHorizontal: 10,
     paddingTop: 10,
     paddingBottom: 4,
-    gap:8,
+    gap: 8,
   },
   searchContainer: {
     flexDirection: 'row',
@@ -1027,11 +661,45 @@ const styles = StyleSheet.create({
   },
   caseFilterOptionText: { fontSize: 14, fontWeight: '600' },
 
-  // List
-  listContent: { paddingHorizontal: 16, paddingBottom: 90, paddingTop: 6, gap: 10 },
+  selectionActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  count: { flex: 1, fontSize: 12, fontWeight: '800' },
+  selectAllButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderRadius: 9,
+    marginLeft: 8,
+  },
+  selectAllText: { fontSize: 11, fontWeight: '800' },
+  cancelButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderRadius: 9,
+  },
+  selectCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+
+  listContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 90,
+    paddingTop: 6,
+    gap: 10,
+  },
   emptyListContent: { flexGrow: 1, paddingHorizontal: 16 },
 
-  // List row (matches LiveChatScreen's ChatCard)
   card: {
     borderRadius: 17,
     padding: 2,
@@ -1049,11 +717,6 @@ const styles = StyleSheet.create({
   avatarText: { fontSize: 17, fontWeight: '800' },
   cardBody: { flex: 1, marginLeft: 12 },
   cardTitle: { fontSize: 15, fontWeight: '800' },
-  cardDetail: {
-    fontSize: 13,
-    lineHeight: 18,
-    marginTop: 0,
-  },
   cardMeta: {
     fontSize: 12,
     fontWeight: '800',
@@ -1086,7 +749,6 @@ const styles = StyleSheet.create({
   latestCaseRemark: { fontSize: 10, marginTop: 1 },
   arrow: { fontSize: 24, lineHeight: 26, marginLeft: 4 },
 
-  // FAB
   fab: {
     position: 'absolute',
     bottom: 24,
@@ -1102,178 +764,23 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
   },
-
-  chatHeaderBtn: {
+  bulkFab: {
+    position: 'absolute',
+    right: 22,
+    bottom: 24,
+    minWidth: 126,
+    height: 56,
+    borderRadius: 28,
+    paddingHorizontal: 17,
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  chatHeaderBtnText: { fontSize: 12, fontWeight: '700' },
-
-  modalFiltersRow: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 4,
-    gap: 10,
-  },
-  modalSearchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 40,
-    borderRadius: 10,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    gap: 6,
-  },
-  modalSearchInput: { flex: 1, fontSize: 13 },
-  filterChipsRow: { flexDirection: 'row', gap: 8 },
-  filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  filterChipText: { fontSize: 12, fontWeight: '700' },
-
-  modalCaseCard: {
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 12,
-  },
-  modalCaseCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  modalCaseCardTitle: { fontSize: 14, fontWeight: '700' },
-  modalCaseDate: { fontSize: 11, marginTop: 2 },
-  statusPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  statusPillText: { fontSize: 10, fontWeight: '800' },
-  editCaseBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    borderWidth: 1,
+    gap: 7,
     alignItems: 'center',
     justifyContent: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
   },
-  remarkBox: {
-    marginTop: 8,
-    padding: 8,
-    borderRadius: 8,
-  },
-  remarkText: { fontSize: 12, lineHeight: 16 },
-
-  // Form styles (used in Create Case / Edit Case screens)
-  formLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1,
-    marginBottom: 6,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 48,
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    gap: 8,
-  },
-  count: { flex: 1, fontSize: 12, fontWeight: '800' },
-  textAreaRow: {
-    height: 80,
-    alignItems: 'flex-start',
-  },
-  input: { flex: 1, fontSize: 14, height: '100%' },
-  textArea: { height: '100%', paddingTop: 10, textAlignVertical: 'top' },
-
-  // Contact avatar/name/phone used inside Create Case screen's selected-contact card
-  contactAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  contactAvatarText: { fontSize: 17, fontWeight: '800' },
-  contactName: { fontSize: 15, fontWeight: '800' },
-  contactPhone: { fontSize: 12, marginTop: 2 },
-
-  selectedContactCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 10,
-  },
-  changeContactBtn: {
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  changeContactBtnText: { fontSize: 12, fontWeight: '700' },
-
-  contactsPickerList: {
-    maxHeight: 160,
-    borderWidth: 1,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  contactPickerItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 10,
-    borderBottomWidth: 1,
-  },
-  contactPickerAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  contactPickerName: { fontSize: 13, fontWeight: '700' },
-  contactPickerPhone: { fontSize: 11, marginTop: 1 },
-
-  statusToggleRow: { flexDirection: 'row', gap: 10 },
-  statusToggleBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  statusToggleBtnText: { fontSize: 13, fontWeight: '700' },
-
-  submitButton: {
-    height: 48,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 6,
-  },
-  submitButtonText: { color: '#FFF', fontSize: 15, fontWeight: '800' },
-
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 10,
-  },
-  errorBoxText: { fontSize: 12, flex: 1 },
-
-  emptyTitle: { fontSize: 16, fontWeight: '800' },
-  emptyCopy: { fontSize: 13, marginTop: 4, textAlign: 'center' },
+  bulkFabText: { color: '#FFF', fontSize: 14, fontWeight: '900' },
 });

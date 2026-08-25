@@ -153,7 +153,7 @@ export function AiTemplateModal({
 
       setIsUploadingLogo(true);
       const res = await uploadFile({
-        uri: asset.uri,
+        uri: asset.uri!,
         name: asset.fileName || 'logo.png',
         type: asset.type || 'image/png',
       });

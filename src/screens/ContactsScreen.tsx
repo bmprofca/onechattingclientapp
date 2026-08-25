@@ -78,6 +78,9 @@ export function ContactsScreen({
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(1);
   const [error, setError] = useState('');
 
   // Bulk selection state (for main contacts list)
@@ -142,44 +145,99 @@ export function ContactsScreen({
     return () => clearTimeout(timer);
   }, [search]);
 
+  const CONTACTS_PAGE_SIZE = 30;
+
   // Load contacts and groups
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const [contactResponse, groupResponse] = await Promise.all([
-        getContactList(session, projectId, 1, 100, debouncedSearch),
-        getContactGroups(session, projectId, 1, 100),
-      ]);
+  const loadContacts = useCallback(
+    async (pageToLoad: number, searchQuery: string, isRefresh = false) => {
+      if (!projectId || !session?.token) return;
+      if (pageToLoad === 1) {
+        setLoading(true);
+      } else {
+        setLoadingMore(true);
+      }
+      setError('');
 
-      const list = contactResponse?.data || contactResponse?.list || [];
-      setContacts(Array.isArray(list) ? list : []);
+      try {
+        const promises: [Promise<any>, Promise<any>?] = [
+          getContactList(session, projectId, pageToLoad, CONTACTS_PAGE_SIZE, searchQuery),
+        ];
+        if (pageToLoad === 1) {
+          promises.push(getContactGroups(session, projectId, 1, 100));
+        }
 
-      const groupList = groupResponse?.data || groupResponse?.list || [];
-      setGroups(
-        (Array.isArray(groupList) ? groupList : []).map((g: any) => ({
-          id: String(g.group_id || g.id),
-          name: g.name || 'Untitled Group',
-          contact_count: g.contact_count || g.count || 0,
-          remark: g.remark || '',
-        })),
-      );
-    } catch (err: any) {
-      setContacts([]);
-      setError(err?.message || 'Could not load contacts');
-      Toast.show({
-        type: 'error',
-        text1: 'Could not load contacts',
-        text2: err?.message,
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId, session.token, session.username, debouncedSearch]);
+        const [contactResponse, groupResponse] = await Promise.all(promises);
+
+        const rawList = contactResponse?.data || contactResponse?.list || [];
+        const fetchedList = Array.isArray(rawList) ? rawList : [];
+
+        if (pageToLoad === 1 || isRefresh) {
+          setContacts(fetchedList);
+        } else {
+          setContacts((prev) => {
+            const existingIds = new Set(
+              prev.map((c) => String(c.contact_id || c.id || c.number || '')),
+            );
+            const newItems = fetchedList.filter(
+              (c: any) => !existingIds.has(String(c.contact_id || c.id || c.number || '')),
+            );
+            return [...prev, ...newItems];
+          });
+        }
+
+        if (groupResponse) {
+          const groupList = groupResponse?.data || groupResponse?.list || [];
+          setGroups(
+            (Array.isArray(groupList) ? groupList : []).map((g: any) => ({
+              id: String(g.group_id || g.id),
+              name: g.name || 'Untitled Group',
+              contact_count: g.contact_count || g.count || 0,
+              remark: g.remark || '',
+            })),
+          );
+        }
+
+        const meta = contactResponse?.meta;
+        const total = meta?.total !== undefined ? Number(meta.total) : undefined;
+        if (total !== undefined) {
+          setHasMore(pageToLoad * CONTACTS_PAGE_SIZE < total);
+        } else {
+          setHasMore(fetchedList.length === CONTACTS_PAGE_SIZE);
+        }
+        setPage(pageToLoad);
+      } catch (err: any) {
+        if (pageToLoad === 1) {
+          setContacts([]);
+        }
+        setError(err?.message || 'Could not load contacts');
+        Toast.show({
+          type: 'error',
+          text1: 'Could not load contacts',
+          text2: err?.message,
+        });
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    },
+    [projectId, session],
+  );
 
   useEffect(() => {
-    load();
-  }, [load]);
+    setPage(1);
+    setHasMore(true);
+    loadContacts(1, debouncedSearch);
+  }, [loadContacts, debouncedSearch]);
+
+  const load = useCallback(() => {
+    return loadContacts(1, debouncedSearch, true);
+  }, [loadContacts, debouncedSearch]);
+
+  const handleLoadMoreContacts = () => {
+    if (!loading && !loadingMore && hasMore && contacts.length >= CONTACTS_PAGE_SIZE) {
+      loadContacts(page + 1, debouncedSearch);
+    }
+  };
 
   const idOf = (item: any) => item?.contact_id || item?.id;
 
@@ -1449,6 +1507,8 @@ export function ContactsScreen({
         contentContainerStyle={
           contacts.length ? styles.listContent : styles.emptyListContent
         }
+        onEndReached={handleLoadMoreContacts}
+        onEndReachedThreshold={0.3}
         keyboardShouldPersistTaps="handled"
         ListEmptyComponent={
           <LoadState
@@ -1463,6 +1523,16 @@ export function ContactsScreen({
             }
             onRetry={load}
           />
+        }
+        ListFooterComponent={
+          loadingMore ? (
+            <View style={styles.footerLoader}>
+              <ActivityIndicator size="small" color={theme.emerald} />
+              <Text style={[styles.footerLoaderText, { color: theme.muted }]}>
+                Loading more contacts...
+              </Text>
+            </View>
+          ) : null
         }
       />
 
@@ -1840,4 +1910,12 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   saveBtnText: { color: '#FFF', fontSize: 15, fontWeight: '800' },
+  footerLoader: {
+    paddingVertical: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  footerLoaderText: { fontSize: 12 },
 });

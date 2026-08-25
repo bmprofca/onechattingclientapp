@@ -49,6 +49,9 @@ export function LiveChatScreen({
   const [items, setItems] = useState<ListItem[]>([]);
   const [totalUnreadCount, setTotalUnreadCount] = useState<number>(0);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(1);
   const [error, setError] = useState('');
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -76,33 +79,90 @@ export function LiveChatScreen({
     }
   }, [projectId, session.token, session.username]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const res = await getInbox(
-        session,
-        projectId,
-        debouncedSearchQuery,
-        activeFilter,
-      );
-      setItems(unwrapList(res));
-    } catch (requestError) {
-      setItems([]);
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : 'Could not load chats.',
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId, session.token, session.username, debouncedSearchQuery, activeFilter]);
+  const CHAT_PAGE_SIZE = 30;
+
+  const loadChats = useCallback(
+    async (pageToLoad: number, searchQueryParam: string, filterParam: ChatFilterType, isRefresh = false) => {
+      if (!projectId || !session?.token) return;
+      if (pageToLoad === 1) {
+        setLoading(true);
+      } else {
+        setLoadingMore(true);
+      }
+      setError('');
+
+      try {
+        const res = await getInbox(
+          session,
+          projectId,
+          searchQueryParam,
+          filterParam,
+          pageToLoad,
+          CHAT_PAGE_SIZE,
+        );
+
+        const list = unwrapList(res);
+
+        if (pageToLoad === 1 || isRefresh) {
+          setItems(list);
+        } else {
+          setItems((prev) => {
+            const existingIds = new Set(
+              prev.map((c) => {
+                const contact = (c.contact as Record<string, any>) || {};
+                return String(c.id || c._id || contact.number || c.phone || c.number || '');
+              }),
+            );
+            const newItems = list.filter((c: any) => {
+              const contact = (c.contact as Record<string, any>) || {};
+              const id = String(c.id || c._id || contact.number || c.phone || c.number || '');
+              return !existingIds.has(id);
+            });
+            return [...prev, ...newItems];
+          });
+        }
+
+        const meta = res?.meta || res?.data?.meta;
+        const total = meta?.total !== undefined ? Number(meta.total) : undefined;
+        if (total !== undefined) {
+          setHasMore(pageToLoad * CHAT_PAGE_SIZE < total);
+        } else {
+          setHasMore(list.length === CHAT_PAGE_SIZE);
+        }
+        setPage(pageToLoad);
+      } catch (requestError) {
+        if (pageToLoad === 1) {
+          setItems([]);
+        }
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : 'Could not load chats.',
+        );
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    },
+    [projectId, session],
+  );
 
   useEffect(() => {
-    load();
+    setPage(1);
+    setHasMore(true);
+    loadChats(1, debouncedSearchQuery, activeFilter);
     loadUnreadCount();
-  }, [load, loadUnreadCount]);
+  }, [loadChats, loadUnreadCount, debouncedSearchQuery, activeFilter]);
+
+  const load = useCallback(() => {
+    return loadChats(1, debouncedSearchQuery, activeFilter, true);
+  }, [loadChats, debouncedSearchQuery, activeFilter]);
+
+  const handleLoadMore = () => {
+    if (!loading && !loadingMore && hasMore && items.length >= CHAT_PAGE_SIZE) {
+      loadChats(page + 1, debouncedSearchQuery, activeFilter);
+    }
+  };
 
   useEffect(() => {
     const unsubUnread = socketManager.onTotalUnreadCount((data) => {
@@ -228,6 +288,9 @@ export function LiveChatScreen({
         data={items}
         keyExtractor={(item, index) => String(item.id || item._id || (item.contact as any)?.number || index) + '-' + index}
         contentContainerStyle={items.length ? styles.list : styles.emptyList}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.3}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
             refreshing={loading}
@@ -248,6 +311,16 @@ export function LiveChatScreen({
               loadUnreadCount();
             }}
           />
+        }
+        ListFooterComponent={
+          loadingMore ? (
+            <View style={styles.footerLoader}>
+              <ActivityIndicator size="small" color={theme.emerald} />
+              <Text style={[styles.footerLoaderText, { color: theme.muted }]}>
+                Loading more chats...
+              </Text>
+            </View>
+          ) : null
         }
         renderItem={({ item, index }) => (
           <FadeInView delay={Math.min(index * 35, 250)} distance={12}>
@@ -307,7 +380,6 @@ function ChatCard({ item, onPress }: { item: ListItem; onPress: (contactNumber: 
       onPress={() => onPress(contactNumber, name)}
       style={[
         styles.card,
-        { backgroundColor: theme.surface, borderColor: theme.border },
       ]}
     >
       <View style={[styles.avatar, { backgroundColor: theme.mint }]}>
@@ -422,10 +494,9 @@ const styles = StyleSheet.create({
   },
   card: {
     borderRadius: 17,
-    padding: 12,
+    padding: 2,
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
   },
   avatar: {
     width: 44,
@@ -671,4 +742,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
   },
+  footerLoader: {
+    paddingVertical: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  footerLoaderText: { fontSize: 12 },
 });

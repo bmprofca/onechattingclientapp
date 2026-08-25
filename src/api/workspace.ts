@@ -36,9 +36,11 @@ export const getInbox = (
     '/message/chat-list',
     {
       project_id: projectId,
+      page_no: page,
       page,
       limit,
       search: search || '',
+      query: search || '',
       filter,
       filter_type: filter,
       type: filter !== 'all' ? filter : undefined,
@@ -652,8 +654,15 @@ export const getContactList = (
     session,
   );
 
-export const getContactGroups = (session: ApiSession, projectId: string, page = 1, limit = 100) =>
-  post<any>('/contact/group-list', {project_id: projectId, page_no: page, page, limit}, session);
+export const getContactGroups = (session: ApiSession, projectId: string, page = 1, limit = 50, search = '') =>
+  post<any>('/contact/group-list', {
+    project_id: projectId,
+    page_no: page,
+    page,
+    limit,
+    search: search || '',
+    query: search || '',
+  }, session);
 
 export const getContactAssignedGroups = (
   session: ApiSession,

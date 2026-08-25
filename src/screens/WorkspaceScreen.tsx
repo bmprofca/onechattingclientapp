@@ -1,39 +1,6 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  useRef,
-} from 'react';
-import {
-  BackHandler,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-  Animated,
-  Easing,
-} from 'react-native';
-import {
-  ArrowLeftRight,
-  Home,
-  MessageCircle,
-  Megaphone,
-  User,
-  Wallet,
-  MoreVertical,
-  Briefcase,
-  HelpCircle,
-  Brain,
-  Settings,
-  ReceiptText,
-  QrCode,
-  FolderOpen,
-  Users,
-  FileText,
-} from 'lucide-react-native';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import { BackHandler, Modal, Pressable, ScrollView, StyleSheet, Text, View, Animated, Easing } from 'react-native';
+import { ArrowLeftRight, Home, MessageCircle, Megaphone, User, Wallet, MoreVertical, Briefcase, HelpCircle, Brain, Settings, ReceiptText, QrCode, FolderOpen, Users, FileText } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { getAccountProfile } from '../api/auth';
 import { getProjectMeta, getUnreadCount } from '../api/workspace';
@@ -44,6 +11,8 @@ import { CampaignDetailsScreen } from './CampaignDetailsScreen';
 import { CreateCampaignScreen } from './CreateCampaignScreen';
 import { NewChatScreen } from './NewChatScreen';
 import { CreateCaseScreen } from './CreateCaseScreen';
+import { CaseDetailsScreen } from './CaseDetailsScreen';
+import { EditCaseScreen } from './EditCaseScreen';
 import { DashboardScreen } from './DashboardScreen';
 import { LiveChatScreen } from './LiveChatScreen';
 import { OpenCasesScreen } from './OpenCasesScreen';
@@ -153,6 +122,8 @@ export function WorkspaceScreen({
   const [createCampaignTarget, setCreateCampaignTarget] = useState(false);
   const [newChatTarget, setNewChatTarget] = useState(false);
   const [createCaseTarget, setCreateCaseTarget] = useState<{ name?: string; number: string } | boolean | null>(null);
+  const [caseDetailsTarget, setCaseDetailsTarget] = useState<{ number: string; name?: string } | null>(null);
+  const [editCaseTarget, setEditCaseTarget] = useState<{ caseItem: any; returnToDetails?: boolean } | null>(null);
   const [casesTarget, setCasesTarget] = useState(false);
   const [walletTarget, setWalletTarget] = useState(false); // full-screen wallet, used from full mode
   const [wabaTarget, setWabaTarget] = useState<string | boolean | null>(null);
@@ -389,8 +360,16 @@ export function WorkspaceScreen({
       setNewChatTarget(false);
       return true;
     }
+    if (editCaseTarget) {
+      setEditCaseTarget(null);
+      return true;
+    }
     if (createCaseTarget) {
       setCreateCaseTarget(null);
+      return true;
+    }
+    if (caseDetailsTarget) {
+      setCaseDetailsTarget(null);
       return true;
     }
     if (casesTarget) {
@@ -479,6 +458,11 @@ export function WorkspaceScreen({
     chatTarget,
     campaignTarget,
     createCampaignTarget,
+    newChatTarget,
+    editCaseTarget,
+    createCaseTarget,
+    caseDetailsTarget,
+    casesTarget,
     walletTarget,
     wabaTarget,
     scannedUsersTarget,
@@ -576,6 +560,43 @@ export function WorkspaceScreen({
     );
   }
 
+  if (editCaseTarget) {
+    return (
+      <ScreenTransition>
+        <EditCaseScreen
+          projectId={projectId}
+          session={apiSession}
+          caseItem={editCaseTarget.caseItem}
+          onBack={() => setEditCaseTarget(null)}
+          onSaved={() => {
+            setEditCaseTarget(null);
+          }}
+        />
+      </ScreenTransition>
+    );
+  }
+
+  if (caseDetailsTarget) {
+    return (
+      <ScreenTransition>
+        <CaseDetailsScreen
+          projectId={projectId}
+          session={apiSession}
+          contactNumber={caseDetailsTarget.number}
+          contactName={caseDetailsTarget.name}
+          onBack={() => setCaseDetailsTarget(null)}
+          onOpenChat={(contactNumber, contactName) => {
+            setCaseDetailsTarget(null);
+            setChatTarget({ number: contactNumber, name: contactName });
+          }}
+          onEditCase={(caseItem) => {
+            setEditCaseTarget({ caseItem, returnToDetails: true });
+          }}
+        />
+      </ScreenTransition>
+    );
+  }
+
   if (createCaseTarget) {
     const initialContact = typeof createCaseTarget === 'object' ? createCaseTarget : null;
     return (
@@ -600,11 +621,10 @@ export function WorkspaceScreen({
         <OpenCasesScreen
           projectId={projectId}
           session={apiSession}
-          onBack={() => setCasesTarget(false)}
-          onOpenChat={(contactNumber, contactName) => {
-            setCasesTarget(false);
-            setChatTarget({ number: contactNumber, name: contactName });
+          onOpenDetails={(contact) => {
+            setCaseDetailsTarget(contact);
           }}
+          onCreateCase={(contact) => setCreateCaseTarget(contact || true)}
         />
       </ScreenTransition>
     );
@@ -1178,9 +1198,9 @@ export function WorkspaceScreen({
             <OpenCasesScreen
               projectId={projectId}
               session={apiSession}
-              onOpenChat={(contactNumber, contactName) =>
-                setChatTarget({ number: contactNumber, name: contactName })
-              }
+              onOpenDetails={(contact) => {
+                setCaseDetailsTarget(contact);
+              }}
               onCreateCase={(contact) => setCreateCaseTarget(contact || true)}
             />
           ) : page === 'campaigns' ? (
