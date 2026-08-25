@@ -23,6 +23,7 @@ import {
   AlertCircle,
   Check,
   CheckSquare,
+  Filter,
 } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import {
@@ -37,6 +38,7 @@ import { socketManager } from '../services/socketManager';
 import { ScalePressable, FadeInView } from '../components/animations';
 import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
 import { loadCaseNames, saveCustomCaseName } from '../services/caseNames';
+import defaultCaseNames from '../data/caseNames.json';
 
 function CaseNameSelect({value, options, onChange, onCreateNew, theme}: any) {
   const [visible, setVisible] = useState(false);
@@ -126,6 +128,8 @@ export function OpenCasesScreen({
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [caseNameFilter, setCaseNameFilter] = useState('');
+  const [caseNameFilterOpen, setCaseNameFilterOpen] = useState(false);
 
   // --- View Cases Screen State ---
   const [showCaseListModal, setShowCaseListModal] = useState(false);
@@ -236,7 +240,15 @@ export function OpenCasesScreen({
     setLoading(true);
     setError('');
     try {
-      const res = await getOpenCases(session, projectId, debouncedSearch);
+      const res = await getOpenCases(
+        session,
+        projectId,
+        debouncedSearch,
+        1,
+        30,
+        caseNameFilter,
+        Array.isArray(defaultCaseNames) ? defaultCaseNames : [],
+      );
       if (res?.error) {
         setError(typeof res.error === 'string' ? res.error : res.msg || 'Failed to get open cases');
         setCasesByNumber([]);
@@ -254,7 +266,7 @@ export function OpenCasesScreen({
     } finally {
       setLoading(false);
     }
-  }, [projectId, session.token, session.username, debouncedSearch]);
+  }, [projectId, session.token, session.username, debouncedSearch, caseNameFilter]);
 
   useEffect(() => {
     fetchOpenCases();
@@ -694,6 +706,15 @@ export function OpenCasesScreen({
     <KeyboardAvoidView style={[styles.container, { backgroundColor: theme.canvas }]}>
       <View style={styles.searchSection}>
         <View style={[styles.searchContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Filter cases by name"
+            onPress={() => setCaseNameFilterOpen(true)}
+            style={[styles.caseFilterButton, caseNameFilter && { backgroundColor: theme.mint }]}
+            hitSlop={6}
+          >
+            <Filter size={17} color={caseNameFilter ? theme.emerald : theme.muted} />
+          </Pressable>
           <Search size={18} color={theme.muted} />
           <TextInput
             style={[styles.searchInput, { color: theme.ink }]}
@@ -720,6 +741,46 @@ export function OpenCasesScreen({
           </Pressable>
         </View>}
       </View>
+
+      <Modal
+        visible={caseNameFilterOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCaseNameFilterOpen(false)}
+      >
+        <Pressable style={styles.caseFilterOverlay} onPress={() => setCaseNameFilterOpen(false)}>
+          <Pressable
+            style={[styles.caseFilterModal, { backgroundColor: theme.surface, borderColor: theme.border }]}
+            onPress={(event) => event.stopPropagation()}
+          >
+            <View style={styles.caseFilterHeader}>
+              <Text style={[styles.caseFilterTitle, { color: theme.ink }]}>Filter by case name</Text>
+              <Pressable onPress={() => setCaseNameFilterOpen(false)} hitSlop={8}>
+                <Text style={[styles.caseFilterClose, { color: theme.muted }]}>×</Text>
+              </Pressable>
+            </View>
+            <ScrollView style={styles.caseFilterList} showsVerticalScrollIndicator={false}>
+              {[
+                { label: 'All cases', value: '' },
+                ...(Array.isArray(defaultCaseNames) ? defaultCaseNames : []).map((name: string) => ({ label: name, value: name })),
+                { label: 'Others', value: 'others' },
+              ].map((option) => (
+                <Pressable
+                  key={option.value || 'all'}
+                  onPress={() => {
+                    setCaseNameFilter(option.value);
+                    setCaseNameFilterOpen(false);
+                  }}
+                  style={[styles.caseFilterOption, { borderBottomColor: theme.border }]}
+                >
+                  <Text style={[styles.caseFilterOptionText, { color: theme.ink }]}>{option.label}</Text>
+                  {caseNameFilter === option.value ? <Check size={17} color={theme.emerald} /> : null}
+                </Pressable>
+              ))}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <FlatList
         data={casesByNumber}
@@ -806,11 +867,18 @@ export function OpenCasesScreen({
                       <View style={styles.latestCaseTitleRow}>
                         <Text style={[styles.latestCaseLabel, { color: theme.muted }]}>Latest:</Text>
                         <Text style={[styles.latestCaseName, { color: theme.ink }]} numberOfLines={1}>
-                          {latestCase.name || 'Untitled Case'}
+                      {latestCase.name || 'Untitled Case'}
                         </Text>
                       </View>
-                     
-                      {openCount > 0 && (
+                      {latestCase.remark ? (
+                        <Text style={[styles.latestCaseRemark, { color: theme.muted }]} numberOfLines={1}>
+                          {latestCase.remark}
+                        </Text>
+                      ) : null}
+                    </View>
+                  )}
+
+                  {openCount > 0 && (
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                       <Text style={[styles.cardMeta, { color: theme.muted }]}>
                         {rawCases.length} case{rawCases.length === 1 ? '' : 's'}
@@ -818,8 +886,6 @@ export function OpenCasesScreen({
                       <View style={[styles.unreadBadge, { backgroundColor: theme.emerald }]}>
                         <Text style={styles.unreadText}>{openCount} open</Text>
                       </View>
-                    </View>
-                  )}
                     </View>
                   )}
                 </View>
@@ -920,6 +986,46 @@ const styles = StyleSheet.create({
     height: '100%',
     fontSize: 14,
   },
+  caseFilterButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  caseFilterOverlay: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    backgroundColor: 'rgba(0,0,0,0.42)',
+  },
+  caseFilterModal: {
+    width: '100%',
+    maxHeight: '72%',
+    borderRadius: 18,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  caseFilterHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 10,
+  },
+  caseFilterTitle: { fontSize: 17, fontWeight: '800' },
+  caseFilterClose: { fontSize: 26, lineHeight: 26 },
+  caseFilterList: { flexGrow: 0 },
+  caseFilterOption: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+  },
+  caseFilterOptionText: { fontSize: 14, fontWeight: '600' },
 
   // List
   listContent: { paddingHorizontal: 16, paddingBottom: 90, paddingTop: 6, gap: 10 },

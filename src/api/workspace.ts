@@ -56,6 +56,8 @@ export const getOpenCases = (
   search?: string,
   page = 1,
   limit = 30,
+  caseNameFilter = '',
+  knownCaseNames: string[] = [],
 ) =>
   post<any>(
     '/message/open-case-list',
@@ -65,6 +67,8 @@ export const getOpenCases = (
       page,
       limit,
       search: search || '',
+      case_name_filter: caseNameFilter || '',
+      known_case_names: knownCaseNames,
     },
     session,
   );
@@ -958,4 +962,3 @@ export interface AiStatus {
 
 export const getAiStatus = (session: ApiSession, projectId: string): Promise<{error?: any; data?: AiStatus}> =>
   post<any>('/template/get-ai-status', { project_id: projectId }, session);
-
