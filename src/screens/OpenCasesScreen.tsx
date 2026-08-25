@@ -697,7 +697,7 @@ export function OpenCasesScreen({
           <Search size={18} color={theme.muted} />
           <TextInput
             style={[styles.searchInput, { color: theme.ink }]}
-            placeholder="Search by number, contact, case..."
+            placeholder="Search by name or phone number..."
             placeholderTextColor={theme.muted}
             value={search}
             onChangeText={setSearch}
@@ -752,7 +752,7 @@ export function OpenCasesScreen({
             const dateB = new Date(b?.create_date || b?.created_at || b?.createdAt || 0).getTime();
             return dateB - dateA;
           });
-          const latestCase = sortedCases[0];
+          const latestCase = item.latest_case || sortedCases[0];
           const openCount = rawCases.filter(
             (c: any) => c?.status === true || c?.status === '1' || c?.status === 'open',
           ).length;
@@ -800,7 +800,17 @@ export function OpenCasesScreen({
                     )}
                   </View>
 
-                  {openCount > 0 && (
+                  
+                  {latestCase && (
+                    <View style={styles.latestCasePreview}>
+                      <View style={styles.latestCaseTitleRow}>
+                        <Text style={[styles.latestCaseLabel, { color: theme.muted }]}>Latest:</Text>
+                        <Text style={[styles.latestCaseName, { color: theme.ink }]} numberOfLines={1}>
+                          {latestCase.name || 'Untitled Case'}
+                        </Text>
+                      </View>
+                     
+                      {openCount > 0 && (
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                       <Text style={[styles.cardMeta, { color: theme.muted }]}>
                         {rawCases.length} case{rawCases.length === 1 ? '' : 's'}
@@ -808,6 +818,8 @@ export function OpenCasesScreen({
                       <View style={[styles.unreadBadge, { backgroundColor: theme.emerald }]}>
                         <Text style={styles.unreadText}>{openCount} open</Text>
                       </View>
+                    </View>
+                  )}
                     </View>
                   )}
                 </View>
@@ -934,7 +946,7 @@ const styles = StyleSheet.create({
   cardDetail: {
     fontSize: 13,
     lineHeight: 18,
-    marginTop: 5,
+    marginTop: 0,
   },
   cardMeta: {
     fontSize: 12,
@@ -952,13 +964,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 6,
     paddingVertical: 2,
-    marginTop: 6,
+    marginTop: 0,
   },
   unreadText: {
     color: '#FFF',
     fontSize: 9,
     fontWeight: '800',
   },
+  latestCasePreview: {
+    marginTop: 4,
+  },
+  latestCaseTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  latestCaseLabel: { fontSize: 10, fontWeight: '700' },
+  latestCaseName: { flex: 1, fontSize: 11, fontWeight: '700' },
+  latestCaseRemark: { fontSize: 10, marginTop: 1 },
   arrow: { fontSize: 24, lineHeight: 26, marginLeft: 4 },
 
   // FAB

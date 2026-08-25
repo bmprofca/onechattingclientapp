@@ -1,14 +1,11 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import {
-  Modal,
   View,
   Text,
   StyleSheet,
   FlatList,
   TextInput,
-  Pressable,
   ActivityIndicator,
-  Platform,
   ScrollView,
   Image,
 } from 'react-native';
@@ -51,18 +48,10 @@ export function TemplateModal({
   const [uploadedFileName, setUploadedFileName] = useState('');
   const [uploadingMedia, setUploadingMedia] = useState(false);
 
-  useEffect(() => {
-    if (visible && projectId && session) {
-      loadTemplates();
-      setSelectedTemplate(null);
-      setVariables([]);
-      setHeaderMediaUrl('');
-      setUploadedFileName('');
-      setUploadingMedia(false);
-    }
-  }, [visible, projectId, session]);
+  const getTemplateComponents = (template: any): any[] =>
+    template?.template?.components || template?.components || [];
 
-  const loadTemplates = async () => {
+  const loadTemplates = useCallback(async () => {
     setLoading(true);
     try {
       const res = await getTemplates(session, projectId, 'APPROVED');
@@ -75,7 +64,18 @@ export function TemplateModal({
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId, session]);
+
+  useEffect(() => {
+    if (visible && projectId && session) {
+      loadTemplates();
+      setSelectedTemplate(null);
+      setVariables([]);
+      setHeaderMediaUrl('');
+      setUploadedFileName('');
+      setUploadingMedia(false);
+    }
+  }, [loadTemplates, visible, projectId, session]);
 
   const filteredTemplates = useMemo(() => {
     if (!searchQuery.trim()) return templates;
@@ -93,7 +93,7 @@ export function TemplateModal({
     let requiresMedia = false;
     let defaultMedia = '';
 
-    const components = template.template?.components || template.components || [];
+    const components = getTemplateComponents(template);
     components.forEach((component: any) => {
       if (component.type === 'HEADER' && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(component.format)) {
         requiresMedia = true;
@@ -156,7 +156,7 @@ export function TemplateModal({
 
   const submitTemplate = (template: any, currentVars: string[], mediaUrl: string) => {
     const formattedComponents: any[] = [];
-    const components = template.template?.components || template.components || [];
+    const components = getTemplateComponents(template);
 
     components.forEach((component: any) => {
       if (component.type === 'HEADER' && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(component.format)) {
@@ -216,7 +216,7 @@ export function TemplateModal({
             </View>
           </View>
           
-          {item.template?.components?.map((comp: any, idx: number) => {
+          {getTemplateComponents(item).map((comp: any, idx: number) => {
             if (comp.type === 'BODY') {
               return (
                 <Text key={idx} style={[styles.templateBody, { color: theme.muted }]} numberOfLines={3}>
@@ -234,9 +234,12 @@ export function TemplateModal({
   const renderEditView = () => {
     if (!selectedTemplate) return null;
 
-    const components = selectedTemplate.template?.components || [];
-    const bodyComponent = components.find((c: any) => c.type === 'BODY');
-    const headerComponent = components.find((c: any) => c.type === 'HEADER' && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(c.format));
+    const components = getTemplateComponents(selectedTemplate);
+    const bodyComponent = components.find((c: any) => String(c.type).toUpperCase() === 'BODY');
+    const headerComponent = components.find(
+      (c: any) => String(c.type).toUpperCase() === 'HEADER' &&
+        ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(String(c.format).toUpperCase()),
+    );
 
     const previewParams = variables.map(v => ({ text: v }));
     const previewText = bodyComponent ? applyBodyParameters(bodyComponent.text, previewParams) : '';
@@ -254,8 +257,12 @@ export function TemplateModal({
               <Text style={[styles.inputLabel, { color: theme.ink }]}>Header Media ({headerComponent.format})</Text>
               {headerMediaUrl ? (
                 <View style={[styles.uploadedRow, { backgroundColor: theme.canvas, borderColor: theme.border, alignItems: 'center' }]}>
-                  {headerComponent.format === 'IMAGE' && headerMediaUrl.startsWith('http') && (
-                    <Image source={{ uri: headerMediaUrl }} style={{ width: 42, height: 42, borderRadius: 8, marginRight: 10 }} />
+                  {String(headerComponent.format).toUpperCase() === 'IMAGE' && headerMediaUrl && (
+                    <Image
+                      source={{ uri: headerMediaUrl, cache: 'reload' }}
+                      style={{ width: 64, height: 64, borderRadius: 8, marginRight: 10 }}
+                      onError={() => {/* silent, no crash */}}
+                    />
                   )}
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.uploadedFileName, { color: theme.ink }]} numberOfLines={1}>
@@ -324,7 +331,7 @@ export function TemplateModal({
     <SlideUpModal
       visible={visible}
       onClose={onClose}
-      maxHeight="92%"
+      maxHeight="70%"
     >
       <KeyboardAvoidView
         style={[styles.modalContent, { backgroundColor: theme.surface }]}

@@ -355,6 +355,8 @@ export const generateAiTemplate = (
   projectId: string,
   payload: {
     prompt: string;
+    header_prompt?: string;
+    reference_image_url?: string;
     category?: string;
     language?: string;
     tone?: string;
@@ -375,7 +377,14 @@ export const generateAiTemplate = (
 export const generateAiHeaderMedia = (
   session: ApiSession,
   projectId: string,
-  payload: {format: 'IMAGE' | 'VIDEO' | 'DOCUMENT'; prompt: string; body?: string; header_text?: string},
+  payload: {
+    format: 'IMAGE' | 'VIDEO' | 'DOCUMENT';
+    prompt: string;
+    header_prompt?: string;
+    reference_image_url?: string;
+    body?: string;
+    header_text?: string;
+  },
 ) =>
   post<any>('/template/generate-ai-header-media', {
     project_id: projectId,
@@ -935,3 +944,18 @@ export async function changeChatAssignment(
     session,
   );
 }
+
+export interface AiStatus {
+  has_key: boolean;
+  source: 'project_personal_key' | 'platform_global_key' | 'none';
+  is_personal_key: boolean;
+  provider: string | null;
+  model: string | null;
+  balance: number;
+  is_eligible: boolean;
+  min_balance_required: number;
+}
+
+export const getAiStatus = (session: ApiSession, projectId: string): Promise<{error?: any; data?: AiStatus}> =>
+  post<any>('/template/get-ai-status', { project_id: projectId }, session);
+

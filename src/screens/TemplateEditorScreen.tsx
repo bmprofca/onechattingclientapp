@@ -24,14 +24,26 @@ const HEADER_FORMATS: {code: 'NONE' | 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT'; l
 function Picker({label, value, options, onChange, theme}: any) { const [open, setOpen] = useState(false); return <View><Text style={[styles.label, {color: theme.muted}]}>{label}</Text><Pressable onPress={() => setOpen(true)} style={[styles.select, {backgroundColor: theme.surface, borderColor: theme.border}]}><Text style={{color: theme.ink}}>{value}</Text><Text style={{color: theme.muted}}>⌄</Text></Pressable><Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}><Pressable style={styles.overlay} onPress={() => setOpen(false)}><View style={[styles.sheet, {backgroundColor: theme.surface}]}>{options.map((option: string) => <Pressable key={option} onPress={() => {onChange(option); setOpen(false);}} style={styles.option}><Text style={[styles.optionText, {color: theme.ink}]}>{option}</Text></Pressable>)}</View></Pressable></Modal></View>; }
 
 function TemplatePreview({theme, headerFormat, header, headerMediaLink, body, footer, buttonType, buttonText, variables}: any) {
+  const [imgError, setImgError] = React.useState(false);
   let sampleBody = body || 'Your message preview will appear here.';
   (variables || []).forEach((v: any) => {
     sampleBody = sampleBody.replace(new RegExp(`\\{\\{${v.id}\\}\\}`, 'g'), v.sample?.trim() ? v.sample : `{{${v.id}}}`);
   });
+  // Reset error flag whenever the URL changes so re-uploads are retried.
+  React.useEffect(() => { setImgError(false); }, [headerMediaLink]);
   return <View style={[styles.previewCard, {backgroundColor: theme.surface, borderColor: theme.border}]}><Text style={[styles.previewTitle, {color: theme.ink}]}>Preview</Text><View style={styles.phone}><View style={styles.phoneTop}><Text style={styles.phoneTopText}>WhatsApp</Text></View><View style={styles.chat}><View style={styles.bubble}>
     {headerFormat === 'TEXT' && header ? <Text style={styles.previewHeader}>{header}</Text> : null}
     {headerFormat === 'IMAGE' && headerMediaLink ? (
-      <Image source={{uri: headerMediaLink}} style={styles.previewImage} resizeMode="cover" />
+      imgError ? (
+        <View style={styles.previewImage}><Text style={{textAlign:'center', color:'#9CA3AF', fontSize:10, paddingTop:50}}>Image preview unavailable</Text></View>
+      ) : (
+        <Image
+          source={{uri: headerMediaLink, cache: 'reload'}}
+          style={styles.previewImage}
+          resizeMode="cover"
+          onError={() => setImgError(true)}
+        />
+      )
     ) : null}
     {headerFormat !== 'NONE' && headerFormat !== 'TEXT' && headerFormat !== 'IMAGE' ? (
       <View style={styles.previewMediaPlaceholder}>
