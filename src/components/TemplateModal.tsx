@@ -19,6 +19,7 @@ import { ApiSession } from '../api/client';
 import { getTemplates, unwrapList } from '../api/workspace';
 import { uploadFile } from '../api/upload';
 import { useTheme } from '../theme/theme';
+import { formatImageUrl } from '../utils/imageUrl';
 import { applyBodyParameters } from '../utils/templateUtils';
 import { SlideUpModal, ScalePressable, FadeInView } from './animations';
 
@@ -95,9 +96,15 @@ export function TemplateModal({
 
     const components = getTemplateComponents(template);
     components.forEach((component: any) => {
-      if (component.type === 'HEADER' && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(component.format)) {
+      if (component.type === 'HEADER' && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(String(component.format).toUpperCase())) {
         requiresMedia = true;
-        const handle = component.example?.header_handle?.[0] || component.example?.header_url?.[0] || '';
+        const handle =
+          component.example?.header_handle?.[0] ||
+          component.example?.header_url?.[0] ||
+          component.example?.url?.[0] ||
+          component.url ||
+          component.header_handle ||
+          '';
         if (handle) {
           defaultMedia = handle;
         }
@@ -158,50 +165,51 @@ export function TemplateModal({
     const formattedComponents: any[] = [];
     const components = getTemplateComponents(template);
 
-    components.forEach((component: any) => {
-      if (component.type === 'HEADER' && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(component.format)) {
-        const effectiveMedia = mediaUrl || component.example?.header_handle?.[0] || component.example?.header_url?.[0] || '';
-        if (effectiveMedia) {
-          formattedComponents.push({
-            type: 'header',
-            parameters: [
-              {
-                type: component.format.toLowerCase(),
-                [component.format.toLowerCase()]: { link: effectiveMedia }
-              }
-            ]
-          });
-        }
-      }
-      if (component.type === 'BODY' && component.text) {
-        const parameters: any[] = [];
-        const matches = component.text.match(/\{\{\d+\}\}/g);
-        if (matches) {
-          matches.forEach((_: string, idx: number) => {
-            parameters.push({
-              type: 'text',
-              text: currentVars[idx] || '',
-            });
-          });
-        }
-        formattedComponents.push({
-          type: 'body',
-          parameters,
-        });
-      }
-    });
+    // Format HEADER if image/media
+    const headerComponent = components.find(
+      (c: any) => String(c.type).toUpperCase() === 'HEADER' &&
+        ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(String(c.format).toUpperCase()),
+    );
+    if (headerComponent) {
+      const format = String(headerComponent.format).toLowerCase();
+      formattedComponents.push({
+        type: 'header',
+        parameters: [
+          {
+            type: format,
+            [format]: {
+              link: mediaUrl || headerMediaUrl,
+            },
+          },
+        ],
+      });
+    }
 
-    onSelectTemplate(template.template_id || template.id, formattedComponents);
-    setSelectedTemplate(null);
+    // Format BODY
+    const bodyComponent = components.find((c: any) => String(c.type).toUpperCase() === 'BODY');
+    if (bodyComponent && currentVars.length > 0) {
+      formattedComponents.push({
+        type: 'body',
+        parameters: currentVars.map((v) => ({
+          type: 'text',
+          text: v,
+        })),
+      });
+    }
+
+    onSelectTemplate(template.template_id || template.id || template.template_name, formattedComponents);
+    onClose();
   };
 
-  const renderItem = ({ item, index }: { item: any; index: number }) => {
+  const renderItem = ({ item }: { item: any }) => {
+    const isSelected = selectedTemplate?.template_id === item.template_id;
     return (
-      <FadeInView delay={Math.min(index * 40, 300)} distance={12}>
+      <FadeInView duration={200} distance={10}>
         <ScalePressable
           style={[
             styles.templateCard,
             { backgroundColor: theme.canvas, borderColor: theme.border },
+            isSelected && { borderColor: theme.emerald },
           ]}
           onPress={() => handleSelect(item)}
         >
@@ -243,23 +251,36 @@ export function TemplateModal({
 
     const previewParams = variables.map(v => ({ text: v }));
     const previewText = bodyComponent ? applyBodyParameters(bodyComponent.text, previewParams) : '';
+    const formattedHeaderUrl = formatImageUrl(headerMediaUrl);
 
     return (
       <FadeInView duration={250} distance={10} style={styles.editContainer}>
-        <View style={[styles.previewBox, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
-          <Text style={[styles.previewLabel, { color: theme.muted }]}>Preview</Text>
-          <Text style={[styles.previewText, { color: theme.ink }]}>{previewText}</Text>
-        </View>
-        
-        <ScrollView style={styles.editScroll} contentContainerStyle={{ padding: 16 }}>
+        <ScrollView
+          style={styles.editScroll}
+          contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={[styles.previewBox, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
+            <Text style={[styles.previewLabel, { color: theme.muted }]}>Preview</Text>
+            {String(headerComponent?.format).toUpperCase() === 'IMAGE' && formattedHeaderUrl ? (
+              <Image
+                source={{ uri: formattedHeaderUrl }}
+                style={styles.previewHeaderImage}
+                resizeMode="cover"
+                onError={() => {/* silent fallback */}}
+              />
+            ) : null}
+            <Text style={[styles.previewText, { color: theme.ink }]}>{previewText}</Text>
+          </View>
+
           {headerComponent && (
             <View style={styles.inputGroup}>
               <Text style={[styles.inputLabel, { color: theme.ink }]}>Header Media ({headerComponent.format})</Text>
               {headerMediaUrl ? (
                 <View style={[styles.uploadedRow, { backgroundColor: theme.canvas, borderColor: theme.border, alignItems: 'center' }]}>
-                  {String(headerComponent.format).toUpperCase() === 'IMAGE' && headerMediaUrl && (
+                  {String(headerComponent.format).toUpperCase() === 'IMAGE' && formattedHeaderUrl && (
                     <Image
-                      source={{ uri: headerMediaUrl, cache: 'reload' }}
+                      source={{ uri: formattedHeaderUrl, cache: 'reload' }}
                       style={{ width: 64, height: 64, borderRadius: 8, marginRight: 10 }}
                       onError={() => {/* silent, no crash */}}
                     />
@@ -331,67 +352,72 @@ export function TemplateModal({
     <SlideUpModal
       visible={visible}
       onClose={onClose}
-      maxHeight="70%"
+      maxHeight="88%"
+      contentStyle={{ backgroundColor: theme.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24 }}
     >
       <KeyboardAvoidView
-        style={[styles.modalContent, { backgroundColor: theme.surface }]}
+        style={{ flex: 1 }}
       >
-        <View style={[styles.header, { borderBottomColor: theme.border }]}>
-          {selectedTemplate ? (
-            <ScalePressable onPress={() => setSelectedTemplate(null)} hitSlop={8} style={{ marginRight: 12 }}>
-              <ArrowLeft size={24} color={theme.ink} />
+        <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
+          <View style={[styles.header, { borderBottomColor: theme.border }]}>
+            {selectedTemplate ? (
+              <ScalePressable onPress={() => setSelectedTemplate(null)} hitSlop={8} style={{ marginRight: 12 }}>
+                <ArrowLeft size={24} color={theme.ink} />
+              </ScalePressable>
+            ) : null}
+            <Text style={[styles.title, { color: theme.ink, flex: 1 }]}>
+              {selectedTemplate ? 'Edit Template' : 'Select Template'}
+            </Text>
+            <ScalePressable onPress={onClose} hitSlop={8}>
+              <X size={24} color={theme.muted} />
             </ScalePressable>
-          ) : null}
-          <Text style={[styles.title, { color: theme.ink, flex: 1 }]}>
-            {selectedTemplate ? 'Edit Template' : 'Select Template'}
-          </Text>
-          <ScalePressable onPress={onClose} hitSlop={8}>
-            <X size={24} color={theme.muted} />
-          </ScalePressable>
-        </View>
+          </View>
 
-        {!selectedTemplate ? (
-          <>
-            <View style={[styles.searchContainer, { borderBottomColor: theme.border }]}>
-              <View style={[styles.searchBar, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
-                <Search size={18} color={theme.muted} style={styles.searchIcon} />
-                <TextInput
-                  style={[styles.searchInput, { color: theme.ink }]}
-                  placeholder="Search templates..."
-                  placeholderTextColor={theme.muted}
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
+          {!selectedTemplate ? (
+            <>
+              <View style={[styles.searchContainer, { borderBottomColor: theme.border }]}>
+                <View style={[styles.searchBar, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
+                  <Search size={18} color={theme.muted} style={styles.searchIcon} />
+                  <TextInput
+                    style={[styles.searchInput, { color: theme.ink }]}
+                    placeholder="Search templates..."
+                    placeholderTextColor={theme.muted}
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                  />
+                </View>
+              </View>
+
+              {loading ? (
+                <View style={styles.centerContainer}>
+                  <ActivityIndicator size="large" color={theme.emerald} />
+                  <Text style={[styles.loadingText, { color: theme.muted }]}>
+                    Loading templates...
+                  </Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={filteredTemplates}
+                  keyExtractor={(item, index) => String(item.id || item.template_id || item.name || index) + '-' + index}
+                  renderItem={renderItem}
+                  style={{ flex: 1 }}
+                  contentContainerStyle={styles.listContent}
+                  keyboardShouldPersistTaps="handled"
+                  ListEmptyComponent={
+                    <View style={styles.centerContainer}>
+                      <FileText size={48} color={theme.border} />
+                      <Text style={[styles.emptyText, { color: theme.muted }]}>
+                        No templates found
+                      </Text>
+                    </View>
+                  }
                 />
-              </View>
-            </View>
-
-            {loading ? (
-              <View style={styles.centerContainer}>
-                <ActivityIndicator size="large" color={theme.emerald} />
-                <Text style={[styles.loadingText, { color: theme.muted }]}>
-                  Loading templates...
-                </Text>
-              </View>
-            ) : (
-              <FlatList
-                data={filteredTemplates}
-                keyExtractor={(item, index) => String(item.id || item.template_id || item.name || index) + '-' + index}
-                renderItem={renderItem}
-                contentContainerStyle={styles.listContent}
-                ListEmptyComponent={
-                  <View style={styles.centerContainer}>
-                    <FileText size={48} color={theme.border} />
-                    <Text style={[styles.emptyText, { color: theme.muted }]}>
-                      No templates found
-                    </Text>
-                  </View>
-                }
-              />
-            )}
-          </>
-        ) : (
-          renderEditView()
-        )}
+              )}
+            </>
+          ) : (
+            renderEditView()
+          )}
+        </View>
       </KeyboardAvoidView>
     </SlideUpModal>
   );
@@ -404,15 +430,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.4)',
   },
   modalContent: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '90%',
-    minHeight: '50%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 10,
+    flex: 1,
+    width: '100%',
   },
   header: {
     flexDirection: 'row',
@@ -500,6 +519,12 @@ const styles = StyleSheet.create({
     padding: 12,
     borderWidth: 1,
     borderRadius: 12,
+  },
+  previewHeaderImage: {
+    width: '100%',
+    height: 120,
+    borderRadius: 8,
+    marginBottom: 8,
   },
   previewLabel: {
     fontSize: 12,

@@ -5,10 +5,11 @@ import { AiTemplateModal } from '../components/AiTemplateModal';
 import Toast from 'react-native-toast-message';
 import {ApiSession} from '../api/client';
 import {createTemplate, editTemplate} from '../api/workspace'
-import {uploadFile, PickedFile} from '../api/upload';
-import {useTheme} from '../theme/theme';
-import {launchImageLibrary, ImagePickerResponse} from 'react-native-image-picker';
-import {pick, types as DocumentPickerTypes, isErrorWithCode, errorCodes} from '@react-native-documents/picker';
+import { uploadFile, PickedFile } from '../api/upload';
+import { useTheme } from '../theme/theme';
+import { formatImageUrl } from '../utils/imageUrl';
+import { launchImageLibrary, ImagePickerResponse } from 'react-native-image-picker';
+import { pick, types as DocumentPickerTypes, isErrorWithCode, errorCodes } from '@react-native-documents/picker';
 
 const CATEGORIES = ['MARKETING', 'UTILITY', 'AUTHENTICATION'];
 const LANGUAGES = ['en', 'hi', 'es', 'fr', 'de', 'ar'];
@@ -25,33 +26,54 @@ function Picker({label, value, options, onChange, theme}: any) { const [open, se
 
 function TemplatePreview({theme, headerFormat, header, headerMediaLink, body, footer, buttonType, buttonText, variables}: any) {
   const [imgError, setImgError] = React.useState(false);
+  const formattedMediaUrl = React.useMemo(() => formatImageUrl(headerMediaLink), [headerMediaLink]);
   let sampleBody = body || 'Your message preview will appear here.';
   (variables || []).forEach((v: any) => {
     sampleBody = sampleBody.replace(new RegExp(`\\{\\{${v.id}\\}\\}`, 'g'), v.sample?.trim() ? v.sample : `{{${v.id}}}`);
   });
   // Reset error flag whenever the URL changes so re-uploads are retried.
-  React.useEffect(() => { setImgError(false); }, [headerMediaLink]);
-  return <View style={[styles.previewCard, {backgroundColor: theme.surface, borderColor: theme.border}]}><Text style={[styles.previewTitle, {color: theme.ink}]}>Preview</Text><View style={styles.phone}><View style={styles.phoneTop}><Text style={styles.phoneTopText}>WhatsApp</Text></View><View style={styles.chat}><View style={styles.bubble}>
-    {headerFormat === 'TEXT' && header ? <Text style={styles.previewHeader}>{header}</Text> : null}
-    {headerFormat === 'IMAGE' && headerMediaLink ? (
-      imgError ? (
-        <View style={styles.previewImage}><Text style={{textAlign:'center', color:'#9CA3AF', fontSize:10, paddingTop:50}}>Image preview unavailable</Text></View>
-      ) : (
-        <Image
-          source={{uri: headerMediaLink, cache: 'reload'}}
-          style={styles.previewImage}
-          resizeMode="cover"
-          onError={() => setImgError(true)}
-        />
-      )
-    ) : null}
-    {headerFormat !== 'NONE' && headerFormat !== 'TEXT' && headerFormat !== 'IMAGE' ? (
-      <View style={styles.previewMediaPlaceholder}>
-        <Text style={styles.previewMediaPlaceholderText}>{headerMediaLink ? `${headerFormat} attached` : `${headerFormat} header`}</Text>
-        {headerMediaLink ? <Text style={styles.previewMediaFileName} numberOfLines={1}>{decodeURIComponent(headerMediaLink.split('/').pop() || 'uploaded file')}</Text> : null}
+  React.useEffect(() => { setImgError(false); }, [formattedMediaUrl]);
+  return (
+    <View style={[styles.previewCard, {backgroundColor: theme.surface, borderColor: theme.border}]}>
+      <Text style={[styles.previewTitle, {color: theme.ink}]}>Preview</Text>
+      <View style={styles.phone}>
+        <View style={styles.phoneTop}>
+          <Text style={styles.phoneTopText}>WhatsApp</Text>
+        </View>
+        <View style={styles.chat}>
+          <View style={styles.bubble}>
+            {headerFormat === 'TEXT' && header ? <Text style={styles.previewHeader}>{header}</Text> : null}
+            {headerFormat === 'IMAGE' && formattedMediaUrl ? (
+              imgError ? (
+                <View style={styles.previewImage}><Text style={{textAlign:'center', color:'#9CA3AF', fontSize:10, paddingTop:50}}>Image preview unavailable</Text></View>
+              ) : (
+                <Image
+                  source={{uri: formattedMediaUrl}}
+                  style={styles.previewImage}
+                  resizeMode="cover"
+                  onError={() => setImgError(true)}
+                />
+              )
+            ) : null}
+            {headerFormat !== 'NONE' && headerFormat !== 'TEXT' && headerFormat !== 'IMAGE' ? (
+              <View style={styles.previewMediaPlaceholder}>
+                <Text style={styles.previewMediaPlaceholderText}>{headerMediaLink ? `${headerFormat} attached` : `${headerFormat} header`}</Text>
+                {headerMediaLink ? <Text style={styles.previewMediaFileName} numberOfLines={1}>{decodeURIComponent(headerMediaLink.split('/').pop() || 'uploaded file')}</Text> : null}
+              </View>
+            ) : null}
+            <Text style={styles.previewBody}>{sampleBody}</Text>
+            {footer ? <Text style={styles.previewFooter}>{footer}</Text> : null}
+            {buttonType !== 'NONE' && buttonText ? (
+              <View style={styles.previewButton}>
+                <Text style={styles.previewButtonText}>{buttonText}</Text>
+              </View>
+            ) : null}
+          </View>
+          <Text style={styles.previewTime}>10:32 AM ✓✓</Text>
+        </View>
       </View>
-    ) : null}
-    <Text style={styles.previewBody}>{sampleBody}</Text>{footer ? <Text style={styles.previewFooter}>{footer}</Text> : null}{buttonType !== 'NONE' && buttonText ? <View style={styles.previewButton}><Text style={styles.previewButtonText}>{buttonText}</Text></View> : null}</View><Text style={styles.previewTime}>10:32 AM ✓✓</Text></View></View></View>;
+    </View>
+  );
 }
 
 // Extracts unique {{n}} variable numbers from text, in order of first appearance.
@@ -90,14 +112,72 @@ function renumberVariables(text: string): {text: string; oldToNew: Map<number, n
 }
 
 export function TemplateEditorScreen({projectId, session, template, onBack, onSaved}: {projectId: string; session: ApiSession; template?: any; onBack: () => void; onSaved: () => void}) {
-  const theme = useTheme(); const cs = template?.template?.components || template?.components || []; const get = (type: string) => cs.find((c: any) => c.type === type) || {}; const button = get('BUTTONS').buttons?.[0] || {};
+  const theme = useTheme();
+  const cs = template?.template?.components || template?.components || [];
+  const get = (type: string) => cs.find((c: any) => String(c.type).toUpperCase() === type) || {};
+  const button = get('BUTTONS').buttons?.[0] || {};
   const initialHeader = get('HEADER');
-  const [name, setName] = useState(template?.template_name || template?.name || ''); const [category, setCategory] = useState(template?.category || 'UTILITY'); const [language, setLanguage] = useState(template?.language || template?.language_code || 'en');
-  const [headerFormat, setHeaderFormat] = useState<'NONE' | 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT'>(
-    initialHeader.format || (initialHeader.text ? 'TEXT' : 'NONE'),
-  );
+
+  // Debug: log the full template and HEADER component to understand API shape
+  React.useEffect(() => {
+    console.log('[TemplateEditor] full template:', JSON.stringify(template, null, 2));
+    console.log('[TemplateEditor] HEADER component:', JSON.stringify(initialHeader, null, 2));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const rawFormat = String(initialHeader.format || '').toUpperCase();
+  const detectedFormat: 'NONE' | 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT' =
+    rawFormat === 'IMAGE' || rawFormat === 'VIDEO' || rawFormat === 'DOCUMENT' || rawFormat === 'TEXT'
+      ? rawFormat
+      : initialHeader.text
+      ? 'TEXT'
+      : template?.header_type
+      ? String(template.header_type).toUpperCase() as any
+      : 'NONE';
+
+  // Extract header media URL from every possible location Meta/server might put it.
+  // handle[] fields are opaque upload handles (not displayable URLs) — skip those.
+  // We look for actual https:// URLs first.
+  const extractHeaderMediaUrl = (): string => {
+    const candidates: (string | undefined | null)[] = [
+      // Standard Meta API locations (actual URLs, not handles)
+      initialHeader.example?.header_url?.[0],
+      initialHeader.example?.url?.[0],
+      // Server-side stored URL
+      initialHeader.url,
+      initialHeader.media_url,
+      initialHeader.image?.link,
+      initialHeader.video?.link,
+      initialHeader.document?.link,
+      // Top-level template fields
+      template?.header_url,
+      template?.header_media_url,
+      template?.media_url,
+      template?.image_url,
+      // Handle-type (Meta upload handles — these start with '4:' or similar, useless for display)
+      // Only use header_handle if it looks like an actual URL
+      initialHeader.example?.header_handle?.[0],
+      initialHeader.header_handle,
+      template?.header_handle,
+    ];
+    // Return the first value that looks like a real URL
+    for (const c of candidates) {
+      if (c && typeof c === 'string' && c.trim()) {
+        const t = c.trim();
+        // Skip Meta upload handles (format: "4:AbCd..." or short opaque strings without slashes)
+        if (!t.includes('/') && !t.startsWith('http') && t.length < 100) continue;
+        return t;
+      }
+    }
+    return '';
+  };
+
+  const [name, setName] = useState(template?.template_name || template?.name || '');
+  const [category, setCategory] = useState(template?.category || 'UTILITY');
+  const [language, setLanguage] = useState(template?.language || template?.language_code || 'en');
+  const [headerFormat, setHeaderFormat] = useState<'NONE' | 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT'>(detectedFormat);
   const [header, setHeader] = useState(initialHeader.text || '');
-  const [headerMediaLink, setHeaderMediaLink] = useState(initialHeader.example?.header_handle?.[0] || '');
+  const [headerMediaLink, setHeaderMediaLink] = useState(extractHeaderMediaUrl);
   const [isUploadingHeader, setIsUploadingHeader] = useState(false);
   const [body, setBody] = useState(get('BODY').text || ''); const [footer, setFooter] = useState(get('FOOTER').text || ''); const [buttonType, setButtonType] = useState(button.type || 'NONE'); const [buttonText, setButtonText] = useState(button.text || ''); const [buttonValue, setButtonValue] = useState(button.phone_number || button.url || ''); const [saving, setSaving] = useState(false);
   const [aiModalVisible, setAiModalVisible] = useState(false);
