@@ -216,17 +216,6 @@ export function ProjectsScreen({
 
   return (
     <KeyboardAvoidView style={[styles.safe, { backgroundColor: theme.canvas }]}>
-      {/* Header (when launched from Dashboard) */}
-      {onClose && (
-        <View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
-          <Pressable onPress={onClose} style={styles.backButton} hitSlop={8}>
-            <ArrowLeft size={24} color={theme.ink} />
-          </Pressable>
-          <Text style={[styles.headerTitle, { color: theme.ink }]}>Projects</Text>
-          <View style={styles.headerRight} />
-        </View>
-      )}
-
       {/* Loading skeleton */}
       {loadingProjects ? (
         <View style={{ flex: 1 }}>
@@ -260,7 +249,12 @@ export function ProjectsScreen({
               {/* Title row */}
               <Text style={[styles.eyebrow, { color: theme.mintText }]}>YOUR WORKSPACES</Text>
               <View style={styles.titleRow}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                  {onClose && (
+                    <Pressable onPress={onClose} style={styles.backButton} hitSlop={8}>
+                      <ArrowLeft size={22} color={theme.ink} />
+                    </Pressable>
+                  )}
                   <View style={[styles.headerIcon, { backgroundColor: theme.mint }]}>
                     <Briefcase size={18} color={theme.emerald} strokeWidth={2.2} />
                   </View>
