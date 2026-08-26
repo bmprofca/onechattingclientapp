@@ -10,6 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+  import { Animated } from 'react-native';
 import Svg, { Defs, Line, Marker, Path } from 'react-native-svg';
 import {
   ArrowLeft,
@@ -40,6 +41,7 @@ import {
   validateFlow,
 } from '../api/flowBuilder';
 import { useTheme } from '../theme/theme';
+import { useKeyboardContext } from '../contexts/KeyboardContext';
 type Props = {
   projectId: string;
   session: ApiSession;
@@ -74,6 +76,7 @@ export function FlowBuilderScreen({
   initialFlowId,
 }: Props) {
   const theme = useTheme();
+  const { keyboardHeightAnim } = useKeyboardContext();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [flows, setFlows] = useState<any[]>([]);
@@ -86,10 +89,18 @@ export function FlowBuilderScreen({
   const [past, setPast] = useState<Graph[]>([]);
   const [future, setFuture] = useState<Graph[]>([]);
   const [zoom, setZoom] = useState(1);
+  const [optionsJson, setOptionsJson] = useState('[]');
   const selectedNode = useMemo(
     () => graph.nodes.find(node => node.id === selected),
     [graph.nodes, selected],
   );
+  useEffect(() => {
+    if (selectedNode?.type === 'message') {
+      setOptionsJson(JSON.stringify(selectedNode.data.items || [], null, 2));
+    } else {
+      setOptionsJson('[]');
+    }
+  }, [selected]);
   const pos = (node: Node, index: number) =>
     node.position || { x: 40, y: 40 + index * 170 };
   const dragResponder = (node: Node, index: number) => {
@@ -200,6 +211,7 @@ export function FlowBuilderScreen({
         ? {
             text: 'Thanks for contacting us.',
             interactive: false,
+            interactiveType: 'list',
             items: [
               { id: 'option_1', title: 'Yes' },
               { id: 'option_2', title: 'No' },
@@ -221,6 +233,26 @@ export function FlowBuilderScreen({
       ],
     }));
     setSelected(id);
+  };
+  const toolDragResponder = (type: string) => {
+    let moved = false;
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gesture) =>
+        Math.abs(gesture.dx) > 8 || Math.abs(gesture.dy) > 8,
+      onPanResponderGrant: () => {
+        moved = false;
+      },
+      onPanResponderMove: () => {
+        moved = true;
+      },
+      onPanResponderRelease: () => {
+        if (moved) addNode(type);
+      },
+      onPanResponderTerminate: () => {
+        moved = false;
+      },
+    });
   };
   const connectNode = (id: string) => {
     if (!connectFrom) {
@@ -345,7 +377,12 @@ export function FlowBuilderScreen({
     if (!result.error) setEnabled(value);
   };
   return (
-    <View style={[s.safe, { backgroundColor: theme.canvas }]}>
+    <Animated.View
+      style={[
+        s.safe,
+        { backgroundColor: theme.canvas, paddingBottom: keyboardHeightAnim },
+      ]}
+    >
       <View
         style={[
           s.header,
@@ -365,7 +402,10 @@ export function FlowBuilderScreen({
           <ActivityIndicator size="large" color={theme.emerald} />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={s.page}>
+        <ScrollView
+          contentContainerStyle={s.page}
+          keyboardShouldPersistTaps="handled"
+        >
           <View style={s.top}>
             <View>
               <Text style={[s.title, { color: theme.ink }]}>
@@ -494,6 +534,7 @@ export function FlowBuilderScreen({
               <Pressable
                 key={type}
                 onPress={() => addNode(type)}
+                {...toolDragResponder(type).panHandlers}
                 style={[
                   s.tool,
                   { backgroundColor: theme.surface, borderColor: theme.border },
@@ -730,6 +771,71 @@ export function FlowBuilderScreen({
                       Interactive options
                     </Text>
                   </Pressable>
+                  {selectedNode.data.interactive && (
+                    <>
+                      <Text style={[s.fieldLabel, { color: theme.muted }]}>Interactive type</Text>
+                      <View style={s.typePicker}>
+                        {[
+                          { value: 'button', label: 'Reply buttons' },
+                          { value: 'list', label: 'List menu' },
+                        ].map(option => (
+                          <Pressable
+                            key={option.value}
+                            onPress={() => update('interactiveType', option.value)}
+                            style={[
+                              s.typeOption,
+                              {
+                                backgroundColor:
+                                  (selectedNode.data.interactiveType || 'list') === option.value
+                                    ? theme.emerald
+                                    : theme.canvas,
+                                borderColor: theme.border,
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={{
+                                color:
+                                  (selectedNode.data.interactiveType || 'list') === option.value
+                                    ? '#FFF'
+                                    : theme.ink,
+                                fontSize: 12,
+                                fontWeight: '700',
+                              }}
+                            >
+                              {option.label}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                      <Text style={[s.fieldLabel, { color: theme.muted }]}>Options JSON</Text>
+                      <TextInput
+                        multiline
+                        value={optionsJson}
+                        onChangeText={value => {
+                          setOptionsJson(value);
+                          try {
+                            const items = JSON.parse(value);
+                            if (Array.isArray(items)) update('items', items);
+                          } catch {
+                            // Keep the draft visible until the JSON is valid.
+                          }
+                        }}
+                        style={[
+                          s.optionsEditor,
+                          {
+                            color: theme.ink,
+                            borderColor: theme.border,
+                            backgroundColor: theme.canvas,
+                          },
+                        ]}
+                        textAlignVertical="top"
+                      />
+                      <Text style={[s.hint, { color: theme.muted }]}> 
+                        Use objects with id, title, and optional description. List messages may also use sections.
+                      </Text>
+                    </>
+                  )}
                 </>
               )}
               {(selectedNode.type === 'keyword' ||
@@ -762,7 +868,7 @@ export function FlowBuilderScreen({
           ) : null}
         </ScrollView>
       )}
-    </View>
+    </Animated.View>
   );
 }
 const s = StyleSheet.create({
@@ -886,6 +992,25 @@ const s = StyleSheet.create({
     marginTop: 9,
   },
   settings: { borderWidth: 1, borderRadius: 14, padding: 14 },
+  fieldLabel: { fontSize: 12, fontWeight: '700', marginTop: 10 },
+  typePicker: { flexDirection: 'row', gap: 8, marginTop: 6 },
+  typeOption: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 9,
+    paddingVertical: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  optionsEditor: {
+    borderWidth: 1,
+    borderRadius: 9,
+    padding: 10,
+    minHeight: 130,
+    marginTop: 6,
+    fontFamily: 'monospace',
+    fontSize: 12,
+  },
   editor: {
     borderWidth: 1,
     borderRadius: 9,
