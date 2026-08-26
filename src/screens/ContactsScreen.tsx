@@ -1407,7 +1407,9 @@ export function ContactsScreen({
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.canvas }]}>
+    <KeyboardAvoidView
+      style={[styles.container, { backgroundColor: theme.canvas }]}
+    >
       {/* Top Header */}
       <View
         style={[
@@ -1562,7 +1564,7 @@ export function ContactsScreen({
           )}
         </ScalePressable>
       )}
-    </View>
+    </KeyboardAvoidView>
   );
 }
 

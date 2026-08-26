@@ -47,6 +47,7 @@ import { ProjectAvatar } from '../components/ProjectAvatar';
 import { ProjectQRModal } from '../components/Modals/ProjectQRModal';
 import { WhatsAppNotificationBanner } from '../components/WhatsAppNotificationBanner';
 import { formatImageUrl } from '../utils/imageUrl';
+import { useKeyboardContext } from '../contexts/KeyboardContext';
 
 type Page =
   | 'dashboard'
@@ -92,6 +93,7 @@ export function WorkspaceScreen({
   onSignOut: () => void;
 }) {
   const theme = useTheme();
+  const { isKeyboardVisible } = useKeyboardContext();
   const projectId = session.selectedProjectId || '';
   const hasProject = !!projectId;
   console.log(
@@ -954,10 +956,13 @@ export function WorkspaceScreen({
   // just duplicate it, so we skip it for those pages.
   const showOuterHeader =
     hasProject || (page !== 'wallet' && page !== 'projects');
+  const isKeyboardScreenVisible =
+    isKeyboardVisible &&
+    (page === 'inbox' || page === 'cases' || page === 'campaigns');
 
   return (
     <View style={[styles.safe, { backgroundColor: theme.canvas }]}>
-      {connectionStatus !== 'connected' && (
+      {!isKeyboardScreenVisible && connectionStatus !== 'connected' && (
         <View
           style={{
             backgroundColor:
@@ -973,7 +978,7 @@ export function WorkspaceScreen({
           </Text>
         </View>
       )}
-      {showOuterHeader && (
+      {showOuterHeader && !isKeyboardScreenVisible && (
         <View
           style={[
             styles.header,
@@ -1216,7 +1221,7 @@ export function WorkspaceScreen({
         </FadeInView>
       </View>
 
-      <View
+      {!isKeyboardScreenVisible && <View
         style={[
           styles.tabBar,
           { backgroundColor: theme.header, borderTopColor: theme.border },
@@ -1285,7 +1290,7 @@ export function WorkspaceScreen({
             </Pressable>
           );
         })}
-      </View>
+      </View>}
 
       {hasProject && (
         <Modal

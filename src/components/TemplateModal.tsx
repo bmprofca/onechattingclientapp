@@ -353,7 +353,12 @@ export function TemplateModal({
       visible={visible}
       onClose={onClose}
       maxHeight="88%"
-      contentStyle={{ backgroundColor: theme.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24 }}
+      contentStyle={{
+        flex: 1,
+        backgroundColor: theme.surface,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+      }}
     >
       <KeyboardAvoidView
         style={{ flex: 1 }}

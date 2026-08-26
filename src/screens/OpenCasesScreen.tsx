@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
   Modal,
   Pressable,
@@ -29,7 +30,7 @@ import { LoadState } from '../components/LoadState';
 import { useTheme } from '../theme/theme';
 import { socketManager } from '../services/socketManager';
 import { ScalePressable, FadeInView } from '../components/animations';
-import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
+import { useKeyboardContext } from '../contexts/KeyboardContext';
 import defaultCaseNames from '../data/caseNames.json';
 
 const parseServerDate = (value: any): Date | null => {
@@ -64,6 +65,7 @@ export function OpenCasesScreen({
   onCreateCase,
 }: Props) {
   const theme = useTheme();
+  const { isKeyboardVisible, keyboardHeightAnim } = useKeyboardContext();
 
   // --- Main List State ---
   const [casesByNumber, setCasesByNumber] = useState<any[]>([]);
@@ -227,7 +229,12 @@ export function OpenCasesScreen({
   };
 
   return (
-    <KeyboardAvoidView style={[styles.container, { backgroundColor: theme.canvas }]}>
+    <Animated.View
+      style={[
+        styles.container,
+        { backgroundColor: theme.canvas, paddingBottom: keyboardHeightAnim },
+      ]}
+    >
       {/* Search and Category Filter */}
       <View style={styles.searchSection}>
         <View
@@ -585,7 +592,7 @@ export function OpenCasesScreen({
         </ScalePressable>
       )}
 
-      {!selectionMode && (
+      {!selectionMode && !isKeyboardVisible && (
         <ScalePressable
           accessibilityRole="button"
           onPress={() => onCreateCase?.()}
@@ -594,7 +601,7 @@ export function OpenCasesScreen({
           <Plus size={24} color="#FFF" strokeWidth={2.5} />
         </ScalePressable>
       )}
-    </KeyboardAvoidView>
+    </Animated.View>
   );
 }
 

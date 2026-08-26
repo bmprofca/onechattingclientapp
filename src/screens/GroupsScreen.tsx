@@ -4,6 +4,7 @@ import {
   FlatList,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -16,6 +17,7 @@ import { getContactGroups } from '../api/workspace';
 import { FadeInView, ScalePressable } from '../components/animations';
 import { LoadState } from '../components/LoadState';
 import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
+import { useKeyboardContext } from '../contexts/KeyboardContext';
 import { useTheme } from '../theme/theme';
 
 type GroupsProps = {
@@ -29,6 +31,7 @@ const PAGE_SIZE = 25;
 
 export function GroupsScreen({ projectId, session, onBack, onOpen }: GroupsProps) {
   const theme = useTheme();
+  const { isKeyboardVisible } = useKeyboardContext();
 
   const [groups, setGroups] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -217,7 +220,12 @@ export function GroupsScreen({ projectId, session, onBack, onOpen }: GroupsProps
             </View>
           </View>
 
-          <View style={styles.createScreen}>
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={styles.createScreen}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+          >
             <Text style={[styles.createLabel, { color: theme.ink }]}>
               Group name *
             </Text>
@@ -270,7 +278,7 @@ export function GroupsScreen({ projectId, session, onBack, onOpen }: GroupsProps
                 <Text style={styles.createButtonText}>Create group</Text>
               )}
             </ScalePressable>
-          </View>
+          </ScrollView>
         </FadeInView>
       </KeyboardAvoidView>
     );
@@ -304,7 +312,9 @@ export function GroupsScreen({ projectId, session, onBack, onOpen }: GroupsProps
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.canvas }]}>
+    <KeyboardAvoidView
+      style={[styles.container, { backgroundColor: theme.canvas }]}
+    >
       {/* Top Header */}
       <View
         style={[
@@ -394,15 +404,17 @@ export function GroupsScreen({ projectId, session, onBack, onOpen }: GroupsProps
       />
 
       {/* Floating Action Button to Create Group */}
-      <ScalePressable
-        onPress={() => setShowCreate(true)}
-        accessibilityRole="button"
-        accessibilityLabel="Create group"
-        style={[styles.fab, { backgroundColor: theme.emerald }]}
-      >
-        <Plus size={24} color="#FFF" strokeWidth={2.5} />
-      </ScalePressable>
-    </View>
+      {!isKeyboardVisible && (
+        <ScalePressable
+          onPress={() => setShowCreate(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Create group"
+          style={[styles.fab, { backgroundColor: theme.emerald }]}
+        >
+          <Plus size={24} color="#FFF" strokeWidth={2.5} />
+        </ScalePressable>
+      )}
+    </KeyboardAvoidView>
   );
 }
 

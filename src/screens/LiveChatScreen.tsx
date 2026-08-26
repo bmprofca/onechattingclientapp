@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
-  KeyboardAvoidingView,
   Modal,
   PermissionsAndroid,
   Platform,
@@ -22,7 +22,7 @@ import { LoadState } from '../components/LoadState';
 import { useTheme } from '../theme/theme';
 import { socketManager } from '../services/socketManager';
 import { ScalePressable, FadeInView, PulseView } from '../components/animations';
-import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
+import { useKeyboardContext } from '../contexts/KeyboardContext';
 
 export type ChatFilterType = 'all' | 'unread' | 'favourites' | 'assigned';
 
@@ -45,6 +45,7 @@ export function LiveChatScreen({
   onNewChat?: () => void;
 }) {
   const theme = useTheme();
+  const { isKeyboardVisible, keyboardHeightAnim } = useKeyboardContext();
   const [activeFilter, setActiveFilter] = useState<ChatFilterType>('all');
   const [items, setItems] = useState<ListItem[]>([]);
   const [totalUnreadCount, setTotalUnreadCount] = useState<number>(0);
@@ -233,7 +234,14 @@ export function LiveChatScreen({
   }, [load, loadUnreadCount]);
 
   return (
-    <KeyboardAvoidView style={{ flex: 1, backgroundColor: theme.canvas }}>
+    <Animated.View
+      style={[
+        { flex: 1, backgroundColor: theme.canvas },
+        {
+          paddingBottom: keyboardHeightAnim,
+        },
+      ]}
+    >
       <FadeInView direction="down" distance={10} duration={300} style={styles.heading}>
         {/* Search */}
         <View style={[styles.searchContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
@@ -333,17 +341,19 @@ export function LiveChatScreen({
       />
 
       {/* FAB */}
-      <ScalePressable
-        accessibilityRole="button"
-        onPress={() => onNewChat?.()}
-        style={[
-          styles.fab,
-          { backgroundColor: theme.emerald },
-        ]}
-      >
-        <MessageSquarePlus size={24} color="#FFF" />
-      </ScalePressable>
-    </KeyboardAvoidView>
+      {!isKeyboardVisible && (
+        <ScalePressable
+          accessibilityRole="button"
+          onPress={() => onNewChat?.()}
+          style={[
+            styles.fab,
+            { backgroundColor: theme.emerald },
+          ]}
+        >
+          <MessageSquarePlus size={24} color="#FFF" />
+        </ScalePressable>
+      )}
+    </Animated.View>
   );
 }
 

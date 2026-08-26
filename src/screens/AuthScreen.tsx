@@ -294,35 +294,37 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: Ses
         onClose={() => setCountryPickerOpen(false)}
         maxHeight="82%"
       >
-        <View style={[styles.countryModal, { backgroundColor: theme.surface }]}>
-          <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
-            <View>
-              <Text style={[styles.modalTitle, { color: theme.ink }]}>Select country or region</Text>
-              <Text style={[styles.modalSubtitle, { color: theme.muted }]}>Choose the phone country code</Text>
+        <KeyboardAvoidView style={{ flex: 0 }}>
+          <View style={[styles.countryModal, { backgroundColor: theme.surface }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+              <View>
+                <Text style={[styles.modalTitle, { color: theme.ink }]}>Select country or region</Text>
+                <Text style={[styles.modalSubtitle, { color: theme.muted }]}>Choose the phone country code</Text>
+              </View>
+              <ScalePressable accessibilityRole="button" accessibilityLabel="Close country selector" onPress={() => setCountryPickerOpen(false)} style={styles.closeButton}>
+                <X size={22} color={theme.ink} />
+              </ScalePressable>
             </View>
-            <ScalePressable accessibilityRole="button" accessibilityLabel="Close country selector" onPress={() => setCountryPickerOpen(false)} style={styles.closeButton}>
-              <X size={22} color={theme.ink} />
-            </ScalePressable>
+            <View style={[styles.searchRow, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
+              <Globe size={17} color={theme.muted} />
+              <TextInput autoFocus value={countrySearch} onChangeText={setCountrySearch} placeholder="Search country or code" placeholderTextColor={theme.muted} style={[styles.searchInput, { color: theme.ink }]} />
+            </View>
+            <FlatList
+              data={filteredCountryCodes}
+              keyExtractor={country => country.code}
+              keyboardShouldPersistTaps="handled"
+              renderItem={({ item, index }) => (
+                <FadeInView delay={Math.min(index * 25, 200)} distance={8}>
+                  <ScalePressable onPress={() => chooseCountry(item.dialCode)} style={[styles.countryOption, { borderBottomColor: theme.border }]}>
+                    <Text style={[styles.countryName, { color: theme.ink }]}>{item.name}</Text>
+                    <Text style={[styles.countryDialCode, { color: item.dialCode === countryCode ? theme.emerald : theme.muted }]}>{item.dialCode}</Text>
+                  </ScalePressable>
+                </FadeInView>
+              )}
+              ListEmptyComponent={<Text style={[styles.emptyCountries, { color: theme.muted }]}>No country or region found.</Text>}
+            />
           </View>
-          <View style={[styles.searchRow, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
-            <Globe size={17} color={theme.muted} />
-            <TextInput autoFocus value={countrySearch} onChangeText={setCountrySearch} placeholder="Search country or code" placeholderTextColor={theme.muted} style={[styles.searchInput, { color: theme.ink }]} />
-          </View>
-          <FlatList
-            data={filteredCountryCodes}
-            keyExtractor={country => country.code}
-            keyboardShouldPersistTaps="handled"
-            renderItem={({ item, index }) => (
-              <FadeInView delay={Math.min(index * 25, 200)} distance={8}>
-                <ScalePressable onPress={() => chooseCountry(item.dialCode)} style={[styles.countryOption, { borderBottomColor: theme.border }]}>
-                  <Text style={[styles.countryName, { color: theme.ink }]}>{item.name}</Text>
-                  <Text style={[styles.countryDialCode, { color: item.dialCode === countryCode ? theme.emerald : theme.muted }]}>{item.dialCode}</Text>
-                </ScalePressable>
-              </FadeInView>
-            )}
-            ListEmptyComponent={<Text style={[styles.emptyCountries, { color: theme.muted }]}>No country or region found.</Text>}
-          />
-        </View>
+        </KeyboardAvoidView>
       </SlideUpModal>
     </View>
   );

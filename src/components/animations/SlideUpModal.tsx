@@ -111,7 +111,6 @@ export function SlideUpModal({
           style={[
             styles.sheet,
             {
-              flex: 1,
               maxHeight,
               transform: [{ translateY }],
             },

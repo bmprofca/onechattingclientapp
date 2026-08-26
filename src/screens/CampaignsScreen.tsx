@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import {
+  Animated,
   FlatList,
   Pressable,
   RefreshControl,
@@ -15,6 +16,7 @@ import { LoadState } from '../components/LoadState';
 import { useTheme } from '../theme/theme';
 
 import { ScalePressable, FadeInView } from '../components/animations';
+import { useKeyboardContext } from '../contexts/KeyboardContext';
 
 export function CampaignsScreen({
   projectId,
@@ -28,6 +30,7 @@ export function CampaignsScreen({
   onCreateCampaign?: () => void;
 }) {
   const theme = useTheme();
+  const { isKeyboardVisible, keyboardHeightAnim } = useKeyboardContext();
   const [items, setItems] = useState<ListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -70,7 +73,12 @@ export function CampaignsScreen({
   }, [load]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.canvas }}>
+    <Animated.View
+      style={[
+        { flex: 1, backgroundColor: theme.canvas },
+        { paddingBottom: keyboardHeightAnim },
+      ]}
+    >
       <FadeInView direction="down" distance={10} duration={300} style={styles.heading}>
         {/* Search Bar */}
         <View style={[styles.searchContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
@@ -153,7 +161,7 @@ export function CampaignsScreen({
       />
 
       {/* FAB */}
-      {onCreateCampaign && (
+      {onCreateCampaign && !isKeyboardVisible && (
         <ScalePressable
           accessibilityRole="button"
           onPress={onCreateCampaign}
@@ -162,7 +170,7 @@ export function CampaignsScreen({
           <Plus size={24} color="#FFF" />
         </ScalePressable>
       )}
-    </View>
+    </Animated.View>
   );
 }
 function CampaignCard({
