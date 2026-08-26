@@ -9,8 +9,6 @@ import {
 } from 'react-native';
 import {
   ArrowLeft,
-  ChevronLeft,
-  ChevronRight,
   FileText,
   RefreshCw,
   X,
@@ -68,10 +66,11 @@ export function TransactionsScreen({
   const theme = useTheme();
   const [items, setItems] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [page, setPage] = useState(1);
-  const [pages, setPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [credit, setCredit] = useState(0);
   const [debit, setDebit] = useState(0);
@@ -81,7 +80,11 @@ export function TransactionsScreen({
 
   const load = useCallback(
     async (requestedPage = page, isRefresh = false) => {
-      isRefresh ? setRefreshing(true) : setLoading(true);
+      if (requestedPage === 1 || isRefresh) {
+        isRefresh ? setRefreshing(true) : setLoading(true);
+      } else {
+        setLoadingMore(true);
+      }
       setError('');
       try {
         const response = await getTransactionHistory(session, {
@@ -97,26 +100,60 @@ export function TransactionsScreen({
             ? {}
             : { type: filter === 'credit' ? '1' : '0' }),
         });
-        const data = response.data || response;
-        setItems(Array.isArray(data.data) ? data.data : []);
-        setCredit(Number(data.total_credit || 0));
-        setDebit(Number(data.total_debit || 0));
-        setPage(data.meta?.page_no || requestedPage);
-        setPages(data.meta?.total_pages || 1);
-        setTotal(data.meta?.total_records || data.data?.length || 0);
+        const nestedData = response.data;
+        const parsedItems = Array.isArray(nestedData)
+          ? nestedData
+          : Array.isArray(nestedData?.data)
+            ? nestedData.data
+            : [];
+        const metadata = response.meta || nestedData?.meta;
+        if (requestedPage === 1 || isRefresh) {
+          setItems(parsedItems);
+        } else {
+          setItems(previous => {
+            const existingIds = new Set(
+              previous.map(item => item.transaction_id).filter(Boolean),
+            );
+            return [
+              ...previous,
+              ...parsedItems.filter(
+                (item: Transaction) =>
+                  !item.transaction_id || !existingIds.has(item.transaction_id),
+              ),
+            ];
+          });
+        }
+        setCredit(Number(response.total_credit ?? nestedData?.total_credit ?? 0));
+        setDebit(Number(response.total_debit ?? nestedData?.total_debit ?? 0));
+        setPage(metadata?.page_no || requestedPage);
+        setTotal(metadata?.total_records || parsedItems.length);
+        setHasMore(
+          metadata?.total_records !== undefined
+            ? requestedPage * 20 < Number(metadata.total_records)
+            : parsedItems.length === 20,
+        );
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load transactions.');
       } finally {
         setLoading(false);
         setRefreshing(false);
+        setLoadingMore(false);
       }
     },
     [filter, page, session, transactionType],
   );
 
   useEffect(() => {
+    setPage(1);
+    setHasMore(true);
     load(1);
   }, [filter, transactionType]);
+
+  const handleLoadMore = () => {
+    if (!loading && !loadingMore && hasMore && items.length >= 20) {
+      load(page + 1);
+    }
+  };
 
   const chip = (label: string, active: boolean, onPress: () => void) => (
     <ScalePressable
@@ -167,6 +204,16 @@ export function TransactionsScreen({
 
       <ScrollView
         contentContainerStyle={styles.page}
+        onScroll={({ nativeEvent }) => {
+          const { contentOffset, contentSize, layoutMeasurement } = nativeEvent;
+          if (
+            contentOffset.y + layoutMeasurement.height >=
+            contentSize.height - 200
+          ) {
+            handleLoadMore();
+          }
+        }}
+        scrollEventThrottle={200}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -350,33 +397,10 @@ export function TransactionsScreen({
           </View>
         )}
 
-        {!loading && !error && pages > 1 && (
-          <View style={styles.pagination}>
-            <ScalePressable
-              disabled={page <= 1}
-              onPress={() => load(page - 1)}
-              style={[
-                styles.pageButton,
-                { borderColor: theme.border },
-                page <= 1 && styles.disabled,
-              ]}
-            >
-              <ChevronLeft color={theme.ink} size={20} />
-            </ScalePressable>
-            <Text style={{ color: theme.muted, fontSize: 13 }}>
-              Page {page} of {pages}
-            </Text>
-            <ScalePressable
-              disabled={page >= pages}
-              onPress={() => load(page + 1)}
-              style={[
-                styles.pageButton,
-                { borderColor: theme.border },
-                page >= pages && styles.disabled,
-              ]}
-            >
-              <ChevronRight color={theme.ink} size={20} />
-            </ScalePressable>
+        {loadingMore && (
+          <View style={styles.footerLoader}>
+            <ActivityIndicator size="small" color={theme.emerald} />
+            <Text style={[styles.copy, { color: theme.muted }]}>Loading more...</Text>
           </View>
         )}
       </ScrollView>
@@ -630,15 +654,14 @@ const styles = StyleSheet.create({
     marginTop: 15,
   },
   retryText: { color: '#FFF', fontWeight: '800' },
-  pagination: {
+  footerLoader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 16,
     marginTop: 20,
+    marginBottom: 10,
   },
-  pageButton: { borderWidth: 1, borderRadius: 10, padding: 8 },
-  disabled: { opacity: 0.4 },
   modal: {
     maxHeight: '100%',
     borderTopLeftRadius: 22,

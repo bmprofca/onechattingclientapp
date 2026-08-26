@@ -214,13 +214,14 @@ export default function App() {
             />
           )}
 
-          <View
-            pointerEvents="box-none"
-            style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
-          >
-            <Toast />
-          </View>
         </SafeAreaView>
+
+        <View
+          pointerEvents="box-none"
+          style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+        >
+          <Toast />
+        </View>
       </SafeAreaProvider>
     </KeyboardProvider>
   );

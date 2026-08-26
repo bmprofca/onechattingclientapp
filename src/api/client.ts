@@ -1,7 +1,7 @@
 import { encryptPayload } from '../crypto/encryptPayload';
 // import Toast from 'react-native-toast-message';
 
-export const API_BASE_URL = ('http://10.162.227.76:6540').replace(/\/$/, '');
+export const API_BASE_URL = ('https://server.onechatting.com').replace(/\/$/, '');
 export type ApiSession = { token: string; username: string };
 
 export class ApiError extends Error { constructor(message: string, public status?: number) { super(message); } }
@@ -69,6 +69,9 @@ export async function get<T>(path: string, _?: unknown, session?: ApiSession): P
   const timer = setTimeout(() => controller.abort(), 20000);
   const url = `${API_BASE_URL}${path}`;
   try {
+    // if (typeof __DEV__ !== 'undefined' && __DEV__) {
+    //   Toast.show({ type: 'info', text1: 'API request', text2: url, visibilityTime: 4000 });
+    // }
     const response = await fetch(url, {
       method: 'GET', signal: controller.signal,
       headers: { 'Content-Type': 'application/json', ...(session ? { token: session.token, username: session.username } : {}) },
