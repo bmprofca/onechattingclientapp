@@ -86,6 +86,23 @@ You've successfully run and modified your React Native App. :partying_face:
 
 If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
 
+## Windows Android setup after a PC reset
+
+This project requires Java 17 and these Android SDK packages:
+
+- Android SDK Platform 36
+- Android SDK Build-Tools 36.0.0
+- Android SDK Command-line Tools (latest)
+- NDK 27.1.12297006
+- CMake 3.22.1
+
+Install or repair them in Android Studio under **SDK Manager**, then make sure `ANDROID_HOME` points to the SDK directory and `JAVA_HOME` points to a JDK 17 installation. The default build targets arm64 devices to keep native paths short and builds reliable on Windows. To build for an emulator or multiple ABIs, override it explicitly:
+
+```powershell
+cd android
+.\gradlew.bat assembleDebug -PreactNativeArchitectures=x86_64
+```
+
 # Learn More
 
 To learn more about React Native, take a look at the following resources:
