@@ -24,7 +24,7 @@ export function LoadState({
       <View style={styles.empty}>
         <ActivityIndicator color={theme.emerald} size="large" />
         <Text style={[styles.emptyText, { color: theme.muted, marginTop: 12 }]}>
-          Loading from 1chatting…
+          Loading from OneChatting…
         </Text>
       </View>
     );

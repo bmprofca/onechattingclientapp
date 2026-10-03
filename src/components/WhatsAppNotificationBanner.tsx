@@ -1,13 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Image,
   Pressable,
   StyleSheet,
   Text,
   Vibration,
   View,
 } from 'react-native';
-import { MessageCircle, X, CornerDownLeft } from 'lucide-react-native';
+import { X, CornerDownLeft } from 'lucide-react-native';
 import { useTheme } from '../theme/theme';
 import { socketManager } from '../services/socketManager';
 
@@ -171,11 +172,9 @@ export function WhatsAppNotificationBanner({
         {/* Top bar info */}
         <View style={styles.topRow}>
           <View style={styles.appHeader}>
-            <View style={[styles.waIconBox, { backgroundColor: '#25D366' }]}>
-              <MessageCircle size={11} color="#FFF" strokeWidth={2.5} />
-            </View>
+            <Image source={require('../assets/logo.png')} style={styles.brandLogo} />
             <Text style={[styles.appName, { color: theme.isDark ? '#8696A0' : '#64748B' }]}>
-              1Chatting • WhatsApp
+              OneChatting • WhatsApp
             </Text>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -253,12 +252,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
-  waIconBox: {
+  brandLogo: {
     width: 16,
     height: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: 4,
   },
   appName: {
     fontSize: 11,

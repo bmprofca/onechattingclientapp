@@ -9,6 +9,7 @@ import { useTheme } from '../theme/theme';
 import { countryCodes } from '../utils/countryCodes';
 
 import { ScalePressable, FadeInView, SlideUpModal } from '../components/animations';
+import { BrandMark } from '../components/BrandMark';
 
 type AuthMode = 'login' | 'signup';
 
@@ -90,7 +91,7 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: Ses
           });
           const session: Session = { ...result, projects: result.projects || [] };
           await saveSession(session);
-          Toast.show({ type: 'success', text1: 'Account created', text2: 'Welcome to 1chatting!' });
+          Toast.show({ type: 'success', text1: 'Account created', text2: 'Welcome to OneChatting!' });
           onAuthenticated(session);
         }
       } catch (error) {
@@ -103,7 +104,7 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: Ses
 
   const content = mode === 'login'
     ? { eyebrow: 'WELCOME BACK', title: 'Your workspace,\nready when you are.', copy: 'Sign in to keep customer conversations moving.', action: step === 1 ? 'Send OTP' : 'Sign in' }
-    : { eyebrow: 'CREATE ACCOUNT', title: 'Start something\nmeaningful.', copy: 'Create your secure 1chatting workspace.', action: step === 1 ? 'Send OTP' : 'Create account' };
+    : { eyebrow: 'CREATE ACCOUNT', title: 'Start something\nmeaningful.', copy: 'Create your secure OneChatting workspace.', action: step === 1 ? 'Send OTP' : 'Create account' };
 
   const fieldStyle = {
     backgroundColor: theme.canvas,
@@ -131,10 +132,7 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: Ses
 
           <FadeInView direction="down" distance={15} duration={400}>
             <View style={styles.brandRow}>
-              <View style={[styles.logo, { backgroundColor: theme.mint }]}>
-                <Text style={[styles.logoText, { color: theme.isDark ? '#ffffffff' : theme.mintText }]}>1</Text>
-              </View>
-              <Text style={[styles.logoText, { color: theme.isDark ? '#ffffffff' : theme.mintText }]}>Chatting</Text>
+              <BrandMark size={40} />
             </View>
           </FadeInView>
 

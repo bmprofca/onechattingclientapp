@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Image, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../theme/theme';
 
 export function SplashScreen() {
@@ -65,14 +65,10 @@ export function SplashScreen() {
           },
         ]}
       >
-        {/* App icon */}
-        <View style={[styles.iconCircle, { backgroundColor: theme.emerald }]}>
-          <Text style={styles.iconText}>1</Text>
-        </View>
+        <Image source={require('../assets/logo.png')} style={styles.iconCircle} resizeMode="cover" />
 
-        {/* App name */}
         <Text style={[styles.appName, { color: theme.ink }]}>
-          1chatting
+          OneChatting
         </Text>
 
         {/* Tagline */}
@@ -99,7 +95,7 @@ export function SplashScreen() {
       <Animated.Text
         style={[styles.footerText, { color: theme.muted, opacity: fadeAnim }]}
       >
-        Powered by 1Chatting
+        Powered by OneChatting
       </Animated.Text>
     </View>
   );
@@ -175,13 +171,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 12,
     elevation: 8,
-  },
-  iconText: {
-    fontSize: 42,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    includeFontPadding: false,
-    textAlignVertical: 'center',
   },
   appName: {
     fontSize: 28,

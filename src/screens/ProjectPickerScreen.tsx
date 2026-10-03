@@ -4,6 +4,7 @@ import { Project } from '../api/auth';
 import { useTheme } from '../theme/theme';
 import { ProjectAvatar } from '../components/ProjectAvatar';
 import { FadeInView } from '../components/animations';
+import { BrandMark } from '../components/BrandMark';
 
 export function ProjectPickerScreen({
   projects,
@@ -22,18 +23,7 @@ export function ProjectPickerScreen({
         contentContainerStyle={styles.page}
         ListHeaderComponent={
           <>
-          <View style={{
-            display: "flex",
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 5,
-          }}>
-            <View style={[styles.logo, { backgroundColor: theme.mint }]}>
-              <Text style={[styles.logoText, { color: theme.mintText }]}>1</Text>
-            </View>
-            <Text style={[styles.logoText, { color: theme.mintText }]}>Chatting</Text>
-
-          </View>
+          <BrandMark size={42} />
             
             <Text style={[styles.eyebrow, { color: theme.mintText }]}>SELECT WORKSPACE</Text>
             <Text style={[styles.title, { color: theme.ink }]}>Choose a project</Text>

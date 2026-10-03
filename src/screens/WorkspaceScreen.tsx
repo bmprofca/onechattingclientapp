@@ -43,6 +43,7 @@ import {
   ScreenTransition,
 } from '../components/animations';
 import { Project } from '../api/auth';
+import { BrandMark } from '../components/BrandMark';
 import { ProjectAvatar } from '../components/ProjectAvatar';
 import { ProjectQRModal } from '../components/Modals/ProjectQRModal';
 import { WhatsAppNotificationBanner } from '../components/WhatsAppNotificationBanner';
@@ -986,33 +987,7 @@ export function WorkspaceScreen({
           ]}
         >
           <View style={styles.headerTitleGroup}>
-            <View
-              style={{
-                display: 'flex',
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 5,
-              }}
-            >
-              <View style={[styles.logo, { backgroundColor: theme.mint }]}>
-                <Text
-                  style={[
-                    styles.logoText,
-                    { color: theme.isDark ? '#ffffffff' : theme.mintText },
-                  ]}
-                >
-                  1
-                </Text>
-              </View>
-              <Text
-                style={[
-                  styles.logoText,
-                  { color: theme.isDark ? '#ffffffff' : theme.mintText },
-                ]}
-              >
-                Chatting
-              </Text>
-            </View>
+            <BrandMark size={36} />
             {!hasProject && (
               <Text style={[styles.greeting, { color: theme.muted }]}>
                 Set up your first workspace
@@ -1118,7 +1093,7 @@ export function WorkspaceScreen({
                   <Briefcase size={30} color={theme.emerald} strokeWidth={2} />
                 </View>
                 <Text style={[styles.emptyTitle, { color: theme.ink }]}>
-                  Welcome to 1Chatting
+                  Welcome to OneChatting
                 </Text>
                 <Text style={[styles.emptyCopy, { color: theme.muted }]}>
                   You don't have a workspace yet. Create one to start chatting

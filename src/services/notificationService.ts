@@ -87,7 +87,7 @@ class NotificationService {
     try {
       await notifee.displayNotification({
         id: 'onechat_foreground_service',
-        title: 'OneChat is active',
+        title: 'OneChatting is active',
         body: 'Listening for incoming messages in background',
         android: {
           channelId: SERVICE_CHANNEL_ID,
@@ -229,7 +229,7 @@ class NotificationService {
   }
 
   /**
-   * Cancel all OneChatClient notifications.
+   * Cancel all OneChatting notifications.
    */
   async cancelAll() {
     try {
