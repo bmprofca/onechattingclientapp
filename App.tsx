@@ -18,6 +18,7 @@ import {
 import { useTheme } from './src/theme/theme';
 import { socketManager } from './src/services/socketManager';
 import { notificationService } from './src/services/notificationService';
+import { listenForForegroundPush, registerDevicePush, unregisterDevicePush } from './src/services/pushService';
 import { ScreenTransition } from './src/components/animations';
 
 import { KeyboardProvider } from './src/contexts/KeyboardContext';
@@ -46,13 +47,17 @@ export default function App() {
     };
     init().catch(console.warn);
 
+    const unsubscribePush = listenForForegroundPush();
     const subscription = AppState.addEventListener('change', nextAppState => {
       if (nextAppState === 'active') {
         socketManager.ensureConnected();
+      } else if (nextAppState === 'background') {
+        socketManager.goOffline();
       }
     });
 
     return () => {
+      unsubscribePush();
       subscription.remove();
     };
   }, []);
@@ -91,12 +96,11 @@ export default function App() {
         setSession(refreshed);
         socketManager.connect(refreshed.token, refreshed.username);
         socketManager.setProjectId(refreshed.selectedProjectId);
-        notificationService.startForegroundService();
+        registerDevicePush({ token: refreshed.token, username: refreshed.username }).catch(console.warn);
       } catch {
         await clearSession();
         setSession(null);
         socketManager.disconnect();
-        notificationService.stopForegroundService();
       }
     };
 
@@ -186,7 +190,10 @@ export default function App() {
                     sessionToSave.username,
                   );
                   socketManager.setProjectId(sessionToSave.selectedProjectId);
-                  notificationService.startForegroundService();
+                  registerDevicePush({
+                    token: sessionToSave.token,
+                    username: sessionToSave.username,
+                  }).catch(console.warn);
                 }}
               />
             </ScreenTransition>
@@ -206,10 +213,15 @@ export default function App() {
               onProjectCreated={handleProjectCreated}
               notificationNavRef={notificationNavRef}
               onSignOut={async () => {
+                if (session?.token && session?.username) {
+                  await unregisterDevicePush({
+                    token: session.token,
+                    username: session.username,
+                  });
+                }
                 await clearSession();
                 setSession(null);
                 socketManager.disconnect();
-                notificationService.stopForegroundService();
               }}
             />
           )}

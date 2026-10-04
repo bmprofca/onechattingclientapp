@@ -9,9 +9,6 @@ import { AppState, Platform, PermissionsAndroid } from 'react-native';
 const MESSAGE_CHANNEL_ID = 'onechat_messages';
 const MESSAGE_CHANNEL_NAME = 'Chat Messages';
 
-const SERVICE_CHANNEL_ID = 'onechat_service_channel';
-const SERVICE_CHANNEL_NAME = 'Background Connection';
-
 /**
  * Callback type for when user taps a notification.
  * The handler receives the contact number and name so the app can
@@ -26,7 +23,6 @@ class NotificationService {
   private channelsCreated = false;
   private activeChatNumber: string | null = null;
   private tapHandler: NotificationTapHandler | null = null;
-  private isForegroundServiceRunning = false;
 
   /**
    * Call once on app start. Creates the Android notification channels
@@ -70,62 +66,6 @@ class NotificationService {
       }
     } catch (e) {
       console.warn('Battery optimization prompt failed:', e);
-    }
-  }
-
-  /**
-   * Start the Android Foreground Service to keep Socket.IO and the JS thread
-   * running when the app is in the background or the screen is locked.
-   */
-  async startForegroundService() {
-    if (Platform.OS !== 'android' || this.isForegroundServiceRunning) return;
-
-    if (!this.channelsCreated) {
-      await this.createChannels();
-    }
-
-    try {
-      await notifee.displayNotification({
-        id: 'onechat_foreground_service',
-        title: 'OneChatting is active',
-        body: 'Listening for incoming messages in background',
-        android: {
-          channelId: SERVICE_CHANNEL_ID,
-          asForegroundService: true,
-          // Use built-in system icon as fallback — avoids "bad notification" crashes
-          // when ic_notification drawable isn't found at runtime
-          smallIcon: 'ic_notification',
-          color: '#25D366',
-          ongoing: true,
-          importance: AndroidImportance.LOW,
-          visibility: AndroidVisibility.SECRET,
-          pressAction: {
-            id: 'default',
-            launchActivity: 'default',
-          },
-        },
-      });
-      this.isForegroundServiceRunning = true;
-      console.log('✅ Foreground service started for background messages');
-    } catch (err) {
-      // Foreground service failed — log but do NOT crash the app
-      // The app still works; just no background socket keepalive
-      console.warn('Failed to start foreground service (non-fatal):', err);
-    }
-  }
-
-  /**
-   * Stop the Android Foreground Service (e.g. on user logout).
-   */
-  async stopForegroundService() {
-    if (Platform.OS !== 'android') return;
-    try {
-      await notifee.stopForegroundService();
-      await notifee.cancelNotification('onechat_foreground_service');
-      this.isForegroundServiceRunning = false;
-      console.log('🛑 Foreground service stopped');
-    } catch (err) {
-      console.warn('Failed to stop foreground service:', err);
     }
   }
 
@@ -256,17 +196,6 @@ class NotificationService {
         lights: true,
         lightColor: '#25D366',
         sound: 'default',
-      });
-
-      // 2. Silent low-priority channel for persistent foreground service
-      await notifee.createChannel({
-        id: SERVICE_CHANNEL_ID,
-        name: SERVICE_CHANNEL_NAME,
-        description: 'Maintains live chat connection while app is in background',
-        importance: AndroidImportance.MIN,
-        visibility: AndroidVisibility.SECRET,
-        sound: undefined,
-        vibration: false,
       });
 
       this.channelsCreated = true;

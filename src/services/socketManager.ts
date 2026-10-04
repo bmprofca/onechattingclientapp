@@ -15,9 +15,11 @@ class SocketManager {
   private connectionChangeCallbacks: ((status: ConnectionStatus) => void)[] = [];
 
   private currentProjectId: string | null = null;
+  private credentials: { token: string; username: string } | null = null;
 
   connect(token: string, username: string) {
     try {
+      this.credentials = { token, username };
       if (this.socket) {
         console.log('🔄 Socket already exists, reusing connection');
         return;
@@ -150,7 +152,13 @@ class SocketManager {
   }
 
   disconnect() {
+    this.credentials = null;
+    this.goOffline();
+  }
+
+  goOffline() {
     if (this.socket) {
+      this.socket.removeAllListeners();
       this.socket.disconnect();
       this.socket = null;
       this.isConnected = false;
@@ -165,7 +173,12 @@ class SocketManager {
   }
 
   ensureConnected() {
-    if (this.socket && !this.isConnected) {
+    if (!this.credentials) return;
+    if (!this.socket) {
+      this.connect(this.credentials.token, this.credentials.username);
+      return;
+    }
+    if (!this.isConnected) {
       console.log('🔄 Reconnecting socket...');
       this.socket.connect();
     }
