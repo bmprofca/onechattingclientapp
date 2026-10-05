@@ -161,7 +161,6 @@ class NotificationService {
       await this.createChannels();
     }
 
-    // Build display text for media messages
     let displayText = messageText;
     if (!displayText && mediaType) {
       if (mediaType.includes('image')) displayText = '📷 Photo';
@@ -172,6 +171,11 @@ class NotificationService {
         displayText = '🎵 Voice message';
       else displayText = '📎 Attachment';
     }
+
+    const dedupeKey = `${contactNumber}:${displayText || 'New message'}`;
+    const now = Date.now();
+    if (now - (this.recentKeys.get(dedupeKey) || 0) < 4000) return;
+    this.recentKeys.set(dedupeKey, now);
 
     try {
       await notifee.displayNotification({

@@ -14,7 +14,7 @@ import { CreateCaseScreen } from './CreateCaseScreen';
 import { CaseDetailsScreen } from './CaseDetailsScreen';
 import { EditCaseScreen } from './EditCaseScreen';
 import { DashboardScreen } from './DashboardScreen';
-import { LiveChatScreen } from './LiveChatScreen';
+import { ChatFilterType, LiveChatScreen } from './LiveChatScreen';
 import { OpenCasesScreen } from './OpenCasesScreen';
 import { ChatRoomScreen } from './ChatRoomScreen';
 import { ProfileScreen } from './ProfileScreen';
@@ -35,7 +35,7 @@ import { GroupsScreen } from './GroupsScreen';
 import { GroupDetailsScreen } from './GroupDetailsScreen';
 import { TemplatesScreen } from './TemplatesScreen';
 import { TemplateEditorScreen } from './TemplateEditorScreen';
-import { socketManager, ConnectionStatus } from '../services/socketManager';
+import { socketManager } from '../services/socketManager';
 import { notificationService } from '../services/notificationService';
 import {
   ScalePressable,
@@ -108,6 +108,7 @@ export function WorkspaceScreen({
   );
 
   const [page, setPage] = useState<Page>(hasProject ? 'inbox' : 'dashboard');
+  const [inboxFilter, setInboxFilter] = useState<ChatFilterType | undefined>();
   const [walletBalance, setWalletBalance] = useState<number | string>(
     session.balance ?? 0,
   );
@@ -151,8 +152,6 @@ export function WorkspaceScreen({
   const [templateEditorTarget, setTemplateEditorTarget] = useState<any>(null);
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [projectQrModalOpen, setProjectQrModalOpen] = useState(false);
-  const [connectionStatus, setConnectionStatus] =
-    useState<ConnectionStatus>('disconnected');
   const [projectProfileImage, setProjectProfileImage] = useState<string>('');
   const [totalUnreadCount, setTotalUnreadCount] = useState<number>(0);
 
@@ -326,11 +325,6 @@ export function WorkspaceScreen({
   useEffect(() => {
     setPage(hasProject ? 'inbox' : 'dashboard');
   }, [hasProject]);
-
-  useEffect(() => {
-    const unsub = socketManager.onConnectionChange(setConnectionStatus);
-    return () => unsub();
-  }, []);
 
   const menuOpacity = useRef(new Animated.Value(0)).current;
 
@@ -993,22 +987,6 @@ export function WorkspaceScreen({
 
   return (
     <View style={[styles.safe, { backgroundColor: theme.canvas }]}>
-      {!isKeyboardScreenVisible && connectionStatus !== 'connected' && (
-        <View
-          style={{
-            backgroundColor:
-              connectionStatus === 'connecting' ? '#F59E0B' : '#EF4444',
-            padding: 4,
-            alignItems: 'center',
-          }}
-        >
-          <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '700' }}>
-            {connectionStatus === 'connecting'
-              ? 'Connecting...'
-              : 'Waiting for network...'}
-          </Text>
-        </View>
-      )}
       {showOuterHeader && !isKeyboardScreenVisible && (
         <View
           style={[
@@ -1187,7 +1165,17 @@ export function WorkspaceScreen({
                 0
               }
               onBalanceUpdated={bal => setWalletBalance(bal)}
-              onOpenInbox={() => setPage('inbox')}
+              onOpenInbox={() => {
+                setInboxFilter(undefined);
+                setPage('inbox');
+              }}
+              onOpenUnread={() => {
+                setInboxFilter('unread');
+                setPage('inbox');
+              }}
+              onOpenContacts={() => setContactsTarget(true)}
+              onOpenCampaigns={() => setPage('campaigns')}
+              onOpenTemplates={() => setTemplatesTarget(true)}
               onOpenProjectsHub={() => setProjectsTarget(true)}
               onOpenWallet={() => setWalletTarget(true)}
               onOpenScannedUsers={() => setScannedUsersTarget(true)}
@@ -1196,6 +1184,7 @@ export function WorkspaceScreen({
             <LiveChatScreen
               projectId={projectId}
               session={apiSession}
+              initialFilter={inboxFilter}
               onOpenChat={(contactNumber, contactName) =>
                 setChatTarget({ number: contactNumber, name: contactName })
               }
@@ -1242,7 +1231,10 @@ export function WorkspaceScreen({
                   ? `${tab.label}, ${totalUnreadCount} unread`
                   : tab.label
               }
-              onPress={() => setPage(tab.key)}
+              onPress={() => {
+                if (tab.key === 'inbox') setInboxFilter(undefined);
+                setPage(tab.key);
+              }}
               style={styles.tabItem}
               hitSlop={4}
             >

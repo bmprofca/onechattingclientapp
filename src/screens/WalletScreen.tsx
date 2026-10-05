@@ -145,7 +145,6 @@ export function WalletScreen({
       setLoading(false);
 
       if (res.gateway === 'razorpay') {
-        // Step 2 — Open Razorpay payment sheet
         let rzpData;
         try {
           rzpData = await RazorpayCheckout.open({
@@ -178,14 +177,11 @@ export function WalletScreen({
         const statusResult = await pollUntilSettled(session, res.order_id);
         setVerifying(false);
         setPaymentResult(statusResult);
-
       } else {
-        // Cashfree / Zwitch — SDK not installed, show informational toast
         Toast.show({
-          type: 'info',
-          text1: 'Order Created',
-          text2: `Order #${res.order_id} created. Complete payment on the web interface.`,
-          visibilityTime: 5000,
+          type: 'error',
+          text1: 'Topup Failed',
+          text2: 'This payment method is not available.',
         });
       }
     } catch (error: any) {

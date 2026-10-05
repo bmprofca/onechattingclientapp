@@ -6,6 +6,17 @@ import {
   Text,
   View,
 } from 'react-native';
+import {
+  Briefcase,
+  FileText,
+  MessageCircle,
+  MessagesSquare,
+  Megaphone,
+  QrCode,
+  Send,
+  Users,
+  Inbox,
+} from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { getAccountProfile } from '../api/auth';
 import {
@@ -19,8 +30,13 @@ import { socketManager } from '../services/socketManager';
 import {
   ScalePressable,
   FadeInView,
-  PulseView,
 } from '../components/animations';
+
+function formatCount(value: any) {
+  const num = Number(String(value ?? 0).replace(/[^0-9.-]+/g, ''));
+  if (!Number.isFinite(num)) return '0';
+  return Math.round(num).toLocaleString('en-IN');
+}
 
 const numericValue = (value: any) =>
   value?.data?.count ??
@@ -39,8 +55,12 @@ export function DashboardScreen({
   onBalanceUpdated,
   onOpenProjectsHub,
   onOpenInbox,
+  onOpenUnread,
   onOpenWallet,
   onOpenScannedUsers,
+  onOpenContacts,
+  onOpenCampaigns,
+  onOpenTemplates,
 }: {
   projectId: string;
   session: ApiSession;
@@ -49,8 +69,12 @@ export function DashboardScreen({
   onBalanceUpdated?: (balance: number) => void;
   onOpenProjectsHub?: () => void;
   onOpenInbox?: () => void;
+  onOpenUnread?: () => void;
   onOpenWallet?: () => void;
   onOpenScannedUsers?: () => void;
+  onOpenContacts?: () => void;
+  onOpenCampaigns?: () => void;
+  onOpenTemplates?: () => void;
 }) {
   const theme = useTheme();
   const [dashboardData, setDashboardData] = useState<any>(null);
@@ -131,15 +155,15 @@ export function DashboardScreen({
   const effectiveProjectCount = liveProjectCount ?? projectCount ?? 0;
 
   const metricsData = [
-    { label: 'Unread chats', value: String(unread), tone: 'emerald' as const, isUnread: unread > 0, onPress: onOpenInbox },
-    { label: 'Scanned Users', value: String(dashboardData?.qr_scanned_users?.total || '0'), tone: 'emerald' as const, onPress: onOpenScannedUsers },
-    { label: 'Projects', value: String(effectiveProjectCount), tone: 'blue' as const, onPress: onOpenProjectsHub },
-    { label: 'Contacts', value: String(dashboardData?.contact?.total || '0'), tone: 'emerald' as const },
-    { label: 'Campaigns', value: String(dashboardData?.campaign?.total || '0'), tone: 'blue' as const },
-    { label: 'Chats', value: String(dashboardData?.chat?.total || '0'), tone: 'emerald' as const, onPress: onOpenInbox },
-    { label: 'Templates', value: String(dashboardData?.template?.total || '0'), tone: 'blue' as const },
-    { label: 'Sent Today', value: String(dashboardData?.message?.today_sent || '0'), tone: 'emerald' as const },
-    { label: 'Total Msgs', value: String(dashboardData?.message?.total || '0'), tone: 'blue' as const },
+    { label: 'Unread chats', value: formatCount(unread), color: '#E5484D', icon: MessageCircle, onPress: onOpenUnread },
+    { label: 'Scanned Users', value: formatCount(dashboardData?.qr_scanned_users?.total), color: '#7C3AED', icon: QrCode, onPress: onOpenScannedUsers },
+    { label: 'Projects', value: formatCount(effectiveProjectCount), color: '#2563EB', icon: Briefcase, onPress: onOpenProjectsHub },
+    { label: 'Contacts', value: formatCount(dashboardData?.contact?.total), color: '#0D9488', icon: Users, onPress: onOpenContacts },
+    { label: 'Campaigns', value: formatCount(dashboardData?.campaign?.total), color: '#D97706', icon: Megaphone, onPress: onOpenCampaigns },
+    { label: 'Chats', value: formatCount(dashboardData?.chat?.total), color: '#059669', icon: MessagesSquare, onPress: onOpenInbox },
+    { label: 'Templates', value: formatCount(dashboardData?.template?.total), color: '#4F46E5', icon: FileText, onPress: onOpenTemplates },
+    { label: 'Sent Today', value: formatCount(dashboardData?.message?.today_sent), color: '#0284C7', icon: Send },
+    { label: 'Total Msgs', value: formatCount(dashboardData?.message?.total), color: '#DB2777', icon: Inbox },
   ];
 
   return (
@@ -185,45 +209,35 @@ export function DashboardScreen({
           </FadeInView>
 
           <View style={styles.metrics}>
-            {metricsData.map((metric, index) => (
-              <FadeInView
-                key={metric.label}
-                delay={60 + index * 30}
-                distance={10}
-                style={[
-                  styles.metricCardWrap,
-                  index % 2 === 0 ? { marginRight: '3%' } : {},
-                ]}
-              >
+            {metricsData.map((metric) => {
+              const Icon = metric.icon;
+              return (
+                <View key={metric.label} style={styles.metricSlot}>
                 <ScalePressable
                   onPress={metric.onPress}
                   disabled={!metric.onPress}
+                  activeScale={0.94}
                   style={[
                     styles.metric,
                     {
-                      backgroundColor: theme.surface,
-                      borderColor: theme.border,
-                      borderWidth: 1,
+                      backgroundColor: theme.isDark ? `${metric.color}2A` : `${metric.color}14`,
+                      borderColor: theme.isDark ? `${metric.color}66` : `${metric.color}33`,
                     },
                   ]}
                 >
-                  {metric.isUnread ? (
-                    <PulseView duration={1200} maxScale={1.08} minScale={0.96}>
-                      <Text style={[styles.metricValue, { color: theme.emerald }]}>
-                        {metric.value}
-                      </Text>
-                    </PulseView>
-                  ) : (
-                    <Text style={[styles.metricValue, { color: theme.ink }]}>
-                      {metric.value}
-                    </Text>
-                  )}
-                  <Text style={[styles.metricLabel, { color: theme.muted }]}>
+                  <View style={[styles.iconWrap, { backgroundColor: metric.color }]}>
+                    <Icon size={15} color="#FFFFFF" strokeWidth={2.4} />
+                  </View>
+                  <Text style={[styles.metricValue, { color: metric.color }]} numberOfLines={1}>
+                    {metric.value}
+                  </Text>
+                  <Text style={[styles.metricLabel, { color: theme.muted }]} numberOfLines={2}>
                     {metric.label}
                   </Text>
                 </ScalePressable>
-              </FadeInView>
-            ))}
+                </View>
+              );
+            })}
           </View>
         </>
       )}
@@ -248,17 +262,29 @@ const styles = StyleSheet.create({
   overviewHint: { fontSize: 12, color: '#d9dedcff', marginTop: 6 },
   metrics: {
     flexDirection: 'row',
-    marginTop: 12,
     flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginTop: 12,
   },
-  metricCardWrap: {
-    width: '48.5%',
+  metricSlot: {
+    width: '31.5%',
     marginBottom: 10,
   },
   metric: {
-    borderRadius: 17,
-    padding: 15,
+    width: '100%',
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 12,
   },
-  metricValue: { fontSize: 23, fontWeight: '800' },
-  metricLabel: { fontSize: 11, marginTop: 3 },
+  iconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  metricValue: { fontSize: 18, fontWeight: '800' },
+  metricLabel: { fontSize: 11, marginTop: 3, lineHeight: 14 },
 });

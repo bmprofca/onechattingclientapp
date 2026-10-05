@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { Platform } from 'react-native';
 import { notificationService } from './notificationService';
 import {
   deleteToken,
@@ -20,6 +21,8 @@ const messaging = getMessaging();
 
 async function showPush(message: RemoteMessage) {
   const data = message.data || {};
+  const title = String(data.contactName || message.notification?.title || '');
+  const body = String(data.messageText || message.notification?.body || '');
   const contactNumber = String(data.contactNumber || '');
   if (!contactNumber) return;
 
@@ -74,7 +77,8 @@ export async function unregisterDevicePush(session: ApiSession) {
 }
 
 export function listenForForegroundPush() {
-  return onMessage(messaging, showPush);
+  // While the app is open the socket posts the native notification.
+  return onMessage(messaging, async () => {});
 }
 
 export function listenForNotificationOpens(
