@@ -1,0 +1,15 @@
+diff --git a/node_modules/react-native-toast-notifications/src/toast-container.tsx b/node_modules/react-native-toast-notifications/src/toast-container.tsx
+index b0bce14..e5c6c2f 100644
+--- a/node_modules/react-native-toast-notifications/src/toast-container.tsx
++++ b/node_modules/react-native-toast-notifications/src/toast-container.tsx
+@@ -4,8 +4,9 @@ import {
+   ViewStyle,
+   KeyboardAvoidingView,
+   Platform,
+-  Dimensions, SafeAreaView,
++  Dimensions,
+ } from "react-native";
++import { SafeAreaView } from "react-native-safe-area-context";
+ import Toast, { ToastOptions, ToastProps } from "./toast";
+ 
+ const { height, width } = Dimensions.get("window");
