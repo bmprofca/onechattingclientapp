@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Toast from '../ui/toast';
-import { MessageInfoModal } from '../components/MessageInfoModal';
+import { MessageInfoHandle, MessageInfoModal } from '../components/MessageInfoModal';
 import {
   ActivityIndicator,
   FlatList,
@@ -122,6 +122,36 @@ function dayKey(message: any) {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 }
 
+function messageRowKey(message: any) {
+  const id = message?.id ?? message?.message_id ?? message?.wamid ?? message?.unique_id;
+  if (id != null && String(id) !== '') return `msg-${id}`;
+  return `msg-${message?.type || 'x'}-${message?.create_date || message?.timestamp || ''}-${String(message?.message || '').slice(0, 24)}`;
+}
+
+function mergeMessages(fetched: any[], current: any[]) {
+  const fetchedIds = new Set(fetched.map(message => messageRowKey(message)));
+  const newestTime = fetched.length
+    ? parseChatDate(fetched[0]?.create_date || fetched[0]?.timestamp)?.getTime() ?? 0
+    : 0;
+  const newer: any[] = [];
+  const older: any[] = [];
+  current.forEach(message => {
+    if (fetchedIds.has(messageRowKey(message))) return;
+    const time = parseChatDate(message?.create_date || message?.timestamp)?.getTime() ?? 0;
+    if (!fetched.length || time >= newestTime) newer.push(message);
+    else older.push(message);
+  });
+  const seen = new Set<string>();
+  const result: any[] = [];
+  [...newer, ...fetched, ...older].forEach(message => {
+    const key = messageRowKey(message);
+    if (seen.has(key)) return;
+    seen.add(key);
+    result.push(message);
+  });
+  return result;
+}
+
 function buildChatRows(messages: any[]): ChatRow[] {
   const rows: ChatRow[] = [];
   let previousDay = '';
@@ -130,8 +160,7 @@ function buildChatRows(messages: any[]): ChatRow[] {
     if (previousDay && day !== previousDay) {
       rows.push({ kind: 'date', key: `date-${previousDay}`, label: formatChatDay(messages[index - 1]) });
     }
-    const id = message.id || message.message_id || message.wamid || message.unique_id || index;
-    rows.push({ kind: 'message', key: `msg-${id}-${index}`, message });
+    rows.push({ kind: 'message', key: messageRowKey(message), message });
     previousDay = day || previousDay;
   });
   if (previousDay && messages.length) {
@@ -166,7 +195,7 @@ export function ChatRoomScreen({
 }) {
   const theme = useTheme();
   const [messages, setMessages] = useState<any[]>([]);
-  const [infoMessage, setInfoMessage] = useState<any>(null);
+  const infoModalRef = useRef<MessageInfoHandle>(null);
   const [datePill, setDatePill] = useState('');
   const [datePillVisible, setDatePillVisible] = useState(false);
   const datePillTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -287,12 +316,12 @@ export function ChatRoomScreen({
         } else {
           const seen = new Set<string>();
           const uniqueFetched = fetchedMessages.filter(m => {
-            const id = String(m.id || m.message_id || m.wamid || m.unique_id);
+            const id = messageRowKey(m);
             if (seen.has(id)) return false;
             seen.add(id);
             return true;
           });
-          setMessages(uniqueFetched);
+          setMessages(prev => mergeMessages(uniqueFetched, prev));
 
           // Chat history responses carry current assignment info, same as the web app.
           if ((response as any)?.assigning) {
@@ -941,7 +970,7 @@ export function ChatRoomScreen({
     const canReply = Boolean(item.wamid && item.status !== 'failed');
 
     return (
-      <FadeInView duration={220} distance={6}>
+      <View>
         <SwipeableMessageWrapper
           enabled={canReply}
           onSwipe={() => setReplyingTo(item)}
@@ -998,22 +1027,22 @@ export function ChatRoomScreen({
                       <CornerUpLeft size={13} color={isOut ? theme.bubbleOutText + 'A0' : theme.muted} />
                     </ScalePressable>
                   )}
-                  <ScalePressable
+                  <Pressable
                     accessibilityRole="button"
                     accessibilityLabel="Message details"
-                    onPress={() => setInfoMessage(item)}
+                    onPress={() => infoModalRef.current?.open(item)}
                     hitSlop={10}
                     style={{ marginLeft: 6, opacity: 0.85 }}
                   >
                     <Info size={13} color={isOut ? theme.bubbleOutText + 'A0' : theme.muted} />
-                  </ScalePressable>
+                  </Pressable>
                 </View>
               </View>
             );
           })()}
         </Pressable>
-      </SwipeableMessageWrapper>
-    </FadeInView>
+        </SwipeableMessageWrapper>
+      </View>
     );
 
     function renderReplyContext(msg: any) {
@@ -1504,12 +1533,6 @@ export function ChatRoomScreen({
         </Pressable>
       </Modal>
 
-      <MessageInfoModal
-        message={infoMessage}
-        chatName={contactName}
-        onClose={() => setInfoMessage(null)}
-      />
-
       {/* Message List area */}
       <View style={[styles.chatBackground, { backgroundColor: theme.chatBg }]}>
         <ChatWallpaper isDark={theme.isDark} />
@@ -1537,6 +1560,8 @@ export function ChatRoomScreen({
           inverted={true}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
+          removeClippedSubviews={false}
+          maintainVisibleContentPosition={{ minIndexForVisible: 1, autoscrollToTopThreshold: 80 }}
           contentContainerStyle={chatRows.length ? styles.listContent : styles.listContentEmpty}
           onEndReached={() => loadHistory(true)}
           onEndReachedThreshold={0.5}
@@ -1796,6 +1821,8 @@ export function ChatRoomScreen({
           </Pressable>
         </Pressable>
       </Modal>
+
+      <MessageInfoModal ref={infoModalRef} chatName={contactName} />
     </Animated.View>
   );
 }

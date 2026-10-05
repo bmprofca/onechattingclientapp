@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { Animated, BackHandler, Easing, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Info } from 'lucide-react-native';
 import { useTheme } from '../theme/theme';
 
@@ -67,71 +67,90 @@ function personMobile(message: any, role: 'send_by' | 'read_by') {
   return String(message?.[`${role}_mobile`] || nested.mobile || '').trim();
 }
 
-export function MessageInfoModal({
-  message,
-  chatName,
-  onClose,
-}: {
-  message: any | null;
-  chatName?: string;
-  onClose: () => void;
-}) {
-  const theme = useTheme();
-  const [shown, setShown] = useState<any | null>(message);
-  const anim = useRef(new Animated.Value(message ? 1 : 0)).current;
+export type MessageInfoHandle = {
+  open: (message: any) => void;
+};
 
-  useEffect(() => {
-    if (message) {
-      setShown(message);
+export const MessageInfoModal = forwardRef<MessageInfoHandle, { chatName?: string }>(
+  function MessageInfoModal({ chatName }, ref) {
+    const theme = useTheme();
+    const [shown, setShown] = useState<any | null>(null);
+    const anim = useRef(new Animated.Value(0)).current;
+    const closing = useRef(false);
+    const shift = useMemo(
+      () => anim.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }),
+      [anim],
+    );
+
+    const close = () => {
+      if (closing.current) return;
+      closing.current = true;
       anim.stopAnimation();
-      anim.setValue(0);
       Animated.timing(anim, {
+        toValue: 0,
+        duration: 120,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: false,
+      }).start(({ finished }) => {
+        closing.current = false;
+        if (finished) setShown(null);
+      });
+    };
+
+    useImperativeHandle(ref, () => ({
+      open(message: any) {
+        closing.current = false;
+        anim.stopAnimation();
+        anim.setValue(0);
+        setShown(message);
+      },
+    }), [anim]);
+
+    useEffect(() => {
+      if (!shown) return;
+      const animation = Animated.timing(anim, {
         toValue: 1,
-        duration: 240,
+        duration: 140,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: false,
-      }).start();
-      return;
-    }
-    Animated.timing(anim, {
-      toValue: 0,
-      duration: 180,
-      easing: Easing.in(Easing.cubic),
-      useNativeDriver: false,
-    }).start(({ finished }) => {
-      if (finished) setShown(null);
-    });
-  }, [anim, message]);
+      });
+      animation.start();
+      const back = BackHandler.addEventListener('hardwareBackPress', () => {
+        close();
+        return true;
+      });
+      return () => {
+        animation.stop();
+        back.remove();
+      };
+    }, [anim, shown]);
 
-  const sentBy = personName(shown, 'send_by');
-  const sentMobile = personMobile(shown, 'send_by');
-  const readBy = personName(shown, 'read_by');
-  const readMobile = personMobile(shown, 'read_by');
-  const outgoing = shown?.type === 'out';
-  const status = String(shown?.status || '');
-  const statusColor =
-    status === 'failed'
-      ? '#E5484D'
-      : status === 'read'
-        ? '#12A150'
-        : status === 'delivered'
-          ? '#2563EB'
-          : theme.muted;
+    if (!shown) return null;
 
-  const backdropOpacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
-  const cardScale = anim.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] });
-  const cardShift = anim.interpolate({ inputRange: [0, 1], outputRange: [28, 0] });
+    const sentBy = personName(shown, 'send_by');
+    const sentMobile = personMobile(shown, 'send_by');
+    const readBy = personName(shown, 'read_by');
+    const readMobile = personMobile(shown, 'read_by');
+    const outgoing = shown?.type === 'out';
+    const status = String(shown?.status || '');
+    const statusColor =
+      status === 'failed'
+        ? '#E5484D'
+        : status === 'read'
+          ? '#12A150'
+          : status === 'delivered'
+            ? '#2563EB'
+            : theme.muted;
 
-  return (
-    <Modal visible={!!shown} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
-      <View style={styles.backdrop}>
-        <Animated.View style={[styles.dim, { opacity: backdropOpacity }]} />
-        <Pressable style={styles.dismiss} onPress={onClose} />
+    return (
+      <View style={styles.backdrop} accessibilityViewIsModal>
+        <Animated.View style={[styles.dim, { opacity: anim }]} />
+        <Pressable style={styles.dismiss} onPress={close} />
         <Animated.View
           style={{
             width: '100%',
-            opacity: backdropOpacity,
-            transform: [{ translateY: cardShift }, { scale: cardScale }],
+            opacity: anim,
+            transform: [{ translateY: shift }],
           }}
         >
           <Pressable
@@ -163,15 +182,15 @@ export function MessageInfoModal({
               <DetailRow label="Error" value={String(shown.failed_reason)} valueColor="#E5484D" theme={theme} />
             ) : null}
 
-            <Pressable onPress={onClose} style={[styles.close, { backgroundColor: theme.emerald }]}>
+            <Pressable onPress={close} style={[styles.close, { backgroundColor: theme.emerald }]}>
               <Text style={styles.closeText}>Close</Text>
             </Pressable>
           </Pressable>
         </Animated.View>
       </View>
-    </Modal>
-  );
-}
+    );
+  },
+);
 
 function DetailRow({
   label,
@@ -199,7 +218,9 @@ function DetailRow({
 
 const styles = StyleSheet.create({
   backdrop: {
-    flex: 1,
+    ...StyleSheet.absoluteFill,
+    zIndex: 40,
+    elevation: 40,
     justifyContent: 'center',
     padding: 24,
   },
