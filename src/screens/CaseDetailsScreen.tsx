@@ -1,3 +1,4 @@
+import { ScreenSkeleton } from '../components/Skeleton';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -215,9 +216,7 @@ export function CaseDetailsScreen({
 
       {/* Case List Body */}
       {loading && caseList.length === 0 ? (
-        <View style={{ paddingVertical: 40, alignItems: 'center' }}>
-          <ActivityIndicator size="large" color={theme.emerald} />
-        </View>
+        <ScreenSkeleton variant="detail" />
       ) : error ? (
         <View style={{ padding: 20, alignItems: 'center' }}>
           <Text style={{ color: theme.danger }}>{error}</Text>

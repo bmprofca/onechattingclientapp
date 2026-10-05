@@ -1,5 +1,5 @@
 import { encryptPayload } from '../crypto/encryptPayload';
-// import Toast from 'react-native-toast-message';
+// import Toast from '../ui/toast';
 
 export const API_BASE_URL = ('https://server.onechatting.com').replace(/\/$/, '');
 export type ApiSession = { token: string; username: string };

@@ -43,7 +43,7 @@ class SocketManager {
         console.log('✅ Socket Connected:', this.socket?.id);
         this.isConnected = true;
         this.notifyConnectionChange('connected');
-        this.socket?.emit('auth', { username, token });
+        this.socket?.emit('auth', { username, token, client: 'mobile' });
       });
 
       this.socket.on('auth_status', (msg) => {
@@ -206,7 +206,7 @@ class SocketManager {
       );
 
       let text = String(msg.message || msg.text || msg.body || '');
-      const mediaType = msg.media_type || msg.type;
+      const mediaType = msg.message_type || msg.media_type;
 
       notificationService.displayMessageNotification(
         contactName,

@@ -31,7 +31,7 @@ import {
   Users,
   X,
 } from 'lucide-react-native';
-import Toast from 'react-native-toast-message';
+import Toast from '../ui/toast';
 import { ApiSession } from '../api/client';
 import {
   addContactsToGroups,
@@ -1501,7 +1501,7 @@ export function ContactsScreen({
         renderItem={renderContact}
         refreshControl={
           <RefreshControl
-            refreshing={loading}
+            refreshing={loading && contacts.length > 0}
             onRefresh={load}
             tintColor={theme.emerald}
           />
@@ -1515,6 +1515,7 @@ export function ContactsScreen({
         ListEmptyComponent={
           <LoadState
             loading={loading}
+            skeleton="contact"
             error={error}
             empty={!contacts.length}
             emptyTitle="No contacts found"

@@ -19,7 +19,9 @@ import {
   Users,
   X,
 } from 'lucide-react-native';
-import Toast from 'react-native-toast-message';
+import Toast from '../ui/toast';
+import { ScreenSkeleton } from '../components/Skeleton';
+import { SearchClearButton } from '../components/SearchClearButton';
 import {ApiSession} from '../api/client';
 import {getGroupContacts, removeContactFromGroup} from '../api/workspace';
 import {FadeInView, ScalePressable} from '../components/animations';
@@ -378,6 +380,7 @@ export function GroupDetailsScreen({
           placeholderTextColor={theme.muted}
           style={[styles.searchInput, {color: theme.ink}]}
         />
+        <SearchClearButton value={search} onClear={() => setSearch('')} color={theme.muted} />
       </View>
 
       {/* Contact List */}
@@ -385,15 +388,17 @@ export function GroupDetailsScreen({
         data={contacts}
         keyExtractor={contactKey}
         refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={load} />
+          <RefreshControl refreshing={loading && contacts.length > 0} onRefresh={load} />
         }
         contentContainerStyle={{padding: 14, gap: 10}}
         ListEmptyComponent={
-          !loading ? (
+          loading ? (
+            <ScreenSkeleton variant="contact" />
+          ) : (
             <Text style={[styles.empty, {color: theme.muted}]}>
               No contacts in this group.
             </Text>
-          ) : null
+          )
         }
         renderItem={renderContact}
       />

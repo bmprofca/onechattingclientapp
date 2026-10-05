@@ -22,6 +22,8 @@ import { useTheme } from '../theme/theme';
 import { formatImageUrl } from '../utils/imageUrl';
 import { applyBodyParameters } from '../utils/templateUtils';
 import { SlideUpModal, ScalePressable, FadeInView } from './animations';
+import { SearchClearButton } from './SearchClearButton';
+import { ScreenSkeleton } from './Skeleton';
 
 type TemplateModalProps = {
   visible: boolean;
@@ -390,16 +392,12 @@ export function TemplateModal({
                     value={searchQuery}
                     onChangeText={setSearchQuery}
                   />
+                  <SearchClearButton value={searchQuery} onClear={() => setSearchQuery('')} color={theme.muted} />
                 </View>
               </View>
 
               {loading ? (
-                <View style={styles.centerContainer}>
-                  <ActivityIndicator size="large" color={theme.emerald} />
-                  <Text style={[styles.loadingText, { color: theme.muted }]}>
-                    Loading templates...
-                  </Text>
-                </View>
+                <ScreenSkeleton variant="card" />
               ) : (
                 <FlatList
                   data={filteredTemplates}

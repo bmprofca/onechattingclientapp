@@ -47,7 +47,8 @@ import {
 import { useTheme } from '../theme/theme';
 import { ScalePressable, FadeInView } from '../components/animations';
 import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
-import Toast from 'react-native-toast-message';
+import Toast from '../ui/toast';
+import { ScreenSkeleton } from '../components/Skeleton';
 
 const INITIAL_FORM = {
   name: '',
@@ -417,10 +418,7 @@ export function ScannedUsersScreen({
 
         {/* Main List */}
         {loading && !refreshing ? (
-          <View style={styles.centerContainer}>
-            <ActivityIndicator size="large" color={theme.emerald} />
-            <Text style={[styles.loadingText, { color: theme.muted }]}>Loading scanned users...</Text>
-          </View>
+          <ScreenSkeleton variant="contact" />
         ) : (
           <FlatList
             data={users}

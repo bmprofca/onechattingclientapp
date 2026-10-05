@@ -12,6 +12,7 @@ import { ApiSession } from '../api/client';
 import { getAccountProfile } from '../api/auth';
 import { Session } from '../services/session';
 import { LoadState } from '../components/LoadState';
+import { ScreenSkeleton } from '../components/Skeleton';
 import { useTheme } from '../theme/theme';
 
 import { formatImageUrl } from '../utils/imageUrl';
@@ -106,8 +107,10 @@ export function ProfileScreen({
           />
         }
       >
-        <LoadState loading={false} error={error} empty={false} onRetry={loadProfile} />
-
+        {loading ? <ScreenSkeleton variant="profile" /> : error ? (
+          <LoadState loading={false} error={error} empty={false} onRetry={loadProfile} />
+        ) : (
+        <>
         {/* Profile Header Hero */}
         <View style={[styles.heroCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
         {profileImgUrl && !imgError ? (
@@ -181,6 +184,8 @@ export function ProfileScreen({
       >
         <Text style={[styles.logoutButtonText, { color: '#FFFFFF' }]}>Log Out</Text>
       </Pressable>
+        </>
+        )}
       </ScrollView>
     </View>
   );

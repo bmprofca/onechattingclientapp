@@ -13,7 +13,7 @@ import {
   View,
 } from 'react-native';
 import Contacts from 'react-native-contacts';
-import Toast from 'react-native-toast-message';
+import Toast from '../ui/toast';
 import { ArrowLeft, Search, Smartphone, X } from 'lucide-react-native';
 import { useTheme } from '../theme/theme';
 import { ScalePressable, FadeInView, SlideUpModal } from '../components/animations';

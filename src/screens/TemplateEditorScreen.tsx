@@ -2,7 +2,7 @@ import React, {useRef, useState} from 'react';
 import {ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View} from 'react-native';
 import { ArrowLeft, Paperclip, Plus, Sparkles, Trash2, X } from 'lucide-react-native';
 import { AiTemplateModal } from '../components/AiTemplateModal';
-import Toast from 'react-native-toast-message';
+import Toast from '../ui/toast';
 import {ApiSession} from '../api/client';
 import {createTemplate, editTemplate} from '../api/workspace'
 import { uploadFile, PickedFile } from '../api/upload';

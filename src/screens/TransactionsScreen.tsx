@@ -1,3 +1,4 @@
+import { ScreenSkeleton } from '../components/Skeleton';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -291,9 +292,7 @@ export function TransactionsScreen({
         </ScrollView>
 
         {loading ? (
-          <View style={styles.center}>
-            <ActivityIndicator color={theme.emerald} size="large" />
-          </View>
+          <ScreenSkeleton variant="transaction" />
         ) : error ? (
           <View
             style={[

@@ -4,7 +4,8 @@ import { ArrowLeft, PhoneCall, MessageCircle, Mail, HelpCircle } from 'lucide-re
 import { ApiSession } from '../api/client';
 import { getSupportInfo, SupportData } from '../api/company';
 import { useTheme } from '../theme/theme';
-import Toast from 'react-native-toast-message';
+import Toast from '../ui/toast';
+import { ScreenSkeleton } from '../components/Skeleton';
 import { FadeInView } from '../components/animations';
 
 export function SupportScreen({
@@ -75,7 +76,7 @@ export function SupportScreen({
         </View>
 
         {loading ? (
-          <ActivityIndicator size="large" color={theme.emerald} style={{ marginTop: 40 }} />
+          <ScreenSkeleton variant="card" />
         ) : (
           <View style={styles.contactContainer}>
             {data?.phone && data.phone.length > 0 && (

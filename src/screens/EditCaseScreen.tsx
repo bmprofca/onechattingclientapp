@@ -9,7 +9,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import Toast from 'react-native-toast-message';
+import Toast from '../ui/toast';
 import {
   ArrowLeft,
   FileText,

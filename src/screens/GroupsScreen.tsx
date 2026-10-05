@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { ArrowLeft, Plus, Search, Users, X } from 'lucide-react-native';
-import Toast from 'react-native-toast-message';
+import Toast from '../ui/toast';
 import { ApiSession, post } from '../api/client';
 import { getContactGroups } from '../api/workspace';
 import { FadeInView, ScalePressable } from '../components/animations';
@@ -363,7 +363,7 @@ export function GroupsScreen({ projectId, session, onBack, onOpen }: GroupsProps
         renderItem={renderGroup}
         refreshControl={
           <RefreshControl
-            refreshing={loading}
+            refreshing={loading && displayGroups.length > 0}
             onRefresh={handleRefresh}
             tintColor={theme.emerald}
           />
@@ -380,6 +380,7 @@ export function GroupsScreen({ projectId, session, onBack, onOpen }: GroupsProps
         ListEmptyComponent={
           <LoadState
             loading={loading}
+            skeleton="card"
             error={error}
             empty={!displayGroups.length}
             emptyTitle="No groups found"

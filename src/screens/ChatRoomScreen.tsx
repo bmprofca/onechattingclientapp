@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import Toast from 'react-native-toast-message';
+import Toast from '../ui/toast';
 import {
   ActivityIndicator,
   FlatList,
@@ -1427,6 +1427,7 @@ export function ChatRoomScreen({
             <View style={{ transform: [{ scaleY: -1 }, { scaleX: -1 }] }}>
               <LoadState
                 loading={loading}
+                skeleton="message"
                 error={error}
                 empty={!loading && !error && messages.length === 0}
                 onRetry={() => loadHistory()}

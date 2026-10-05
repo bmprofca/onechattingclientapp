@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, ActivityIndicator, Alert, Modal, Platform } from 'react-native';
 import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
 import { ArrowLeft, Save, Plus, Trash2, X, FileText, Type, HelpCircle, Info, UploadCloud, ChevronDown, ChevronUp } from 'lucide-react-native';
-import Toast from 'react-native-toast-message';
+import Toast from '../ui/toast';
+import { ScreenSkeleton } from '../components/Skeleton';
 import {
   errorCodes,
   isErrorWithCode,
@@ -473,9 +474,7 @@ export function ContextConfigScreen({
       </View>
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={theme.mint} />
-        </View>
+        <ScreenSkeleton variant="form" />
       ) : (
         <KeyboardAvoidView style={{ flex: 1 }}>
           <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">

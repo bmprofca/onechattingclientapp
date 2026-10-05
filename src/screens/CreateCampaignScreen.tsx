@@ -16,7 +16,9 @@ import {
 } from 'react-native';
 import Contacts from 'react-native-contacts';
 import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
-import Toast from 'react-native-toast-message';
+import Toast from '../ui/toast';
+import { ScreenSkeleton } from '../components/Skeleton';
+import { SearchClearButton } from '../components/SearchClearButton';
 import {
   ArrowLeft,
   Calendar,
@@ -1010,12 +1012,11 @@ export function CreateCampaignScreen({
                 placeholderTextColor={theme.muted}
                 style={[styles.searchInput, { color: theme.ink }]}
               />
+              <SearchClearButton value={templateSearch} onClear={() => setTemplateSearch('')} color={theme.muted} />
             </View>
 
             {loadingTemplates ? (
-              <View style={styles.centerBox}>
-                <ActivityIndicator size="large" color={theme.emerald} />
-              </View>
+              <ScreenSkeleton variant="card" />
             ) : (
               <FlatList
                 data={filteredTemplates}
@@ -1086,13 +1087,11 @@ export function CreateCampaignScreen({
                 placeholderTextColor={theme.muted}
                 style={[styles.searchInput, { color: theme.ink }]}
               />
+              <SearchClearButton value={contactsSearch} onClear={() => setContactsSearch('')} color={theme.muted} />
             </View>
 
             {loadingContacts ? (
-              <View style={styles.centerBox}>
-                <ActivityIndicator size="large" color={theme.emerald} />
-                <Text style={[styles.emptyModalText, { color: theme.muted, marginTop: 10 }]}>Loading contacts...</Text>
-              </View>
+              <ScreenSkeleton variant="contact" />
             ) : (
               <FlatList
                 data={filteredContacts}
@@ -1213,12 +1212,7 @@ export function CreateCampaignScreen({
                 </ScalePressable>
               </View>
             ) : loadingDeviceContacts ? (
-              <View style={styles.centerBox}>
-                <ActivityIndicator size="large" color={theme.emerald} />
-                <Text style={[styles.emptyModalText, { color: theme.muted, marginTop: 10 }]}>
-                  Loading contacts from device...
-                </Text>
-              </View>
+              <ScreenSkeleton variant="contact" />
             ) : (
               <FlatList
                 data={filteredDeviceContacts}

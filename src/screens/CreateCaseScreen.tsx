@@ -10,7 +10,9 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import Toast from 'react-native-toast-message';
+import Toast from '../ui/toast';
+import { ScreenSkeleton } from '../components/Skeleton';
+import { SearchClearButton } from '../components/SearchClearButton';
 import {
   ArrowLeft,
   Search,
@@ -436,10 +438,11 @@ export function CreateCaseScreen({
                 placeholderTextColor={theme.muted}
                 style={[styles.input, { color: theme.ink }]}
               />
+              <SearchClearButton value={contactsQuery} onClear={() => setContactsQuery('')} color={theme.muted} />
             </View>
 
             {contactsLoading ? (
-              <ActivityIndicator color={theme.emerald} style={{ padding: 24 }} />
+              <ScreenSkeleton variant="contact" />
             ) : (
               <FlatList
                 data={contacts}

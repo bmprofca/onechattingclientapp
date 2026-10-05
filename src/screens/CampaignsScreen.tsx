@@ -13,6 +13,8 @@ import { Search, Plus, Megaphone } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { getCampaigns, ListItem, unwrapList } from '../api/workspace';
 import { LoadState } from '../components/LoadState';
+import { SearchClearButton } from '../components/SearchClearButton';
+import { ScreenSkeleton } from '../components/Skeleton';
 import { useTheme } from '../theme/theme';
 
 import { ScalePressable, FadeInView } from '../components/animations';
@@ -91,6 +93,7 @@ export function CampaignsScreen({
             onChangeText={setSearchQuery}
             returnKeyType="search"
           />
+          <SearchClearButton value={searchQuery} onClear={() => setSearchQuery('')} color={theme.muted} />
         </View>
 
         <View style={[styles.segmented, { backgroundColor: theme.cardHover }]}>
@@ -140,18 +143,22 @@ export function CampaignsScreen({
         contentContainerStyle={items.length ? styles.list : styles.emptyList}
         refreshControl={
           <RefreshControl
-            refreshing={loading}
+            refreshing={loading && items.length > 0}
             onRefresh={load}
             tintColor={theme.emerald}
           />
         }
         ListEmptyComponent={
-          <LoadState
-            loading={false}
-            error={error}
-            empty={!loading && !error}
-            onRetry={load}
-          />
+          loading ? (
+            <ScreenSkeleton variant="card" />
+          ) : (
+            <LoadState
+              loading={false}
+              error={error}
+              empty={!error}
+              onRetry={load}
+            />
+          )
         }
         renderItem={({ item, index }) => (
           <FadeInView delay={Math.min(index * 35, 250)} distance={10}>

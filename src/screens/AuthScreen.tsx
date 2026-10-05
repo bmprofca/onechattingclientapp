@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
-import Toast from 'react-native-toast-message';
+import Toast from '../ui/toast';
+import { SearchClearButton } from '../components/SearchClearButton';
 import { Briefcase, ChevronDown, Globe, Mail, Phone, User, KeyRound, X } from 'lucide-react-native';
 import { login, register, sendOtp } from '../api/auth';
 import { saveSession, Session } from '../services/session';
@@ -306,6 +307,7 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: Ses
             <View style={[styles.searchRow, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
               <Globe size={17} color={theme.muted} />
               <TextInput autoFocus value={countrySearch} onChangeText={setCountrySearch} placeholder="Search country or code" placeholderTextColor={theme.muted} style={[styles.searchInput, { color: theme.ink }]} />
+              <SearchClearButton value={countrySearch} onClear={() => setCountrySearch('')} color={theme.muted} />
             </View>
             <FlatList
               data={filteredCountryCodes}

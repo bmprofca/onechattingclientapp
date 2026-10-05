@@ -1,3 +1,4 @@
+import { ScreenSkeleton } from '../components/Skeleton';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
@@ -254,9 +255,7 @@ export function AiBillsScreen({
 
       {/* List */}
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={theme.emerald} />
-        </View>
+        <ScreenSkeleton variant="transaction" />
       ) : error ? (
         <View style={styles.center}>
           <Text style={[styles.errorText, { color: theme.danger }]}>{error}</Text>

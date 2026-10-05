@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
-import Toast from 'react-native-toast-message';
+import Toast from '../ui/toast';
 import RazorpayCheckout from 'react-native-razorpay';
 import {
   Wallet,

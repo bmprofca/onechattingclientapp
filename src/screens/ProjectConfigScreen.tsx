@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
-import Toast from 'react-native-toast-message';
+import Toast from '../ui/toast';
+import { ScreenSkeleton } from '../components/Skeleton';
 import { ArrowLeft, Bell, Bot, ChevronRight, FileText, GitBranch, MessageSquare, Settings, Shield, UserCheck, Zap } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { getAutoCaseCreateStatus, getBotSettings, setAutoCaseCreate, setAutoReply, setAutoReplyType } from '../api/context';
@@ -103,7 +104,7 @@ export function ProjectConfigScreen({ projectId, session, onBack, onOpenAgent, o
       <Text style={[styles.headerTitle, { color: theme.ink }]}>Project Configuration</Text>
       <View style={styles.back} />
     </View>
-    {loading ? <View style={styles.center}><ActivityIndicator size="large" color={theme.emerald} /></View> :
+    {loading ? <ScreenSkeleton variant="form" /> :
       <FadeInView delay={60} distance={14} duration={300} style={{ flex: 1 }}><ScrollView contentContainerStyle={styles.page}>
         <View style={styles.intro}><Settings color={theme.emerald} size={28} /><View style={styles.introCopy}><Text style={[styles.title, { color: theme.ink }]}>Project Configuration</Text><Text style={[styles.copy, { color: theme.muted }]}>Manage settings for this project.</Text></View></View>
         <ConfigCard icon={<Zap color={theme.emerald} />} title="Auto Case Create" description="Create a new case automatically based on your project rules." theme={theme} right={<Switch value={autoCaseCreate} disabled={updating === 'case'} onValueChange={toggleCase} trackColor={{ false: theme.border, true: theme.emerald }} />} />

@@ -14,7 +14,7 @@ import {
 import { Sparkles, Check, CheckCircle, MessageSquare, Info, Image as ImageIcon, UploadCloud, Trash2, AlertTriangle, CreditCard, Key } from 'lucide-react-native';
 import { X } from 'lucide-react-native';
 import { launchImageLibrary } from 'react-native-image-picker';
-import Toast from 'react-native-toast-message';
+import Toast from '../ui/toast';
 import { ApiSession } from '../api/client';
 import { generateAiTemplate, generateAiHeaderMedia, createTemplate, getAiStatus, AiStatus } from '../api/workspace';
 import { uploadFile } from '../api/upload';

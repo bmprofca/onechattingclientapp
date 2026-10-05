@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Linking } from 'react-native';
 import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
-import Toast from 'react-native-toast-message';
+import Toast from '../ui/toast';
+import { ScreenSkeleton } from '../components/Skeleton';
 import { ArrowLeft, MessageSquare, Globe, Link as LinkIcon, CheckCircle2 } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { embedSignup, submitWabaId, getWabaInformation } from '../api/workspace';
@@ -165,7 +166,7 @@ export function WabaOnboardingScreen({
           </Text>
 
           {loadingInfo ? (
-            <ActivityIndicator color={theme.emerald} style={{ marginVertical: 40 }} />
+            <ScreenSkeleton variant="form" />
           ) : isConnected ? (
             <View style={[styles.statusCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <View style={styles.statusHeader}>

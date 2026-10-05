@@ -1,7 +1,8 @@
 import React, {useCallback, useEffect, useState} from 'react';
 import {ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
 import {ArrowLeft, CheckCircle, Circle, Edit3, GitBranch, Plus, RefreshCw, Trash2, X, Zap} from 'lucide-react-native';
-import Toast from 'react-native-toast-message';
+import Toast from '../ui/toast';
+import { ScreenSkeleton } from '../components/Skeleton';
 import {ApiSession} from '../api/client';
 import {deleteFlows, getFlowStatus, listFlows} from '../api/flowBuilder';
 import {useTheme} from '../theme/theme';
@@ -111,7 +112,7 @@ export function FlowLibraryScreen({projectId, session, onBack, onOpenFlow}: Prop
       </View>
 
       {loading ? (
-        <View style={styles.center}><ActivityIndicator size="large" color={theme.emerald} /></View>
+        <ScreenSkeleton variant="card" />
       ) : (
         <ScrollView contentContainerStyle={styles.page}>
           {!selectMode && (

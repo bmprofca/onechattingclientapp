@@ -12,7 +12,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import Toast from 'react-native-toast-message';
+import Toast from '../ui/toast';
 import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
 import {
   ArrowLeft,
@@ -409,7 +409,7 @@ export function ManageProjectScreen({
         <View style={styles.headerRight} />
       </View>
 
-      <LoadState loading={loadingMeta} error={errorMeta} empty={false} onRetry={loadMeta} />
+      <LoadState loading={loadingMeta} skeleton="form" error={errorMeta} empty={false} onRetry={loadMeta} />
 
       {!loadingMeta && !errorMeta && metaDetails && (
         <KeyboardAvoidView style={styles.keyboardArea}>

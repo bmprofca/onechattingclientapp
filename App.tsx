@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, StatusBar, View } from 'react-native';
+import { AppState, BackHandler, StatusBar, ToastAndroid, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import Toast from 'react-native-toast-message';
+import { AppToastProvider } from './src/ui/toast';
 
 import { AuthScreen } from './src/screens/AuthScreen';
 import { SplashScreen } from './src/components/SplashScreen';
@@ -51,14 +51,25 @@ export default function App() {
     const subscription = AppState.addEventListener('change', nextAppState => {
       if (nextAppState === 'active') {
         socketManager.ensureConnected();
-      } else if (nextAppState === 'background') {
-        socketManager.goOffline();
       }
+    });
+
+    let lastBackPress = 0;
+    const backSubscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      const now = Date.now();
+      if (now - lastBackPress < 2000) {
+        BackHandler.exitApp();
+        return true;
+      }
+      lastBackPress = now;
+      ToastAndroid.show('Press back again to exit', ToastAndroid.SHORT);
+      return true;
     });
 
     return () => {
       unsubscribePush();
       subscription.remove();
+      backSubscription.remove();
     };
   }, []);
 
@@ -142,6 +153,7 @@ export default function App() {
 
   return (
     <KeyboardProvider>
+    <AppToastProvider>
       <SafeAreaProvider>
         <StatusBar
           translucent={false}
@@ -228,13 +240,8 @@ export default function App() {
 
         </SafeAreaView>
 
-        <View
-          pointerEvents="box-none"
-          style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
-        >
-          <Toast />
-        </View>
       </SafeAreaProvider>
+    </AppToastProvider>
     </KeyboardProvider>
   );
 }

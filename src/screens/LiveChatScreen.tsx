@@ -14,11 +14,13 @@ import {
   View,
 } from 'react-native';
 import Contacts from 'react-native-contacts';
-import Toast from 'react-native-toast-message';
+import Toast from '../ui/toast';
+import { SearchClearButton } from '../components/SearchClearButton';
 import { Search, MessageSquarePlus, X, Smartphone, User, Phone, Check, BookUser, Users } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { getInbox, getUnreadCount, ListItem, unwrapList } from '../api/workspace';
 import { LoadState } from '../components/LoadState';
+import { ScreenSkeleton } from '../components/Skeleton';
 import { useTheme } from '../theme/theme';
 import { socketManager } from '../services/socketManager';
 import { ScalePressable, FadeInView, PulseView } from '../components/animations';
@@ -254,6 +256,7 @@ export function LiveChatScreen({
             onChangeText={setSearchQuery}
             returnKeyType="search"
           />
+          <SearchClearButton value={searchQuery} onClear={() => setSearchQuery('')} color={theme.muted} />
         </View>
 
         {/* Filtration Tabs */}
@@ -301,7 +304,7 @@ export function LiveChatScreen({
         keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
-            refreshing={loading}
+            refreshing={loading && items.length > 0}
             onRefresh={() => {
               load();
               loadUnreadCount();
@@ -310,15 +313,19 @@ export function LiveChatScreen({
           />
         }
         ListEmptyComponent={
-          <LoadState
-            loading={false}
-            error={error}
-            empty={!loading && !error}
-            onRetry={() => {
-              load();
-              loadUnreadCount();
-            }}
-          />
+          loading ? (
+            <ScreenSkeleton variant="chat" />
+          ) : (
+            <LoadState
+              loading={false}
+              error={error}
+              empty={!error}
+              onRetry={() => {
+                load();
+                loadUnreadCount();
+              }}
+            />
+          )
         }
         ListFooterComponent={
           loadingMore ? (

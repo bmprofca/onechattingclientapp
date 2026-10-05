@@ -13,6 +13,7 @@ import {
   getUnreadCount,
 } from '../api/workspace';
 import { LoadState } from '../components/LoadState';
+import { ScreenSkeleton } from '../components/Skeleton';
 import { useTheme } from '../theme/theme';
 import { socketManager } from '../services/socketManager';
 import {
@@ -176,7 +177,9 @@ export function DashboardScreen({
         />
       }
     >
-      <LoadState loading={false} error={error} empty={false} onRetry={load} />
+      {loading ? <ScreenSkeleton variant="dashboard" /> : (
+        <LoadState loading={false} error={error} empty={false} onRetry={load} />
+      )}
       {!loading && !error && (
         <>
           <FadeInView direction="down" distance={12} duration={350}>

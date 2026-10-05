@@ -12,7 +12,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import Toast from 'react-native-toast-message';
+import Toast from '../ui/toast';
 import {
   Search,
   Plus,
@@ -380,7 +380,7 @@ export function OpenCasesScreen({
         keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
-            refreshing={loading}
+            refreshing={loading && casesByNumber.length > 0}
             onRefresh={fetchOpenCases}
             tintColor={theme.emerald}
           />
@@ -388,6 +388,7 @@ export function OpenCasesScreen({
         ListEmptyComponent={
           <LoadState
             loading={loading}
+            skeleton="case"
             error={error}
             empty={!casesByNumber.length}
             emptyTitle="No open cases found"

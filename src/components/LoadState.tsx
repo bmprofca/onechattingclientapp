@@ -1,6 +1,7 @@
 import React from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../theme/theme';
+import { ScreenSkeleton } from './Skeleton';
 
 export function LoadState({
   loading,
@@ -9,6 +10,7 @@ export function LoadState({
   emptyTitle,
   emptyCopy,
   onRetry,
+  skeleton = 'list',
 }: {
   loading: boolean;
   error?: string;
@@ -16,18 +18,11 @@ export function LoadState({
   emptyTitle?: string;
   emptyCopy?: string;
   onRetry: () => void;
+  skeleton?: React.ComponentProps<typeof ScreenSkeleton>['variant'];
 }) {
   const theme = useTheme();
 
-  if (loading)
-    return (
-      <View style={styles.empty}>
-        <ActivityIndicator color={theme.emerald} size="large" />
-        <Text style={[styles.emptyText, { color: theme.muted, marginTop: 12 }]}>
-          Loading from OneChatting…
-        </Text>
-      </View>
-    );
+  if (loading) return <ScreenSkeleton variant={skeleton} />;
 
   if (error)
     return (

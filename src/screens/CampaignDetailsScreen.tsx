@@ -99,6 +99,7 @@ export function CampaignDetailsScreen({
         <ScreenHeader title={campaignName || 'Campaign'} onBack={onBack} theme={theme} />
         <LoadState
           loading={loading}
+          skeleton="detail"
           error={error}
           empty={!loading && !error && !details}
           onRetry={load}

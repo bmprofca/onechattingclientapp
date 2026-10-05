@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Dimensions,
   Linking,
   Modal,
@@ -23,7 +22,8 @@ import {
   Layers,
   Info,
 } from 'lucide-react-native';
-import Toast from 'react-native-toast-message';
+import Toast from '../../ui/toast';
+import { Bone } from '../Skeleton';
 import { ApiSession } from '../../api/client';
 import { getProjectQRCodes, QRCodeItem } from '../../api/qrcode';
 import { useTheme } from '../../theme/theme';
@@ -197,10 +197,8 @@ export function ProjectQRModal({
 
           {loading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={theme.emerald} />
-              <Text style={[styles.loadingText, { color: theme.muted }]}>
-                Loading QR Codes...
-              </Text>
+              <Bone width={220} height={220} radius={16} />
+              <Bone width={160} height={14} style={{ marginTop: 16 }} />
             </View>
           ) : qrList.length === 0 ? (
             <View style={styles.emptyContainer}>

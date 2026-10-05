@@ -28,7 +28,8 @@ import {
   Trash2,
   UploadCloud,
 } from 'lucide-react-native';
-import Toast from 'react-native-toast-message';
+import Toast from '../ui/toast';
+import { ScreenSkeleton } from '../components/Skeleton';
 import { ApiSession } from '../api/client';
 import {
   createFlow,
@@ -398,9 +399,7 @@ export function FlowBuilderScreen({
         </Pressable>
       </View>
       {loading ? (
-        <View style={s.center}>
-          <ActivityIndicator size="large" color={theme.emerald} />
-        </View>
+        <ScreenSkeleton variant="form" />
       ) : (
         <ScrollView
           contentContainerStyle={s.page}
