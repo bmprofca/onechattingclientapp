@@ -48,20 +48,12 @@ export async function uploadFile(file: PickedFile): Promise<UploadedFile> {
     );
   }
 
-  // Read raw text first so we can see exactly what the server sent back,
-  // even if it's HTML (404/500 page) instead of JSON.
   const rawText = await response.text();
-  console.log('[uploadFile] status:', response.status);
-  console.log('[uploadFile] raw response:', rawText);
-
   let data: any = null;
   try {
     data = rawText ? JSON.parse(rawText) : null;
-  } catch (parseError) {
-    console.log('[uploadFile] response was not valid JSON');
-    throw new Error(
-      `Server returned non-JSON (status ${response.status}): ${rawText.slice(0, 200)}`,
-    );
+  } catch {
+    throw new Error(`Server returned non-JSON (status ${response.status})`);
   }
 
   if (!response.ok) {

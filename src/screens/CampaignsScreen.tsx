@@ -150,7 +150,7 @@ export function CampaignsScreen({
         }
         ListEmptyComponent={
           loading ? (
-            <ScreenSkeleton variant="card" />
+            <ScreenSkeleton variant="chat" />
           ) : (
             <LoadState
               loading={false}
@@ -268,7 +268,7 @@ const styles = StyleSheet.create({
   segmentText: { fontSize: 13, fontWeight: '700' },
   rule: { height: 1, marginTop: 8 },
   list: { paddingHorizontal: 10, paddingBottom: 18, paddingTop: 4 },
-  emptyList: { flexGrow: 1, paddingHorizontal: 20 },
+  emptyList: { flexGrow: 1, paddingHorizontal: 10 },
   card: {
     borderRadius: 17,
     padding: 6,

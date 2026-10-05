@@ -41,13 +41,13 @@ export function PulseView({
           toValue: 1,
           duration: duration / 2,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.timing(anim, {
           toValue: 0,
           duration: duration / 2,
           easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ]),
     );

@@ -1,6 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Animated,
   FlatList,
   Modal,
@@ -8,6 +7,7 @@ import {
   Platform,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -16,14 +16,14 @@ import {
 import Contacts from 'react-native-contacts';
 import Toast from '../ui/toast';
 import { SearchClearButton } from '../components/SearchClearButton';
-import { Search, MessageSquarePlus, X, Smartphone, User, Phone, Check, BookUser, Users } from 'lucide-react-native';
+import { Search, MessageSquarePlus, X, Smartphone, User, Phone, Check, BookUser, Users, Image as ImageIcon, Video, FileText, Music, Mic, MapPin } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { getInbox, getUnreadCount, ListItem, unwrapList } from '../api/workspace';
 import { LoadState } from '../components/LoadState';
 import { ScreenSkeleton } from '../components/Skeleton';
 import { useTheme } from '../theme/theme';
 import { socketManager } from '../services/socketManager';
-import { ScalePressable, FadeInView, PulseView } from '../components/animations';
+import { ScalePressable, FadeInView } from '../components/animations';
 import { useKeyboardContext } from '../contexts/KeyboardContext';
 
 export type ChatFilterType = 'all' | 'unread' | 'favourites' | 'assigned';
@@ -34,6 +34,51 @@ const FILTERS: { key: ChatFilterType; label: string }[] = [
   { key: 'favourites', label: 'Favourites' },
   { key: 'assigned', label: 'Assigned' },
 ];
+
+const CHAT_PAGE_SIZE = 30;
+
+type TabState = {
+  items: ListItem[];
+  page: number;
+  hasMore: boolean;
+  loading: boolean;
+  loadingMore: boolean;
+  error: string;
+};
+
+function blankTab(loading = false): TabState {
+  return { items: [], page: 0, hasMore: true, loading, loadingMore: false, error: '' };
+}
+
+function blankTabs(loading = false): Record<ChatFilterType, TabState> {
+  return {
+    all: blankTab(loading),
+    unread: blankTab(loading),
+    favourites: blankTab(loading),
+    assigned: blankTab(loading),
+  };
+}
+
+type ChatMemory = {
+  projectId: string;
+  search: string;
+  filter: ChatFilterType;
+  tabs: Record<ChatFilterType, TabState>;
+  offsets: Record<ChatFilterType, number>;
+};
+
+let chatMemory: ChatMemory | null = null;
+
+function chatKey(item: ListItem) {
+  const contact = (item.contact as Record<string, any>) || {};
+  return String(item.id || item._id || contact.number || item.phone || item.number || '');
+}
+
+function mergeChats(current: ListItem[], incoming: ListItem[]) {
+  const seen = new Set(current.map(chatKey));
+  const extra = incoming.filter(item => !seen.has(chatKey(item)));
+  return extra.length ? [...current, ...extra] : current;
+}
 
 export function LiveChatScreen({
   projectId,
@@ -48,17 +93,79 @@ export function LiveChatScreen({
 }) {
   const theme = useTheme();
   const { isKeyboardVisible, keyboardHeightAnim } = useKeyboardContext();
-  const [activeFilter, setActiveFilter] = useState<ChatFilterType>('all');
-  const [items, setItems] = useState<ListItem[]>([]);
+  const [activeFilter, setActiveFilter] = useState<ChatFilterType>(() =>
+    chatMemory?.projectId === projectId ? chatMemory.filter : 'all',
+  );
+  const filterIndexRef = useRef(FILTERS.findIndex(tab => tab.key === activeFilter));
+  const pageWidth = useRef(0);
+  const pagerRef = useRef<ScrollView>(null);
+  const pagerReady = useRef(false);
+  const scrollX = useRef(new Animated.Value(0)).current;
+  const onPagerScroll = useRef(
+    Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: false }),
+  ).current;
+  const [pagerSize, setPagerSize] = useState({ width: 0, height: 0 });
+  const [tabTrackWidth, setTabTrackWidth] = useState(0);
+  const selectTab = (index: number) => {
+    const next = Math.max(0, Math.min(FILTERS.length - 1, index));
+    filterIndexRef.current = next;
+    setActiveFilter(FILTERS[next].key);
+    const width = pageWidth.current;
+    if (width > 0) pagerRef.current?.scrollTo({ x: next * width, animated: true });
+  };
+  const settleFromOffset = (x: number) => {
+    const width = pageWidth.current;
+    if (width <= 0) return;
+    const next = Math.max(0, Math.min(FILTERS.length - 1, Math.round(x / width)));
+    if (filterIndexRef.current === next) return;
+    filterIndexRef.current = next;
+    setActiveFilter(FILTERS[next].key);
+  };
+  const remembered =
+    chatMemory && chatMemory.projectId === projectId ? chatMemory : null;
+  const [tabs, setTabs] = useState<Record<ChatFilterType, TabState>>(() => {
+    if (!remembered) return blankTabs(true);
+    return {
+      all: { ...remembered.tabs.all, loading: false, loadingMore: false },
+      unread: { ...remembered.tabs.unread, loading: false, loadingMore: false },
+      favourites: { ...remembered.tabs.favourites, loading: false, loadingMore: false },
+      assigned: { ...remembered.tabs.assigned, loading: false, loadingMore: false },
+    };
+  });
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
+  const offsets = useRef<Record<ChatFilterType, number>>(
+    remembered?.offsets || { all: 0, unread: 0, favourites: 0, assigned: 0 },
+  );
+  const initialOffsets = useRef<Record<ChatFilterType, number>>(
+    remembered?.offsets || { all: 0, unread: 0, favourites: 0, assigned: 0 },
+  );
+  const tabToken = useRef<Record<ChatFilterType, number>>({
+    all: 0,
+    unread: 0,
+    favourites: 0,
+    assigned: 0,
+  });
+  const paging = useRef<Record<ChatFilterType, boolean>>({
+    all: false,
+    unread: false,
+    favourites: false,
+    assigned: false,
+  });
+  const [refreshing, setRefreshing] = useState(false);
   const [totalUnreadCount, setTotalUnreadCount] = useState<number>(0);
-  const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  const [page, setPage] = useState(1);
-  const [error, setError] = useState('');
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(() =>
+    chatMemory?.projectId === projectId ? chatMemory.search : '',
+  );
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(() =>
+    chatMemory?.projectId === projectId ? chatMemory.search : '',
+  );
+  const searchRef = useRef(debouncedSearchQuery);
+  searchRef.current = debouncedSearchQuery;
+  const fetchPageRef = useRef<(filter: ChatFilterType, pageToLoad: number, search: string) => Promise<void>>(
+    async () => {},
+  );
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -82,90 +189,120 @@ export function LiveChatScreen({
     }
   }, [projectId, session.token, session.username]);
 
-  const CHAT_PAGE_SIZE = 30;
-
-  const loadChats = useCallback(
-    async (pageToLoad: number, searchQueryParam: string, filterParam: ChatFilterType, isRefresh = false) => {
+  const fetchPage = useCallback(
+    async (filter: ChatFilterType, pageToLoad: number, search: string) => {
       if (!projectId || !session?.token) return;
-      if (pageToLoad === 1) {
-        setLoading(true);
-      } else {
-        setLoadingMore(true);
+      const current = tabsRef.current[filter];
+      if (pageToLoad > 1) {
+        if (paging.current[filter] || current.loading || !current.hasMore || current.page < 1) return;
+        paging.current[filter] = true;
       }
-      setError('');
-
+      const token = pageToLoad === 1 ? ++tabToken.current[filter] : tabToken.current[filter];
+      setTabs(prev => ({
+        ...prev,
+        [filter]: {
+          ...prev[filter],
+          loading: pageToLoad === 1 && prev[filter].items.length === 0,
+          loadingMore: pageToLoad > 1,
+          error: '',
+        },
+      }));
       try {
-        const res = await getInbox(
-          session,
-          projectId,
-          searchQueryParam,
-          filterParam,
-          pageToLoad,
-          CHAT_PAGE_SIZE,
-        );
-
+        const res = await getInbox(session, projectId, search, filter, pageToLoad, CHAT_PAGE_SIZE);
+        if (tabToken.current[filter] !== token) return;
         const list = unwrapList(res);
-
-        if (pageToLoad === 1 || isRefresh) {
-          setItems(list);
-        } else {
-          setItems((prev) => {
-            const existingIds = new Set(
-              prev.map((c) => {
-                const contact = (c.contact as Record<string, any>) || {};
-                return String(c.id || c._id || contact.number || c.phone || c.number || '');
-              }),
-            );
-            const newItems = list.filter((c: any) => {
-              const contact = (c.contact as Record<string, any>) || {};
-              const id = String(c.id || c._id || contact.number || c.phone || c.number || '');
-              return !existingIds.has(id);
-            });
-            return [...prev, ...newItems];
-          });
-        }
-
         const meta = res?.meta || res?.data?.meta;
         const total = meta?.total !== undefined ? Number(meta.total) : undefined;
-        if (total !== undefined) {
-          setHasMore(pageToLoad * CHAT_PAGE_SIZE < total);
-        } else {
-          setHasMore(list.length === CHAT_PAGE_SIZE);
-        }
-        setPage(pageToLoad);
+        const hasMore = total !== undefined ? pageToLoad * CHAT_PAGE_SIZE < total : list.length === CHAT_PAGE_SIZE;
+        setTabs(prev => ({
+          ...prev,
+          [filter]: {
+            items: pageToLoad === 1 ? list : mergeChats(prev[filter].items, list),
+            page: pageToLoad,
+            hasMore,
+            loading: false,
+            loadingMore: false,
+            error: '',
+          },
+        }));
       } catch (requestError) {
-        if (pageToLoad === 1) {
-          setItems([]);
-        }
-        setError(
-          requestError instanceof Error
-            ? requestError.message
-            : 'Could not load chats.',
-        );
+        if (tabToken.current[filter] !== token) return;
+        setTabs(prev => ({
+          ...prev,
+          [filter]: {
+            ...prev[filter],
+            items: pageToLoad === 1 ? [] : prev[filter].items,
+            loading: false,
+            loadingMore: false,
+            error: requestError instanceof Error ? requestError.message : 'Could not load chats.',
+          },
+        }));
       } finally {
-        setLoading(false);
-        setLoadingMore(false);
+        if (pageToLoad > 1) paging.current[filter] = false;
       }
     },
     [projectId, session],
   );
+  fetchPageRef.current = fetchPage;
+
+  const viewabilityConfig = useRef(
+    FILTERS.reduce((map, tab) => {
+      map[tab.key] = { itemVisiblePercentThreshold: 20 };
+      return map;
+    }, {} as Record<ChatFilterType, { itemVisiblePercentThreshold: number }>),
+  ).current;
+  const onViewableItemsChanged = useRef(
+    FILTERS.reduce((map, tab) => {
+      map[tab.key] = ({ viewableItems }: { viewableItems: Array<{ index: number | null }> }) => {
+        if (FILTERS[filterIndexRef.current]?.key !== tab.key) return;
+        const state = tabsRef.current[tab.key];
+        if (!state?.items.length || state.page < 1 || !state.hasMore) return;
+        const maxIndex = viewableItems.reduce((max, item) => Math.max(max, item.index ?? 0), 0);
+        if (maxIndex < state.items.length - 8) return;
+        void fetchPageRef.current(tab.key, state.page + 1, searchRef.current);
+      };
+      return map;
+    }, {} as Record<ChatFilterType, (info: { viewableItems: Array<{ index: number | null }> }) => void>),
+  ).current;
 
   useEffect(() => {
-    setPage(1);
-    setHasMore(true);
-    loadChats(1, debouncedSearchQuery, activeFilter);
-    loadUnreadCount();
-  }, [loadChats, loadUnreadCount, debouncedSearchQuery, activeFilter]);
-
-  const load = useCallback(() => {
-    return loadChats(1, debouncedSearchQuery, activeFilter, true);
-  }, [loadChats, debouncedSearchQuery, activeFilter]);
-
-  const handleLoadMore = () => {
-    if (!loading && !loadingMore && hasMore && items.length >= CHAT_PAGE_SIZE) {
-      loadChats(page + 1, debouncedSearchQuery, activeFilter);
+    const sameSearch = chatMemory?.projectId === projectId && chatMemory.search === debouncedSearchQuery;
+    if (!sameSearch) {
+      setTabs(blankTabs(true));
     }
-  };
+    FILTERS.forEach(tab => {
+      const cached = sameSearch ? chatMemory?.tabs[tab.key] : undefined;
+      if (cached && cached.items.length > 0) return;
+      void fetchPage(tab.key, 1, debouncedSearchQuery);
+    });
+    loadUnreadCount();
+  }, [fetchPage, loadUnreadCount, debouncedSearchQuery, projectId]);
+
+  useEffect(() => {
+    chatMemory = {
+      projectId,
+      search: debouncedSearchQuery,
+      filter: activeFilter,
+      tabs,
+      offsets: { ...offsets.current },
+    };
+  }, [tabs, projectId, debouncedSearchQuery, activeFilter]);
+
+  const requestNext = useCallback((filter: ChatFilterType) => {
+    const tab = tabsRef.current[filter];
+    if (!tab || tab.loading || tab.loadingMore || !tab.hasMore || tab.page < 1) return;
+    void fetchPage(filter, tab.page + 1, debouncedSearchQuery);
+  }, [debouncedSearchQuery, fetchPage]);
+
+  const load = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all(FILTERS.map(tab => fetchPage(tab.key, 1, debouncedSearchQuery)));
+      await loadUnreadCount();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [fetchPage, debouncedSearchQuery, loadUnreadCount]);
 
   useEffect(() => {
     const unsubUnread = socketManager.onTotalUnreadCount((data) => {
@@ -175,56 +312,55 @@ export function LiveChatScreen({
     });
 
     const unsubChat = socketManager.onChat((data) => {
-      setItems((prev) => {
-        const contactNum = data.contact?.number;
-        if (!contactNum) return prev;
-
-        const existingIdx = prev.findIndex((c) => {
-          const cNum = (c.contact as Record<string, any>)?.number || c.phone || c.number;
-          return String(cNum) === String(contactNum);
-        });
-
-        const newChat: any =
-          existingIdx >= 0
-            ? { ...prev[existingIdx] }
+      const contactNum = data.contact?.number;
+      if (!contactNum) return;
+      const incoming = data.message?.type === 'in' && data.message?.status !== 'read';
+      setTabs(prev => {
+        const next = { ...prev };
+        FILTERS.forEach(tab => {
+          const items = prev[tab.key].items;
+          const existingIdx = items.findIndex(c => {
+            const cNum = (c.contact as Record<string, any>)?.number || c.phone || c.number;
+            return String(cNum) === String(contactNum);
+          });
+          if (existingIdx < 0 && tab.key !== 'all' && !(tab.key === 'unread' && incoming)) return;
+          const newChat: any = existingIdx >= 0
+            ? { ...items[existingIdx] }
             : { contact: data.contact, number: contactNum, unread_count: 0 };
-
-        newChat.last_message = data.message;
-        if (data.message.type === 'in' && data.message.status !== 'read') {
-          newChat.unread_count = Number(newChat.unread_count || 0) + 1;
-        }
-
-        const nextList = [...prev];
-        if (existingIdx >= 0) {
-          nextList.splice(existingIdx, 1);
-        }
-
-        nextList.unshift(newChat);
-        return nextList;
+          newChat.last_message = data.message;
+          if (incoming) newChat.unread_count = Number(newChat.unread_count || 0) + 1;
+          const list = [...items];
+          if (existingIdx >= 0) list.splice(existingIdx, 1);
+          list.unshift(newChat);
+          next[tab.key] = { ...prev[tab.key], items: list };
+        });
+        return next;
       });
-
-      // Also refresh unread count
       loadUnreadCount();
     });
 
     const unsubAssigned = socketManager.onChatAssigned(() => {
-      load();
+      void fetchPage('assigned', 1, debouncedSearchQuery);
     });
 
     const unsubStatus = socketManager.onMessageStatus((data) => {
       if (!data?.wamid) return;
-      setItems((prev) =>
-        prev.map((c) => {
-          const lastMsg = (c.last_message as Record<string, any>) || {};
-          if (lastMsg.wamid === data.wamid || lastMsg._id === data.message_id) {
-            return {
-              ...c,
-              last_message: { ...lastMsg, status: data.status },
-            };
-          }
-          return c;
-        }),
-      );
+      setTabs(prev => {
+        const next = { ...prev };
+        FILTERS.forEach(tab => {
+          next[tab.key] = {
+            ...prev[tab.key],
+            items: prev[tab.key].items.map(c => {
+              const lastMsg = (c.last_message as Record<string, any>) || {};
+              if (lastMsg.wamid === data.wamid || lastMsg._id === data.message_id) {
+                return { ...c, last_message: { ...lastMsg, status: data.status } };
+              }
+              return c;
+            }),
+          };
+        });
+        return next;
+      });
     });
 
     return () => {
@@ -233,7 +369,7 @@ export function LiveChatScreen({
       unsubAssigned();
       unsubStatus();
     };
-  }, [load, loadUnreadCount]);
+  }, [debouncedSearchQuery, fetchPage, loadUnreadCount]);
 
   return (
     <Animated.View
@@ -260,7 +396,13 @@ export function LiveChatScreen({
         </View>
 
         {/* Filtration Tabs */}
-        <View style={[styles.tabsContainer, { borderBottomColor: theme.border }]}>
+        <View
+          style={[styles.tabsContainer, { borderBottomColor: theme.border }]}
+          onLayout={event => {
+            const width = event.nativeEvent.layout.width;
+            if (width > 0 && Math.abs(width - tabTrackWidth) > 1) setTabTrackWidth(width);
+          }}
+        >
           {FILTERS.map((tab) => {
             const isActive = activeFilter === tab.key;
             return (
@@ -268,7 +410,7 @@ export function LiveChatScreen({
                 key={tab.key}
                 accessibilityRole="button"
                 accessibilityLabel={tab.label}
-                onPress={() => setActiveFilter(tab.key)}
+                onPress={() => selectTab(FILTERS.findIndex(item => item.key === tab.key))}
                 style={styles.tabButton}
                 hitSlop={4}
               >
@@ -288,64 +430,109 @@ export function LiveChatScreen({
                     </View>
                   )}
                 </View>
-                {isActive && <View style={[styles.activeIndicator, { backgroundColor: '#2563EB' }]} />}
               </Pressable>
             );
           })}
+          {tabTrackWidth > 0 && pagerSize.width > 0 ? (
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.slidingIndicator,
+                {
+                  width: tabTrackWidth / FILTERS.length,
+                  backgroundColor: '#2563EB',
+                  transform: [{
+                    translateX: scrollX.interpolate({
+                      inputRange: [0, pagerSize.width * (FILTERS.length - 1)],
+                      outputRange: [0, (tabTrackWidth / FILTERS.length) * (FILTERS.length - 1)],
+                      extrapolate: 'clamp',
+                    }),
+                  }],
+                },
+              ]}
+            />
+          ) : null}
         </View>
       </FadeInView>
 
-      <FlatList
-        data={items}
-        keyExtractor={(item, index) => String(item.id || item._id || (item.contact as any)?.number || index) + '-' + index}
-        contentContainerStyle={items.length ? styles.list : styles.emptyList}
-        onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.3}
-        keyboardShouldPersistTaps="handled"
-        refreshControl={
-          <RefreshControl
-            refreshing={loading && items.length > 0}
-            onRefresh={() => {
-              load();
-              loadUnreadCount();
+      <View
+        style={styles.pager}
+        onLayout={event => {
+          const { width, height } = event.nativeEvent.layout;
+          if (width <= 0 || height <= 0) return;
+          if (Math.abs(width - pageWidth.current) < 1 && Math.abs(height - pagerSize.height) < 1) return;
+          pageWidth.current = width;
+          setPagerSize({ width, height });
+        }}
+      >
+        {pagerSize.width > 0 ? (
+          <Animated.ScrollView
+            ref={pagerRef}
+            horizontal
+            pagingEnabled
+            disableIntervalMomentum
+            nestedScrollEnabled
+            directionalLockEnabled
+            keyboardShouldPersistTaps="handled"
+            showsHorizontalScrollIndicator={false}
+            overScrollMode="never"
+            removeClippedSubviews={false}
+            scrollEventThrottle={16}
+            onScroll={onPagerScroll}
+            onLayout={() => {
+              if (pagerReady.current) return;
+              pagerReady.current = true;
+              const width = pageWidth.current;
+              const index = filterIndexRef.current;
+              if (width > 0 && index > 0) {
+                scrollX.setValue(index * width);
+                pagerRef.current?.scrollTo({ x: index * width, animated: false });
+              }
             }}
-            tintColor={theme.emerald}
-          />
-        }
-        ListEmptyComponent={
-          loading ? (
-            <ScreenSkeleton variant="chat" />
-          ) : (
-            <LoadState
-              loading={false}
-              error={error}
-              empty={!error}
-              onRetry={() => {
-                load();
-                loadUnreadCount();
-              }}
-            />
-          )
-        }
-        ListFooterComponent={
-          loadingMore ? (
-            <View style={styles.footerLoader}>
-              <ActivityIndicator size="small" color={theme.emerald} />
-              <Text style={[styles.footerLoaderText, { color: theme.muted }]}>
-                Loading more chats...
-              </Text>
-            </View>
-          ) : null
-        }
-        renderItem={({ item, index }) => (
-          <FadeInView delay={Math.min(index * 35, 250)} distance={12}>
-            <ChatCard
-              item={item}
-              onPress={(contactNumber, contactName) => onOpenChat(contactNumber, contactName)}
-            />
-          </FadeInView>
-        )}
-      />
+            onMomentumScrollEnd={event => settleFromOffset(event.nativeEvent.contentOffset.x)}
+            onScrollEndDrag={event => {
+              const velocity = event.nativeEvent.velocity?.x ?? 0;
+              if (Math.abs(velocity) < 0.05) settleFromOffset(event.nativeEvent.contentOffset.x);
+            }}
+            style={{ width: pagerSize.width, height: pagerSize.height }}
+          >
+            {FILTERS.map(tab => {
+              const page = tabs[tab.key];
+              return (
+                <MemoChatTabPage
+                  key={tab.key}
+                  width={pagerSize.width}
+                  height={pagerSize.height}
+                  items={page.items}
+                  loading={page.loading}
+                  error={page.error}
+                  refreshing={refreshing}
+                  initialOffset={initialOffsets.current[tab.key] || 0}
+                  onOpenChat={onOpenChat}
+                  onRefresh={load}
+                  onRetry={() => {
+                    void fetchPage(tab.key, 1, debouncedSearchQuery);
+                    loadUnreadCount();
+                  }}
+                  onLoadMore={() => {
+                    if (FILTERS[filterIndexRef.current]?.key !== tab.key) return;
+                    requestNext(tab.key);
+                  }}
+                  onScrollOffset={y => {
+                    offsets.current[tab.key] = y;
+                    if (chatMemory && chatMemory.projectId === projectId) {
+                      chatMemory.offsets[tab.key] = y;
+                      chatMemory.filter = tab.key;
+                    }
+                  }}
+                  viewabilityConfig={viewabilityConfig[tab.key]}
+                  onViewableItemsChanged={onViewableItemsChanged[tab.key]}
+                />
+              );
+            })}
+          </Animated.ScrollView>
+        ) : null}
+      </View>
 
       {/* FAB */}
       {!isKeyboardVisible && (
@@ -366,7 +553,149 @@ export function LiveChatScreen({
 
 
 
-function ChatCard({ item, onPress }: { item: ListItem; onPress: (contactNumber: string, contactName: string) => void }) {
+function ChatTabPage({
+  width,
+  height,
+  items,
+  loading,
+  error,
+  refreshing,
+  initialOffset,
+  onOpenChat,
+  onRefresh,
+  onRetry,
+  onLoadMore,
+  onScrollOffset,
+  viewabilityConfig,
+  onViewableItemsChanged,
+}: {
+  width: number;
+  height: number;
+  items: ListItem[];
+  loading: boolean;
+  error: string;
+  refreshing: boolean;
+  initialOffset: number;
+  onOpenChat: (contactNumber: string, contactName: string) => void;
+  onRefresh: () => void;
+  onRetry: () => void;
+  onLoadMore: () => void;
+  onScrollOffset: (y: number) => void;
+  viewabilityConfig: { itemVisiblePercentThreshold: number };
+  onViewableItemsChanged: (info: { viewableItems: Array<{ index: number | null }> }) => void;
+}) {
+  const theme = useTheme();
+  const startOffset = useRef(initialOffset).current;
+  const renderItem = useCallback(
+    ({ item }: { item: ListItem }) => <ChatCard item={item} onPress={onOpenChat} />,
+    [onOpenChat],
+  );
+
+  return (
+    <View style={{ width, height }}>
+      <FlatList
+        style={{ flex: 1 }}
+        data={items}
+        keyExtractor={(item, index) => chatKey(item) || `chat-${index}`}
+        renderItem={renderItem}
+        contentContainerStyle={items.length ? styles.list : styles.emptyList}
+        nestedScrollEnabled
+        keyboardShouldPersistTaps="handled"
+        removeClippedSubviews={false}
+        initialNumToRender={12}
+        maxToRenderPerBatch={8}
+        windowSize={8}
+        onEndReached={onLoadMore}
+        onEndReachedThreshold={1.5}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
+        contentOffset={{ x: 0, y: startOffset }}
+        onScroll={event => onScrollOffset(event.nativeEvent.contentOffset.y)}
+        scrollEventThrottle={32}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.emerald} />
+        }
+        ListEmptyComponent={
+          loading ? (
+            <ScreenSkeleton variant="chat" />
+          ) : (
+            <LoadState loading={false} error={error} empty={!error} onRetry={onRetry} />
+          )
+        }
+      />
+    </View>
+  );
+}
+
+const MemoChatTabPage = memo(ChatTabPage, (prev, next) =>
+  prev.items === next.items &&
+  prev.loading === next.loading &&
+  prev.error === next.error &&
+  prev.refreshing === next.refreshing &&
+  prev.width === next.width &&
+  prev.height === next.height,
+);
+
+function lastMessagePreview(lastMessage: Record<string, any>, item: ListItem) {
+  const type = String(lastMessage.message_type || (item as any).message_type || 'text').toLowerCase();
+  const text = String(lastMessage.message || (item as any).message || '').trim();
+  switch (type) {
+    case 'image':
+      return { label: 'Photo', Icon: ImageIcon };
+    case 'video':
+      return { label: 'Video', Icon: Video };
+    case 'audio':
+      return { label: 'Audio', Icon: Music };
+    case 'voice':
+      return { label: 'Voice message', Icon: Mic };
+    case 'document':
+      return { label: 'Document', Icon: FileText };
+    case 'location':
+      return { label: 'Location', Icon: MapPin };
+    case 'contact':
+      return { label: 'Contact', Icon: User };
+    case 'sticker':
+      return { label: 'Sticker', Icon: null };
+    default:
+      return { label: text || (type !== 'text' ? 'Message' : ''), Icon: null };
+  }
+}
+
+function parseListDate(value: unknown): Date | null {
+  if (value == null || value === '') return null;
+  if (typeof value === 'number') {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const match = String(value).trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/);
+  if (match) {
+    return new Date(
+      Number(match[1]),
+      Number(match[2]) - 1,
+      Number(match[3]),
+      Number(match[4] || 0),
+      Number(match[5] || 0),
+      Number(match[6] || 0),
+    );
+  }
+  const parsed = new Date(String(value));
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatListTime(value: unknown) {
+  const date = parseListDate(value);
+  if (!date) return '';
+  const startOfDay = (item: Date) => new Date(item.getFullYear(), item.getMonth(), item.getDate()).getTime();
+  const dayDiff = Math.round((startOfDay(new Date()) - startOfDay(date)) / 86400000);
+  if (dayDiff <= 0) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (dayDiff === 1) return 'Yesterday';
+  if (dayDiff < 7) return date.toLocaleDateString([], { weekday: 'long' });
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${day}/${month}/${date.getFullYear()}`;
+}
+
+const ChatCard = memo(function ChatCard({ item, onPress }: { item: ListItem; onPress: (contactNumber: string, contactName: string) => void }) {
   const theme = useTheme();
   const contact = (item.contact as Record<string, any>) || {};
   const lastMessage = (item.last_message as Record<string, any>) || {};
@@ -375,29 +704,15 @@ function ChatCard({ item, onPress }: { item: ListItem; onPress: (contactNumber: 
   const name = String(
     contact.name || contact.number || item.name || item.contact_name || item.phone || 'Untitled',
   );
-  const detail = String(
-    lastMessage.message ||
-    item.message ||
-    item.status ||
-    item.phone ||
-    item.number ||
-    '',
-  );
-  const rawDate = lastMessage.createdAt || item.date || item.created_at || '';
-  const date = rawDate ? new Date(rawDate) : null;
-  const time =
-    date && !isNaN(date.getTime())
-      ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      : '';
+  const preview = lastMessagePreview(lastMessage, item);
+  const time = formatListTime(lastMessage.create_date || lastMessage.createdAt || item.date || item.created_at || '');
   const unreadCount = Number(item.unread_count ?? 0);
 
   return (
-    <ScalePressable
+    <Pressable
       accessibilityRole="button"
       onPress={() => onPress(contactNumber, name)}
-      style={[
-        styles.card,
-      ]}
+      style={({ pressed }) => [styles.card, pressed && { opacity: 0.72 }]}
     >
       <View style={[styles.avatar, { backgroundColor: theme.mint }]}>
         <Text style={[styles.avatarText, { color: theme.mintText }]}>
@@ -411,15 +726,23 @@ function ChatCard({ item, onPress }: { item: ListItem; onPress: (contactNumber: 
             {name}
           </Text>
           {time ? (
-            <Text style={[styles.timeText, { color: theme.muted }]}>
+            <Text numberOfLines={1} style={[styles.timeText, { color: theme.muted }]}>
               {time}
             </Text>
           ) : null}
         </View>
 
-        <Text numberOfLines={1} style={[styles.cardDetail, { color: theme.muted }]}>
-          {detail}
-        </Text>
+        {preview.label ? (
+          <View style={styles.previewRow}>
+            {(() => {
+              const PreviewIcon = preview.Icon;
+              return PreviewIcon ? <PreviewIcon size={14} color={theme.muted} /> : null;
+            })()}
+            <Text numberOfLines={1} style={[styles.cardDetail, { color: theme.muted, flex: 1 }]}>
+              {preview.label}
+            </Text>
+          </View>
+        ) : null}
 
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text style={[styles.cardMeta, { color: theme.muted }]}>
@@ -434,9 +757,9 @@ function ChatCard({ item, onPress }: { item: ListItem; onPress: (contactNumber: 
       </View>
 
       <Text style={[styles.arrow, { color: theme.muted }]}>›</Text>
-    </ScalePressable>
+    </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   heading: {
@@ -491,14 +814,14 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
   },
-  activeIndicator: {
+  slidingIndicator: {
     position: 'absolute',
-    bottom: -1,
     left: 0,
-    right: 0,
+    bottom: -1,
     height: 2,
     borderRadius: 2,
   },
+  pager: { flex: 1, overflow: 'hidden' },
   list: {
     paddingHorizontal: 16,
     paddingBottom: 90,
@@ -525,10 +848,15 @@ const styles = StyleSheet.create({
   avatarText: { fontSize: 17, fontWeight: '800' },
   cardBody: { flex: 1, marginLeft: 12 },
   cardTitle: { fontSize: 15, fontWeight: '800' },
+  previewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 3,
+  },
   cardDetail: {
     fontSize: 13,
     lineHeight: 18,
-    marginTop: 3,
   },
   cardMeta: {
     fontSize: 10,

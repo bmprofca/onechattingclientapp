@@ -18,7 +18,7 @@ import {
 import { useTheme } from './src/theme/theme';
 import { socketManager } from './src/services/socketManager';
 import { notificationService } from './src/services/notificationService';
-import { listenForForegroundPush, registerDevicePush, unregisterDevicePush } from './src/services/pushService';
+import { listenForForegroundPush, listenForNotificationOpens, registerDevicePush, unregisterDevicePush } from './src/services/pushService';
 import { ScreenTransition } from './src/components/animations';
 
 import { KeyboardProvider } from './src/contexts/KeyboardContext';
@@ -48,6 +48,24 @@ export default function App() {
     init().catch(console.warn);
 
     const unsubscribePush = listenForForegroundPush();
+    const openTimers = new Set<ReturnType<typeof setInterval>>();
+    const unsubscribeOpen = listenForNotificationOpens((contactNumber, contactName) => {
+      const open = () => notificationNavRef.current?.(contactNumber, contactName);
+      if (notificationNavRef.current) {
+        open();
+        return;
+      }
+      let attempts = 0;
+      const timer = setInterval(() => {
+        attempts += 1;
+        if (notificationNavRef.current || attempts > 10) {
+          clearInterval(timer);
+          openTimers.delete(timer);
+          open();
+        }
+      }, 300);
+      openTimers.add(timer);
+    });
     const subscription = AppState.addEventListener('change', nextAppState => {
       if (nextAppState === 'active') {
         socketManager.ensureConnected();
@@ -68,6 +86,8 @@ export default function App() {
 
     return () => {
       unsubscribePush();
+      unsubscribeOpen();
+      openTimers.forEach(clearInterval);
       subscription.remove();
       backSubscription.remove();
     };
@@ -153,8 +173,8 @@ export default function App() {
 
   return (
     <KeyboardProvider>
-    <AppToastProvider>
       <SafeAreaProvider>
+      <AppToastProvider>
         <StatusBar
           translucent={false}
           backgroundColor={statusBarColor}
@@ -240,8 +260,8 @@ export default function App() {
 
         </SafeAreaView>
 
+      </AppToastProvider>
       </SafeAreaProvider>
-    </AppToastProvider>
     </KeyboardProvider>
   );
 }

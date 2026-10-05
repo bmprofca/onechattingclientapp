@@ -23,6 +23,7 @@ import {
   Info,
 } from 'lucide-react-native';
 import Toast from '../../ui/toast';
+import { openLink } from '../../utils/openLink';
 import { Bone } from '../Skeleton';
 import { ApiSession } from '../../api/client';
 import { getProjectQRCodes, QRCodeItem } from '../../api/qrcode';
@@ -122,7 +123,7 @@ export function ProjectQRModal({
         if (supported) {
           return Linking.openURL(whatsappUrl);
         } else {
-          return Linking.openURL(`https://api.whatsapp.com/send?text=${text}`);
+          return openLink(`https://api.whatsapp.com/send?text=${text}`);
         }
       })
       .catch(() => {
@@ -146,7 +147,7 @@ export function ProjectQRModal({
   };
 
   const handleOpenLink = () => {
-    Linking.openURL(publicQrUrl).catch(() => {
+    openLink(publicQrUrl).catch(() => {
       Toast.show({
         type: 'error',
         text1: 'Could not open link',

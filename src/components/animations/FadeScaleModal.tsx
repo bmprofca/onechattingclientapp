@@ -40,7 +40,7 @@ export function FadeScaleModal({
           toValue: 1,
           duration: 250,
           easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ]).start();
     } else if (modalVisible) {
@@ -48,7 +48,7 @@ export function FadeScaleModal({
         toValue: 0,
         duration: 200,
         easing: Easing.in(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: false,
       }).start(() => {
         setModalVisible(false);
       });
@@ -60,7 +60,7 @@ export function FadeScaleModal({
       toValue: 0,
       duration: 200,
       easing: Easing.in(Easing.cubic),
-      useNativeDriver: true,
+      useNativeDriver: false,
     }).start(() => {
       setModalVisible(false);
       onClose();

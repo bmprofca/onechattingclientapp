@@ -38,12 +38,12 @@ export function ScalePressable({
         toValue: activeScale,
         friction,
         tension,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
       Animated.timing(opacityAnim, {
         toValue: activeOpacity,
         duration: 100,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
     ]).start();
     onPressIn?.(event);
@@ -56,12 +56,12 @@ export function ScalePressable({
         toValue: 1,
         friction,
         tension,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
       Animated.timing(opacityAnim, {
         toValue: 1,
         duration: 150,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
     ]).start();
     onPressOut?.(event);

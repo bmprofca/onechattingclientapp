@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Toast from '../ui/toast';
+import { MessageInfoModal } from '../components/MessageInfoModal';
 import {
   ActivityIndicator,
   FlatList,
@@ -13,7 +14,6 @@ import {
   Text,
   TextInput,
   View,
-  Alert,
   Animated,
   PanResponder,
 } from 'react-native';
@@ -72,6 +72,78 @@ import { useTheme } from '../theme/theme';
 import { socketManager } from '../services/socketManager';
 import { Image as ImageIcon, Video, FileText, Music, LayoutTemplate } from 'lucide-react-native';
 import { ScalePressable, FadeInView } from '../components/animations';
+type ChatRow =
+  | { kind: 'message'; key: string; message: any }
+  | { kind: 'date'; key: string; label: string };
+
+function parseChatDate(value: any): Date | null {
+  if (value == null || value === '') return null;
+  if (typeof value === 'number') return new Date(value);
+  const str = String(value).trim();
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/);
+  if (match) {
+    return new Date(
+      Number(match[1]),
+      Number(match[2]) - 1,
+      Number(match[3]),
+      Number(match[4] || 0),
+      Number(match[5] || 0),
+      Number(match[6] || 0),
+    );
+  }
+  const parsed = new Date(str);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatChatDay(message: any) {
+  const date = parseChatDate(message?.create_date || message?.timestamp);
+  if (!date) return '';
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const sameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  if (sameDay(date, today)) return 'Today';
+  if (sameDay(date, yesterday)) return 'Yesterday';
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${day}/${month}/${date.getFullYear()}`;
+}
+
+function formatMessageTime(value: any) {
+  const date = parseChatDate(value);
+  if (!date) return '';
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function dayKey(message: any) {
+  const date = parseChatDate(message?.create_date || message?.timestamp);
+  if (!date) return '';
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function buildChatRows(messages: any[]): ChatRow[] {
+  const rows: ChatRow[] = [];
+  let previousDay = '';
+  messages.forEach((message, index) => {
+    const day = dayKey(message);
+    if (previousDay && day !== previousDay) {
+      rows.push({ kind: 'date', key: `date-${previousDay}`, label: formatChatDay(messages[index - 1]) });
+    }
+    const id = message.id || message.message_id || message.wamid || message.unique_id || index;
+    rows.push({ kind: 'message', key: `msg-${id}-${index}`, message });
+    previousDay = day || previousDay;
+  });
+  if (previousDay && messages.length) {
+    rows.push({
+      kind: 'date',
+      key: `date-${previousDay}-end`,
+      label: formatChatDay(messages[messages.length - 1]),
+    });
+  }
+  return rows;
+}
+
 type AttachmentKind = 'photo' | 'video' | 'document' | 'audio';
 
 type PendingAttachment = {
@@ -94,6 +166,10 @@ export function ChatRoomScreen({
 }) {
   const theme = useTheme();
   const [messages, setMessages] = useState<any[]>([]);
+  const [infoMessage, setInfoMessage] = useState<any>(null);
+  const [datePill, setDatePill] = useState('');
+  const [datePillVisible, setDatePillVisible] = useState(false);
+  const datePillTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [inputText, setInputText] = useState('');
@@ -837,6 +913,25 @@ export function ChatRoomScreen({
     );
   }
 
+  const revealDatePill = (label: string) => {
+    if (!label) return;
+    setDatePill(label);
+    setDatePillVisible(true);
+    if (datePillTimer.current) clearTimeout(datePillTimer.current);
+    datePillTimer.current = setTimeout(() => setDatePillVisible(false), 900);
+  };
+
+  const chatRows = useMemo(() => buildChatRows(messages), [messages]);
+
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 20 }).current;
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: Array<{ index: number | null; item: ChatRow }> }) => {
+    const visible = viewableItems.filter(entry => entry.index != null && entry.item);
+    if (!visible.length) return;
+    const top = visible.reduce((best, entry) => ((entry.index ?? 0) > (best.index ?? 0) ? entry : best));
+    const label = top.item.kind === 'date' ? top.item.label : formatChatDay(top.item.message);
+    if (label) setDatePill(label);
+  }).current;
+
   const renderMessage = ({ item }: { item: any }) => {
     const isOut = item.type === 'out';
     const isRead = item.status === 'read';
@@ -881,7 +976,7 @@ export function ChatRoomScreen({
                     styles.messageTime,
                     { color: isOut ? theme.bubbleOutText + 'A0' : theme.muted },
                   ]}>
-                    {new Date(item.create_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {formatMessageTime(item.create_date || item.timestamp)}
                   </Text>
                   {isOut && (
                     <View style={{ marginLeft: 4, flexDirection: 'row', alignItems: 'center' }}>
@@ -890,14 +985,7 @@ export function ChatRoomScreen({
                       {item.status === 'delivered' && <CheckCheck size={16} color={theme.muted} />}
                       {item.status === 'read' && <CheckCheck size={16} color="#34B7F1" />}
                       {item.status === 'failed' && (
-                        <ScalePressable
-                          onPress={() => Alert.alert('Message Failed', item.failed_reason || 'Unknown error')}
-                          hitSlop={8}
-                          style={{ marginLeft: 4, flexDirection: 'row', alignItems: 'center', gap: 4 }}
-                        >
-                          <AlertCircle size={14} color="#EF4444" />
-                          <Info size={14} color={theme.muted} />
-                        </ScalePressable>
+                        <AlertCircle size={14} color="#EF4444" style={{ marginLeft: 4 }} />
                       )}
                     </View>
                   )}
@@ -910,6 +998,15 @@ export function ChatRoomScreen({
                       <CornerUpLeft size={13} color={isOut ? theme.bubbleOutText + 'A0' : theme.muted} />
                     </ScalePressable>
                   )}
+                  <ScalePressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Message details"
+                    onPress={() => setInfoMessage(item)}
+                    hitSlop={10}
+                    style={{ marginLeft: 6, opacity: 0.85 }}
+                  >
+                    <Info size={13} color={isOut ? theme.bubbleOutText + 'A0' : theme.muted} />
+                  </ScalePressable>
                 </View>
               </View>
             );
@@ -1407,29 +1504,54 @@ export function ChatRoomScreen({
         </Pressable>
       </Modal>
 
+      <MessageInfoModal
+        message={infoMessage}
+        chatName={contactName}
+        onClose={() => setInfoMessage(null)}
+      />
+
       {/* Message List area */}
       <View style={[styles.chatBackground, { backgroundColor: theme.chatBg }]}>
         <ChatWallpaper isDark={theme.isDark} />
+        {datePillVisible && datePill ? (
+          <View pointerEvents="none" style={styles.datePillWrap}>
+            <View style={[styles.datePill, { backgroundColor: theme.isDark ? '#1F2C34' : '#FFFFFF' }]}>
+              <Text style={[styles.datePillText, { color: theme.muted }]}>{datePill}</Text>
+            </View>
+          </View>
+        ) : null}
         <FlatList
-          data={messages}
-          keyExtractor={(item, index) => {
-            const baseId = item.id || item.message_id || item.wamid || item.unique_id;
-            return baseId ? `${baseId}-${index}` : `msg-${index}`;
-          }}
-          renderItem={renderMessage}
+          data={chatRows}
+          keyExtractor={item => item.key}
+          renderItem={({ item }) =>
+            item.kind === 'date' ? (
+              <View style={styles.dateChipWrap}>
+                <View style={[styles.datePill, { backgroundColor: theme.isDark ? '#1F2C34' : '#FFFFFF' }]}>
+                  <Text style={[styles.datePillText, { color: theme.muted }]}>{item.label}</Text>
+                </View>
+              </View>
+            ) : (
+              renderMessage({ item: item.message })
+            )
+          }
           inverted={true}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
-          contentContainerStyle={messages.length ? styles.listContent : styles.listContentEmpty}
+          contentContainerStyle={chatRows.length ? styles.listContent : styles.listContentEmpty}
           onEndReached={() => loadHistory(true)}
           onEndReachedThreshold={0.5}
+          onScrollBeginDrag={() => datePill && setDatePillVisible(true)}
+          onScrollEndDrag={() => revealDatePill(datePill)}
+          onMomentumScrollEnd={() => revealDatePill(datePill)}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={viewabilityConfig}
           ListEmptyComponent={
             <View style={{ transform: [{ scaleY: -1 }, { scaleX: -1 }] }}>
               <LoadState
                 loading={loading}
                 skeleton="message"
                 error={error}
-                empty={!loading && !error && messages.length === 0}
+                empty={!loading && !error && chatRows.length === 0}
                 onRetry={() => loadHistory()}
               />
             </View>
@@ -2079,6 +2201,29 @@ const styles = StyleSheet.create({
   messageTime: {
     fontSize: 11,
   },
+  dateChipWrap: {
+    alignItems: 'center',
+    marginVertical: 8,
+  },
+  datePillWrap: {
+    position: 'absolute',
+    top: 8,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 4,
+  },
+  datePill: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 8,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+  },
+  datePillText: { fontSize: 12, fontWeight: '700' },
   messageStatusTicks: {
     fontSize: 12,
     marginLeft: 3,
@@ -2358,14 +2503,14 @@ function SwipeableMessageWrapper({ children, onSwipe, enabled }: { children: Rea
         }
         Animated.spring(pan, {
           toValue: 0,
-          useNativeDriver: true,
+          useNativeDriver: false,
           bounciness: 12,
         }).start();
       },
       onPanResponderTerminate: () => {
         Animated.spring(pan, {
           toValue: 0,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }).start();
       },
     })

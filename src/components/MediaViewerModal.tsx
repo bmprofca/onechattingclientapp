@@ -12,13 +12,13 @@ import {
   Platform,
   Alert,
   StatusBar,
-  Linking,
   Share,
 } from 'react-native';
 import { X, Download, ExternalLink, FileText } from 'lucide-react-native';
 import ReactNativeBlobUtil from 'react-native-blob-util';
 import { CameraRoll } from '@react-native-camera-roll/camera-roll';
 import { ScalePressable, FadeInView } from './animations';
+import { openLink } from '../utils/openLink';
 
 type MediaViewerProps = {
   visible: boolean;
@@ -135,11 +135,10 @@ export function MediaViewerModal({
   };
 
   const handleOpenExternal = () => {
-    if (mediaUrl) {
-      Linking.openURL(mediaUrl).catch(() =>
-        Alert.alert('Cannot open', 'Could not open this file in browser.'),
-      );
-    }
+    if (!mediaUrl) return;
+    openLink(mediaUrl).catch(() =>
+      Alert.alert('Cannot open', 'Could not open this file.'),
+    );
   };
 
   const renderContent = () => {
@@ -166,7 +165,7 @@ export function MediaViewerModal({
             <Text style={styles.videoPlayIcon}>▶</Text>
           </View>
           <Text style={styles.placeholderTitle}>{fileName}</Text>
-          <Text style={styles.placeholderSub}>Tap "Open" to play in your browser</Text>
+          <Text style={styles.placeholderSub}>Tap Open to play this video</Text>
         </View>
       );
     }

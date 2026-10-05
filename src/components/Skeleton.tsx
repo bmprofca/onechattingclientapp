@@ -57,35 +57,38 @@ function Row({ children, style }: { children: React.ReactNode; style?: ViewStyle
   );
 }
 
-function ChatRows({ count = 7, round = false }: { count?: number; round?: boolean }) {
+function ListRows({ count = 8 }: { count?: number }) {
   return (
-    <View style={styles.stack}>
+    <View style={styles.listStack}>
       {Array.from({ length: count }, (_, index) => (
-        <Row key={index}>
-          <Bone width={44} height={44} radius={round ? 22 : 14} />
+        <View key={index} style={styles.listRow}>
+          <Bone width={44} height={44} radius={14} />
           <View style={styles.lines}>
-            <Bone width={index % 2 === 0 ? '58%' : '46%'} height={14} />
-            <Bone width={index % 2 === 0 ? '78%' : '64%'} height={12} style={{ marginTop: 8 }} />
+            <View style={styles.lineHead}>
+              <Bone width={index % 2 === 0 ? '54%' : '42%'} height={15} />
+              <Bone width={36} height={11} />
+            </View>
+            <Bone width={index % 2 === 0 ? '86%' : '70%'} height={13} style={{ marginTop: 6 }} />
+            <Bone width={index % 3 === 0 ? '48%' : '34%'} height={10} style={{ marginTop: 6 }} />
           </View>
-          <Bone width={36} height={10} />
-        </Row>
+          <Bone width={8} height={18} radius={3} />
+        </View>
       ))}
     </View>
   );
 }
 
-function CardRows({ count = 5 }: { count?: number }) {
+function CardRows({ count = 6 }: { count?: number }) {
   const theme = useTheme();
   return (
-    <View style={styles.stack}>
+    <View style={styles.listStack}>
       {Array.from({ length: count }, (_, index) => (
-        <View key={index} style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-          <Bone width={40} height={40} radius={12} />
+        <View key={index} style={[styles.groupCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <Bone width={38} height={38} radius={12} />
           <View style={styles.lines}>
-            <Bone width="62%" height={14} />
-            <Bone width="40%" height={11} style={{ marginTop: 8 }} />
+            <Bone width={index % 2 === 0 ? '62%' : '46%'} height={14} />
+            <Bone width="30%" height={12} style={{ marginTop: 6 }} />
           </View>
-          <Bone width={64} height={22} radius={11} />
         </View>
       ))}
     </View>
@@ -112,11 +115,8 @@ export function ScreenSkeleton({
 }) {
   const theme = useTheme();
 
-  if (variant === 'chat' || variant === 'list' || variant === 'case') {
-    return <ChatRows />;
-  }
-  if (variant === 'contact') {
-    return <ChatRows round />;
+  if (variant === 'chat' || variant === 'list' || variant === 'case' || variant === 'contact') {
+    return <ListRows />;
   }
   if (variant === 'card') {
     return <CardRows />;
@@ -152,14 +152,25 @@ export function ScreenSkeleton({
   }
   if (variant === 'dashboard') {
     return (
-      <View style={styles.pad}>
-        <Bone height={132} radius={22} />
-        <View style={styles.grid}>
-          {Array.from({ length: 6 }, (_, index) => (
-            <View key={index} style={[styles.tile, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-              <Bone width={28} height={28} radius={8} />
-              <Bone width="70%" height={13} style={{ marginTop: 12 }} />
-              <Bone width="90%" height={11} style={{ marginTop: 8 }} />
+      <View>
+        <View style={[styles.wallet, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <Bone width="58%" height={10} />
+          <Bone width="46%" height={28} radius={8} style={{ marginTop: 12 }} />
+          <Bone width="92%" height={12} style={{ marginTop: 12 }} />
+        </View>
+        <View style={styles.metrics}>
+          {Array.from({ length: 9 }, (_, index) => (
+            <View
+              key={index}
+              style={[
+                styles.metricWrap,
+                index % 2 === 0 ? styles.metricGap : null,
+              ]}
+            >
+              <View style={[styles.metric, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <Bone width={index % 3 === 0 ? 36 : 54} height={23} radius={6} />
+                <Bone width={index % 2 === 0 ? '68%' : '52%'} height={11} style={{ marginTop: 8 }} />
+              </View>
             </View>
           ))}
         </View>
@@ -229,6 +240,45 @@ export function ScreenSkeleton({
 
 const styles = StyleSheet.create({
   stack: { paddingHorizontal: 16, paddingTop: 8, gap: 8 },
+  listStack: { paddingTop: 8, gap: 10 },
+  listRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 2,
+    gap: 12,
+  },
+  lineHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  groupCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  wallet: {
+    marginTop: 10,
+    borderRadius: 21,
+    borderWidth: 1,
+    padding: 20,
+  },
+  metrics: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 12,
+  },
+  metricWrap: { width: '48.5%', marginBottom: 10 },
+  metricGap: { marginRight: '3%' },
+  metric: {
+    borderRadius: 17,
+    borderWidth: 1,
+    padding: 15,
+  },
   row: {
     minHeight: 68,
     borderRadius: 16,
@@ -239,23 +289,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   lines: { flex: 1 },
-  card: {
-    minHeight: 72,
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
   pad: { paddingHorizontal: 16, paddingTop: 16 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 14 },
-  tile: {
-    width: '48%',
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 14,
-  },
   hero: {
     alignItems: 'center',
     borderWidth: 1,

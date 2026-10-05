@@ -1,6 +1,5 @@
 import { io, Socket } from 'socket.io-client';
 import { API_BASE_URL } from '../api/client';
-import { notificationService } from './notificationService';
 
 export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected';
 
@@ -53,9 +52,6 @@ class SocketManager {
       this.socket.on('chat', (data) => {
         if (!this.isPayloadForSelectedProject(data?.project_id)) return;
         this.messageCallbacks.forEach((callback) => callback(data));
-
-        // Trigger native device notification for incoming messages
-        this.triggerNativeNotification(data);
       });
 
       this.socket.on('message_status', (data) => {
@@ -184,40 +180,6 @@ class SocketManager {
     }
   }
 
-  private triggerNativeNotification(data: any) {
-    try {
-      const msg = data?.message || {};
-      const contact = data?.contact || {};
-
-      // Only notify on incoming messages
-      const isIncoming =
-        msg.type === 'in' ||
-        msg.message_type === 'in' ||
-        msg.direction === 'in';
-      if (!isIncoming) return;
-
-      const contactNumber = String(
-        contact.number || msg.number || msg.from || msg.contact_number || '',
-      );
-      if (!contactNumber) return;
-
-      const contactName = String(
-        contact.name || contact.firm_name || msg.name || contactNumber,
-      );
-
-      let text = String(msg.message || msg.text || msg.body || '');
-      const mediaType = msg.message_type || msg.media_type;
-
-      notificationService.displayMessageNotification(
-        contactName,
-        text,
-        contactNumber,
-        mediaType,
-      );
-    } catch (error) {
-      console.warn('Failed to trigger native notification:', error);
-    }
-  }
 }
 
 export const socketManager = new SocketManager();

@@ -42,12 +42,12 @@ export function WhatsAppNotificationBanner({
       Animated.timing(translateY, {
         toValue: -150,
         duration: 250,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
       Animated.timing(opacity, {
         toValue: 0,
         duration: 200,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
     ]).start(() => {
       setNotification(null);
@@ -77,12 +77,12 @@ export function WhatsAppNotificationBanner({
         toValue: 0,
         bounciness: 6,
         speed: 14,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
       Animated.timing(opacity, {
         toValue: 1,
         duration: 200,
-        useNativeDriver: true,
+        useNativeDriver: false,
       }),
     ]).start();
 

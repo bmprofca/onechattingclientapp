@@ -45,7 +45,7 @@ export function SlideUpModal({
           toValue: 1,
           duration: 320,
           easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ]).start();
     } else if (modalVisible) {
@@ -53,7 +53,7 @@ export function SlideUpModal({
         toValue: 0,
         duration: 240,
         easing: Easing.in(Easing.cubic),
-        useNativeDriver: true,
+        useNativeDriver: false,
       }).start(() => {
         setModalVisible(false);
       });
@@ -65,7 +65,7 @@ export function SlideUpModal({
       toValue: 0,
       duration: 240,
       easing: Easing.in(Easing.cubic),
-      useNativeDriver: true,
+      useNativeDriver: false,
     }).start(() => {
       setModalVisible(false);
       onClose();

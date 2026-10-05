@@ -339,7 +339,7 @@ export function WorkspaceScreen({
         toValue: 1,
         duration: 150,
         easing: Easing.out(Easing.ease),
-        useNativeDriver: true,
+        useNativeDriver: false,
       }).start();
     } else {
       menuOpacity.setValue(0);
@@ -495,9 +495,35 @@ export function WorkspaceScreen({
     return () => subscription.remove();
   }, [handleBackPress]);
 
-  // ---- Full-screen overlays shared by both modes ----
+  const inboxListMounted =
+    page === 'inbox' &&
+    !campaignTarget &&
+    !createCampaignTarget &&
+    !newChatTarget &&
+    !editCaseTarget &&
+    !caseDetailsTarget &&
+    !createCaseTarget &&
+    !casesTarget &&
+    !walletTarget &&
+    !wabaTarget &&
+    !scannedUsersTarget &&
+    !contactsTarget &&
+    !groupsTarget &&
+    !groupDetailsTarget &&
+    !templatesTarget &&
+    !templateEditorTarget &&
+    !supportTarget &&
+    !contextConfigTarget &&
+    !agentConfigTarget &&
+    !flowBuilderTarget &&
+    !flowLibraryTarget &&
+    !projectConfigTarget &&
+    !transactionsTarget &&
+    !aiBillsTarget &&
+    !projectsTarget &&
+    !profileTarget;
 
-  if (chatTarget) {
+  if (chatTarget && !inboxListMounted) {
     return (
       <View style={{ flex: 1 }}>
         <ScreenTransition>
@@ -987,7 +1013,10 @@ export function WorkspaceScreen({
           ]}
         >
           <View style={styles.headerTitleGroup}>
-            <BrandMark size={36} />
+            <BrandMark
+              size={36}
+              subtitle={hasProject ? currentProject?.name || '' : undefined}
+            />
             {!hasProject && (
               <Text style={[styles.greeting, { color: theme.muted }]}>
                 Set up your first workspace
@@ -1155,15 +1184,9 @@ export function WorkspaceScreen({
               }
               onBalanceUpdated={bal => setWalletBalance(bal)}
               onOpenInbox={() => setPage('inbox')}
-              onOpenProfile={() => setProfileTarget(true)}
               onOpenProjectsHub={() => setProjectsTarget(true)}
               onOpenWallet={() => setWalletTarget(true)}
-              onOpenSupport={() => setSupportTarget(true)}
               onOpenScannedUsers={() => setScannedUsersTarget(true)}
-              onOpenTemplates={() => setTemplatesTarget(true)}
-              onOpenGroups={() => setGroupsTarget(true)}
-              onOpenContacts={() => setContactsTarget(true)}
-              onOpenCases={() => setCasesTarget(true)}
             />
           ) : page === 'inbox' ? (
             <LiveChatScreen
@@ -1451,19 +1474,33 @@ export function WorkspaceScreen({
         />
       )}
 
-      {/* WhatsApp In-App Notification Banner */}
       <WhatsAppNotificationBanner
-        currentChatNumber={null}
+        currentChatNumber={chatTarget?.number || null}
         onOpenChat={(contactNumber, contactName) =>
           setChatTarget({ number: contactNumber, name: contactName })
         }
       />
+
+      {chatTarget ? (
+        <View style={[styles.chatOverlay, { backgroundColor: theme.canvas }]}>
+          <ScreenTransition>
+            <ChatRoomScreen
+              projectId={projectId}
+              session={apiSession}
+              contactNumber={chatTarget.number}
+              contactName={chatTarget.name}
+              onBack={() => setChatTarget(null)}
+            />
+          </ScreenTransition>
+        </View>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
+  chatOverlay: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 30, elevation: 30 },
   logo: {
     width: 42,
     height: 42,
@@ -1480,7 +1517,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     borderBottomWidth: 1,
   },
-  headerTitleGroup: { justifyContent: 'center' },
+  headerTitleGroup: { flex: 1, minWidth: 0, marginRight: 8, justifyContent: 'center' },
   greeting: { fontSize: 11, fontWeight: '600', letterSpacing: 0.5 },
   headerName: { fontSize: 24, fontWeight: '900', letterSpacing: -0.3 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },

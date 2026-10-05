@@ -20,18 +20,13 @@ export async function post<T>(path: string, payload: unknown, session?: ApiSessi
       body: JSON.stringify(encryptPayload(payload)),
     });
 
-    // --- ADDED: read raw text first so we can see exactly what the server sent ---
     const rawText = await response.text();
-    console.log(`[post ${path}] status:`, response.status);
-    console.log(`[post ${path}] raw response:`, rawText);
-
     let result: any = {};
     try {
       result = rawText ? JSON.parse(rawText) : {};
     } catch {
-      console.log(`[post ${path}] response was not valid JSON`);
+      result = {};
     }
-    // --- END ADDED ---
 
     if (!response.ok || result.error === true || typeof result.error === 'string') {
       throw new ApiError(
@@ -78,14 +73,11 @@ export async function get<T>(path: string, _?: unknown, session?: ApiSession): P
     });
 
     const rawText = await response.text();
-    console.log(`[get ${path}] status:`, response.status);
-    console.log(`[get ${path}] raw response:`, rawText);
-
     let result: any = {};
     try {
       result = rawText ? JSON.parse(rawText) : {};
     } catch {
-      console.log(`[get ${path}] response was not valid JSON`);
+      result = {};
     }
 
     if (!response.ok || result.error === true || typeof result.error === 'string') {

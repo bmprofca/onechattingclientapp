@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, Linking } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
 import Toast from '../ui/toast';
 import { ScreenSkeleton } from '../components/Skeleton';
@@ -7,6 +7,7 @@ import { ArrowLeft, MessageSquare, Globe, Link as LinkIcon, CheckCircle2 } from 
 import { ApiSession } from '../api/client';
 import { embedSignup, submitWabaId, getWabaInformation } from '../api/workspace';
 import { useTheme } from '../theme/theme';
+import { openLink } from '../utils/openLink';
 
 export function WabaOnboardingScreen({
   session,
@@ -71,11 +72,11 @@ export function WabaOnboardingScreen({
       }
 
       if (targetUrl) {
-        Linking.openURL(targetUrl);
+        await openLink(targetUrl);
         Toast.show({
           type: 'success',
-          text1: 'Browser Opened',
-          text2: 'Please complete the WhatsApp signup in your browser.',
+          text1: 'Signup opened',
+          text2: 'Complete the WhatsApp signup in the page that opened.',
         });
       } else {
         throw new Error('No signup URL could be generated.');

@@ -2,30 +2,24 @@ import { Platform } from 'react-native';
 import {
   deleteToken,
   getMessaging,
+  getInitialNotification,
   getToken,
   onMessage,
+  onNotificationOpenedApp,
   onTokenRefresh,
   registerDeviceForRemoteMessages,
   setBackgroundMessageHandler,
   type RemoteMessage,
 } from '@react-native-firebase/messaging';
 import { ApiSession, post } from '../api/client';
-import { notificationService } from './notificationService';
-
 let currentSession: ApiSession | null = null;
 let refreshListenerReady = false;
 
 const messaging = getMessaging();
 
-async function showPush(message: RemoteMessage) {
-  const data = message.data || {};
-  if (data.type !== 'chat_message') return;
-  await notificationService.displayMessageNotification(
-    String(data.contactName || data.contactNumber || 'New message'),
-    String(data.messageText || ''),
-    String(data.contactNumber || ''),
-    data.mediaType ? String(data.mediaType) : undefined,
-  );
+async function showPush(_message: RemoteMessage) {
+  // Android shows the FCM notification payload itself. Posting another
+  // local notification here duplicates it while the app is open.
 }
 
 export function registerBackgroundPushHandler() {
@@ -72,4 +66,19 @@ export async function unregisterDevicePush(session: ApiSession) {
 
 export function listenForForegroundPush() {
   return onMessage(messaging, showPush);
+}
+
+export function listenForNotificationOpens(
+  onOpen: (contactNumber: string, contactName: string) => void,
+) {
+  const openFrom = (message: RemoteMessage | null) => {
+    const data = message?.data || {};
+    const contactNumber = String(data.contactNumber || '');
+    if (!contactNumber) return;
+    onOpen(contactNumber, String(data.contactName || contactNumber));
+  };
+
+  const unsubscribe = onNotificationOpenedApp(messaging, openFrom);
+  getInitialNotification(messaging).then(openFrom).catch(() => {});
+  return unsubscribe;
 }

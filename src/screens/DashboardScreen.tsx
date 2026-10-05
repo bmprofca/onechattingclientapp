@@ -37,32 +37,20 @@ export function DashboardScreen({
   balance,
   projectCount,
   onBalanceUpdated,
-  onOpenProfile,
   onOpenProjectsHub,
   onOpenInbox,
   onOpenWallet,
-  onOpenSupport,
   onOpenScannedUsers,
-  onOpenTemplates,
-  onOpenGroups,
-  onOpenContacts,
-  onOpenCases,
 }: {
   projectId: string;
   session: ApiSession;
   balance?: string | number;
   projectCount?: number;
   onBalanceUpdated?: (balance: number) => void;
-  onOpenProfile?: () => void;
   onOpenProjectsHub?: () => void;
   onOpenInbox?: () => void;
   onOpenWallet?: () => void;
-  onOpenSupport?: () => void;
   onOpenScannedUsers?: () => void;
-  onOpenTemplates?: () => void;
-  onOpenGroups?: () => void;
-  onOpenContacts?: () => void;
-  onOpenCases?: () => void;
 }) {
   const theme = useTheme();
   const [dashboardData, setDashboardData] = useState<any>(null);
@@ -154,33 +142,22 @@ export function DashboardScreen({
     { label: 'Total Msgs', value: String(dashboardData?.message?.total || '0'), tone: 'blue' as const },
   ];
 
-  const actions = [
-    { title: 'Open Cases', note: 'Manage customer cases', onPress: onOpenCases },
-    { title: 'Scanned Users', note: 'QR scan audience', onPress: onOpenScannedUsers },
-    { title: 'Projects', note: 'Switch workspace', onPress: onOpenProjectsHub },
-    { title: 'Templates', note: 'Manage message templates', onPress: onOpenTemplates },
-    { title: 'Groups', note: 'Manage contact groups', onPress: onOpenGroups },
-    { title: 'All Contacts', note: 'Manage workspace contacts', onPress: onOpenContacts },
-    { title: 'Wallet', note: 'Balance & top-up', onPress: onOpenWallet },
-    { title: 'Profile', note: 'Account details', onPress: onOpenProfile },
-    { title: 'Support', note: 'Help center', onPress: onOpenSupport },
-  ];
-
   return (
     <ScrollView
       contentContainerStyle={styles.page}
       refreshControl={
         <RefreshControl
-          refreshing={loading}
+          refreshing={loading && !!dashboardData}
           onRefresh={load}
           tintColor={theme.emerald}
         />
       }
     >
-      {loading ? <ScreenSkeleton variant="dashboard" /> : (
+      {loading && !dashboardData ? (
+        <ScreenSkeleton variant="dashboard" />
+      ) : error && !dashboardData ? (
         <LoadState loading={false} error={error} empty={false} onRetry={load} />
-      )}
-      {!loading && !error && (
+      ) : (
         <>
           <FadeInView direction="down" distance={12} duration={350}>
             <ScalePressable
@@ -248,42 +225,6 @@ export function DashboardScreen({
               </FadeInView>
             ))}
           </View>
-
-          <FadeInView delay={250} duration={350}>
-            <Text style={[styles.sectionTitle, { color: theme.ink }]}>
-              Manage workspace
-            </Text>
-          </FadeInView>
-
-          <View style={styles.actionGrid}>
-            {actions.map((action, index) => (
-              <FadeInView
-                key={action.title}
-                delay={280 + index * 35}
-                distance={10}
-                style={styles.actionCardWrap}
-              >
-                <ScalePressable
-                  onPress={action.onPress}
-                  disabled={!action.onPress}
-                  style={[
-                    styles.actionCard,
-                    { backgroundColor: theme.surface, borderColor: theme.border },
-                  ]}
-                >
-                  <Text style={[styles.actionTitle, { color: theme.ink }]}>
-                    {action.title}
-                  </Text>
-                  <Text style={[styles.actionNote, { color: theme.muted }]}>
-                    {action.note}
-                  </Text>
-                  <Text style={[styles.actionArrow, { color: theme.emerald }]}>
-                    ›
-                  </Text>
-                </ScalePressable>
-              </FadeInView>
-            ))}
-          </View>
         </>
       )}
     </ScrollView>
@@ -320,38 +261,4 @@ const styles = StyleSheet.create({
   },
   metricValue: { fontSize: 23, fontWeight: '800' },
   metricLabel: { fontSize: 11, marginTop: 3 },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    marginTop: 24,
-    marginBottom: 4,
-  },
-  actionGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  actionCardWrap: {
-    width: '48.5%',
-    marginTop: 10,
-  },
-  actionCard: {
-    minHeight: 102,
-    borderWidth: 1,
-    borderRadius: 17,
-    padding: 14,
-  },
-  actionTitle: { fontSize: 14, fontWeight: '800' },
-  actionNote: {
-    fontSize: 11,
-    lineHeight: 15,
-    marginTop: 5,
-    width: '80%',
-  },
-  actionArrow: {
-    position: 'absolute',
-    right: 13,
-    bottom: 10,
-    fontSize: 21,
-  },
 });

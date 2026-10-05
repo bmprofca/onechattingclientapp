@@ -9,7 +9,6 @@ import {
   Pressable,
   ActivityIndicator,
   ScrollView,
-  Linking,
 } from 'react-native';
 import { Sparkles, Check, CheckCircle, MessageSquare, Info, Image as ImageIcon, UploadCloud, Trash2, AlertTriangle, CreditCard, Key } from 'lucide-react-native';
 import { X } from 'lucide-react-native';
@@ -20,6 +19,7 @@ import { generateAiTemplate, generateAiHeaderMedia, createTemplate, getAiStatus,
 import { uploadFile } from '../api/upload';
 import { useTheme } from '../theme/theme';
 import { KeyboardAvoidView } from './KeyboardAvoidView';
+import { openLink } from '../utils/openLink';
 
 type AiTemplateModalProps = {
   visible: boolean;
@@ -312,7 +312,11 @@ export function AiTemplateModal({
                   </Text>
                   <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
                     <Pressable
-                      onPress={() => Linking.openURL('https://app.onechat.in/recharge')}
+                      onPress={() => {
+                        openLink('https://app.onechat.in/recharge').catch(() =>
+                          Toast.show({ type: 'error', text1: 'Could not open the recharge page' }),
+                        );
+                      }}
                       style={[styles.cautionBtn, { backgroundColor: '#D97706' }]}
                     >
                       <CreditCard size={12} color="#FFF" />
