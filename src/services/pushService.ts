@@ -1,4 +1,5 @@
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
+import { notificationService } from './notificationService';
 import {
   deleteToken,
   getMessaging,
@@ -17,9 +18,23 @@ let refreshListenerReady = false;
 
 const messaging = getMessaging();
 
-async function showPush(_message: RemoteMessage) {
-  // Android shows the FCM notification payload itself. Posting another
-  // local notification here duplicates it while the app is open.
+async function showPush(message: RemoteMessage) {
+  const title = message.notification?.title;
+  const body = message.notification?.body;
+  // The open app posts its own native notification from the socket.
+  // A notification payload is drawn by Android when the process is stopped.
+  if (AppState.currentState === 'active' || title || body) return;
+
+  const data = message.data || {};
+  const contactNumber = String(data.contactNumber || '');
+  if (!contactNumber && !title && !body) return;
+
+  await notificationService.displayMessageNotification(
+    String(data.contactName || title || contactNumber || 'New message'),
+    String(data.messageText || body || ''),
+    contactNumber || 'message',
+    String(data.mediaType || ''),
+  );
 }
 
 export function registerBackgroundPushHandler() {

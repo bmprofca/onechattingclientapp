@@ -46,7 +46,6 @@ import { Project } from '../api/auth';
 import { BrandMark } from '../components/BrandMark';
 import { ProjectAvatar } from '../components/ProjectAvatar';
 import { ProjectQRModal } from '../components/Modals/ProjectQRModal';
-import { WhatsAppNotificationBanner } from '../components/WhatsAppNotificationBanner';
 import { formatImageUrl } from '../utils/imageUrl';
 import { useKeyboardContext } from '../contexts/KeyboardContext';
 
@@ -535,12 +534,6 @@ export function WorkspaceScreen({
             onBack={() => setChatTarget(null)}
           />
         </ScreenTransition>
-        <WhatsAppNotificationBanner
-          currentChatNumber={chatTarget.number}
-          onOpenChat={(contactNumber, contactName) =>
-            setChatTarget({ number: contactNumber, name: contactName })
-          }
-        />
       </View>
     );
   }
@@ -1473,13 +1466,6 @@ export function WorkspaceScreen({
           projectImage={projectProfileImage}
         />
       )}
-
-      <WhatsAppNotificationBanner
-        currentChatNumber={chatTarget?.number || null}
-        onOpenChat={(contactNumber, contactName) =>
-          setChatTarget({ number: contactNumber, name: contactName })
-        }
-      />
 
       {chatTarget ? (
         <View style={[styles.chatOverlay, { backgroundColor: theme.canvas }]}>
