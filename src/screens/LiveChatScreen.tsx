@@ -85,16 +85,18 @@ export function LiveChatScreen({
   session,
   onOpenChat,
   onNewChat,
+  initialFilter,
 }: {
   projectId: string;
   session: ApiSession;
   onOpenChat: (contactNumber: string, contactName: string) => void;
   onNewChat?: () => void;
+  initialFilter?: ChatFilterType;
 }) {
   const theme = useTheme();
   const { isKeyboardVisible, keyboardHeightAnim } = useKeyboardContext();
   const [activeFilter, setActiveFilter] = useState<ChatFilterType>(() =>
-    chatMemory?.projectId === projectId ? chatMemory.filter : 'all',
+    initialFilter ?? (chatMemory?.projectId === projectId ? chatMemory.filter : 'all'),
   );
   const filterIndexRef = useRef(FILTERS.findIndex(tab => tab.key === activeFilter));
   const pageWidth = useRef(0);

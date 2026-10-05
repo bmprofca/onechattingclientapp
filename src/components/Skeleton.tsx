@@ -164,7 +164,6 @@ export function ScreenSkeleton({
               key={index}
               style={[
                 styles.metricWrap,
-                index % 2 === 0 ? styles.metricGap : null,
               ]}
             >
               <View style={[styles.metric, { backgroundColor: theme.surface, borderColor: theme.border }]}>
@@ -270,10 +269,10 @@ const styles = StyleSheet.create({
   metrics: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    justifyContent: 'space-between',
     marginTop: 12,
   },
-  metricWrap: { width: '48.5%', marginBottom: 10 },
-  metricGap: { marginRight: '3%' },
+  metricWrap: { width: '31.5%', marginBottom: 10 },
   metric: {
     borderRadius: 17,
     borderWidth: 1,

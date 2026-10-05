@@ -20,6 +20,7 @@ import { socketManager } from './src/services/socketManager';
 import { notificationService } from './src/services/notificationService';
 import { listenForForegroundPush, listenForNotificationOpens, registerDevicePush, unregisterDevicePush } from './src/services/pushService';
 import { ScreenTransition } from './src/components/animations';
+import { ConnectionBanner } from './src/components/ConnectionBanner';
 
 import { KeyboardProvider } from './src/contexts/KeyboardContext';
 
@@ -185,6 +186,7 @@ export default function App() {
           style={{ flex: 1, backgroundColor: statusBarColor }}
           edges={['top', 'bottom', 'left', 'right']}
         >
+          {session ? <ConnectionBanner /> : null}
           {session === undefined ? (
             <SplashScreen />
           ) : !session ? (
