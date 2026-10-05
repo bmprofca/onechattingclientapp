@@ -1,4 +1,4 @@
-import { AppState, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import { notificationService } from './notificationService';
 import {
   deleteToken,
@@ -19,19 +19,15 @@ let refreshListenerReady = false;
 const messaging = getMessaging();
 
 async function showPush(message: RemoteMessage) {
-  const title = message.notification?.title;
-  const body = message.notification?.body;
-  // The open app posts its own native notification from the socket.
-  // A notification payload is drawn by Android when the process is stopped.
-  if (AppState.currentState === 'active' || title || body) return;
-
   const data = message.data || {};
+  const title = String(data.contactName || message.notification?.title || '');
+  const body = String(data.messageText || message.notification?.body || '');
   const contactNumber = String(data.contactNumber || '');
   if (!contactNumber && !title && !body) return;
 
   await notificationService.displayMessageNotification(
-    String(data.contactName || title || contactNumber || 'New message'),
-    String(data.messageText || body || ''),
+    title || contactNumber || 'New message',
+    body,
     contactNumber || 'message',
     String(data.mediaType || ''),
   );
@@ -80,7 +76,8 @@ export async function unregisterDevicePush(session: ApiSession) {
 }
 
 export function listenForForegroundPush() {
-  return onMessage(messaging, showPush);
+  // While the app is open the socket posts the native notification.
+  return onMessage(messaging, async () => {});
 }
 
 export function listenForNotificationOpens(

@@ -69,8 +69,6 @@ export default function App() {
     const subscription = AppState.addEventListener('change', nextAppState => {
       if (nextAppState === 'active') {
         socketManager.ensureConnected();
-      } else if (nextAppState === 'background') {
-        socketManager.goOffline();
       }
     });
 

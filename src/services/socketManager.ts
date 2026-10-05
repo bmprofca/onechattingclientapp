@@ -1,4 +1,3 @@
-import { AppState } from 'react-native';
 import { io, Socket } from 'socket.io-client';
 import { API_BASE_URL } from '../api/client';
 import { notificationService } from './notificationService';
@@ -167,7 +166,6 @@ class SocketManager {
   }
 
   private postForegroundNotification(data: any) {
-    if (AppState.currentState !== 'active') return;
     const message = data?.message || {};
     if (message.type !== 'in') return;
     const contact = data?.contact || {};
