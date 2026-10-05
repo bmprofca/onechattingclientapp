@@ -3,20 +3,16 @@ import { ApiSession, post } from './client';
 // ─── Response Types ──────────────────────────────────────────────────────────
 
 export interface TopupWalletResponse {
-  gateway: 'razorpay' | 'cashfree' | 'zwitch';
-  /** For Razorpay: razorpay_order_id. For Cashfree: payment_session_id. For Zwitch: payment_token_id. */
+  gateway: 'razorpay';
+  /** Razorpay order id */
   token_id: string;
   /** Our internal order_id stored in payment_orders table */
   order_id: string;
   /** Razorpay API key to pass to the SDK */
   key_id?: string;
-  /** Amount — in PAISE for Razorpay (e.g. ₹2000 = 200000), in INR for Cashfree/Zwitch */
+  /** Amount in paise (₹2000 = 200000) */
   amount: number;
   currency: string;
-  /** Cashfree only */
-  payment_session_id?: string;
-  cf_order_id?: string;
-  environment?: 'production' | 'sandbox';
   msg?: string;
 }
 
