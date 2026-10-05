@@ -2,12 +2,13 @@ import { AppRegistry } from 'react-native';
 import notifee from '@notifee/react-native';
 import App from './App';
 import { name as appName } from './app.json';
+import { notificationService } from './src/services/notificationService';
 import { registerBackgroundPushHandler } from './src/services/pushService';
 
 registerBackgroundPushHandler();
 
-notifee.onBackgroundEvent(async () => {
-	// Tap handling lives in the notification service once the app is running.
+notifee.onBackgroundEvent(async event => {
+	notificationService.handleBackgroundEvent(event);
 });
 
 // Polyfill secure random for libraries that rely on `crypto.getRandomValues`.

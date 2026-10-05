@@ -1,7 +1,5 @@
-import { AppState } from 'react-native';
 import { io, Socket } from 'socket.io-client';
 import { API_BASE_URL } from '../api/client';
-import { notificationService } from './notificationService';
 
 export type ConnectionStatus = 'connected' | 'connecting' | 'disconnected';
 
@@ -54,7 +52,6 @@ class SocketManager {
       this.socket.on('chat', (data) => {
         if (!this.isPayloadForSelectedProject(data?.project_id)) return;
         this.messageCallbacks.forEach((callback) => callback(data));
-        this.postForegroundNotification(data);
       });
 
       this.socket.on('message_status', (data) => {
@@ -164,23 +161,6 @@ class SocketManager {
     socket.disconnect();
     socket.removeAllListeners();
     this.notifyConnectionChange('disconnected');
-  }
-
-  private postForegroundNotification(data: any) {
-    if (AppState.currentState !== 'active') return;
-    const message = data?.message || {};
-    if (message.type !== 'in') return;
-    const contact = data?.contact || {};
-    const contactNumber = String(contact.number || '');
-    if (!contactNumber) return;
-    notificationService
-      .displayMessageNotification(
-        String(contact.name || contact.firm_name || contactNumber),
-        String(message.message || ''),
-        contactNumber,
-        String(message.message_type || ''),
-      )
-      .catch(() => {});
   }
 
   getConnectionStatus(): ConnectionStatus {

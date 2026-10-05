@@ -48,6 +48,7 @@ import { ProjectAvatar } from '../components/ProjectAvatar';
 import { ProjectQRModal } from '../components/Modals/ProjectQRModal';
 import { formatImageUrl } from '../utils/imageUrl';
 import { useKeyboardContext } from '../contexts/KeyboardContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type Page =
   | 'dashboard'
@@ -93,6 +94,7 @@ export function WorkspaceScreen({
   onSignOut: () => void;
 }) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const { isKeyboardVisible } = useKeyboardContext();
   const projectId = session.selectedProjectId || '';
   const hasProject = !!projectId;
@@ -524,7 +526,16 @@ export function WorkspaceScreen({
 
   if (chatTarget && !inboxListMounted) {
     return (
-      <View style={{ flex: 1 }}>
+      <View
+        style={{
+          position: 'absolute',
+          top: -insets.top,
+          right: 0,
+          bottom: 0,
+          left: 0,
+          backgroundColor: theme.header,
+        }}
+      >
         <ScreenTransition>
           <ChatRoomScreen
             projectId={projectId}
@@ -1468,7 +1479,12 @@ export function WorkspaceScreen({
       )}
 
       {chatTarget ? (
-        <View style={[styles.chatOverlay, { backgroundColor: theme.canvas }]}>
+        <View
+          style={[
+            styles.chatOverlay,
+            { backgroundColor: theme.header, top: -insets.top },
+          ]}
+        >
           <ScreenTransition>
             <ChatRoomScreen
               projectId={projectId}

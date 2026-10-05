@@ -8,6 +8,7 @@ import { AppState, Platform, PermissionsAndroid } from 'react-native';
 
 const MESSAGE_CHANNEL_ID = 'onechat_messages';
 const MESSAGE_CHANNEL_NAME = 'Chat Messages';
+const APP_NAME = 'OneChatting';
 
 /**
  * Callback type for when user taps a notification.
@@ -19,10 +20,17 @@ export type NotificationTapHandler = (
   contactName: string,
 ) => void;
 
+type NotificationTapData = {
+  contactNumber?: string;
+  contactName?: string;
+};
+
 class NotificationService {
   private channelsCreated = false;
   private activeChatNumber: string | null = null;
   private tapHandler: NotificationTapHandler | null = null;
+  private pendingTap: { contactNumber: string; contactName: string } | null = null;
+  private initialNotificationChecked = false;
 
   /**
    * Call once on app start. Creates the Android notification channels
@@ -74,6 +82,44 @@ class NotificationService {
    */
   onNotificationTap(handler: NotificationTapHandler) {
     this.tapHandler = handler;
+    if (this.pendingTap) {
+      const { contactNumber, contactName } = this.pendingTap;
+      this.pendingTap = null;
+      handler(contactNumber, contactName);
+    }
+
+    if (this.initialNotificationChecked) return;
+    this.initialNotificationChecked = true;
+    notifee
+      .getInitialNotification()
+      .then(initial => {
+        if (initial?.notification?.data) {
+          this.dispatchTap(
+            initial.notification.data as NotificationTapData,
+          );
+        }
+      })
+      .catch(error => {
+        console.warn('Failed to read initial notification:', error);
+      });
+  }
+
+  handleBackgroundEvent(event: NotifeeEvent) {
+    if (event.type === EventType.PRESS && event.detail.notification?.data) {
+      this.dispatchTap(event.detail.notification.data as NotificationTapData);
+    }
+  }
+
+  private dispatchTap(data: NotificationTapData) {
+    const contactNumber = String(data.contactNumber || '');
+    if (!contactNumber) return;
+    const contactName = String(data.contactName || contactNumber);
+
+    if (this.tapHandler) {
+      this.tapHandler(contactNumber, contactName);
+    } else {
+      this.pendingTap = { contactNumber, contactName };
+    }
   }
 
   /**
@@ -130,8 +176,8 @@ class NotificationService {
     try {
       await notifee.displayNotification({
         id: `chat_${contactNumber}`, // Reuse ID per contact to stack/replace
-        title: contactName || contactNumber,
-        body: displayText || 'New message',
+        title: APP_NAME,
+        body: `${contactName || contactNumber}: ${displayText || 'New message'}`,
         data: {
           contactNumber,
           contactName: contactName || contactNumber,
@@ -140,6 +186,8 @@ class NotificationService {
         android: {
           channelId: MESSAGE_CHANNEL_ID,
           smallIcon: 'ic_notification',
+          largeIcon: require('../assets/logo.png'),
+          circularLargeIcon: true,
           color: '#25D366',
           importance: AndroidImportance.HIGH,
           visibility: AndroidVisibility.PUBLIC,
@@ -208,26 +256,7 @@ class NotificationService {
     // Foreground events (app is open)
     notifee.onForegroundEvent(({ type, detail }: NotifeeEvent) => {
       if (type === EventType.PRESS && detail.notification?.data) {
-        const { contactNumber, contactName } = detail.notification.data as {
-          contactNumber: string;
-          contactName: string;
-        };
-        if (contactNumber && this.tapHandler) {
-          this.tapHandler(contactNumber, contactName);
-        }
-      }
-    });
-
-    // Background events (app is in background)
-    notifee.onBackgroundEvent(async ({ type, detail }: NotifeeEvent) => {
-      if (type === EventType.PRESS && detail.notification?.data) {
-        const { contactNumber, contactName } = detail.notification.data as {
-          contactNumber: string;
-          contactName: string;
-        };
-        if (contactNumber && this.tapHandler) {
-          this.tapHandler(contactNumber, contactName);
-        }
+        this.dispatchTap(detail.notification.data as NotificationTapData);
       }
     });
   }
