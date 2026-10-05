@@ -8,7 +8,7 @@ import { registerBackgroundPushHandler } from './src/services/pushService';
 registerBackgroundPushHandler();
 
 notifee.onBackgroundEvent(async event => {
-	notificationService.handleBackgroundEvent(event);
+	await notificationService.handleBackgroundEvent(event);
 });
 
 // Polyfill secure random for libraries that rely on `crypto.getRandomValues`.
