@@ -72,6 +72,7 @@ import { useTheme } from '../theme/theme';
 import { socketManager } from '../services/socketManager';
 import { Image as ImageIcon, Video, FileText, Music, LayoutTemplate } from 'lucide-react-native';
 import { ScalePressable, FadeInView } from '../components/animations';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 type ChatRow =
   | { kind: 'message'; key: string; message: any }
   | { kind: 'date'; key: string; label: string };
@@ -194,6 +195,7 @@ export function ChatRoomScreen({
   onBack: () => void;
 }) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<any[]>([]);
   const infoModalRef = useRef<MessageInfoHandle>(null);
   const [datePill, setDatePill] = useState('');
@@ -1223,7 +1225,7 @@ export function ChatRoomScreen({
   const canSend = !sending && !isUploading && !isLockedByAssignment && (!!pendingAttachment || !!inputText.trim());
 
   return (
-    <Animated.View style={[styles.safe, { backgroundColor: theme.canvas, paddingBottom: keyboardHeightAnim }]}>
+    <Animated.View style={[styles.safe, { backgroundColor: theme.header, paddingTop: insets.top, paddingBottom: keyboardHeightAnim }]}>
       {/* Sleek Top Header */}
       <FadeInView direction="down" distance={8} duration={250} style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
         <ScalePressable onPress={onBack} style={styles.backButton} hitSlop={8}>

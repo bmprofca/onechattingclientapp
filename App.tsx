@@ -35,22 +35,11 @@ export default function App() {
 
   // Initialize notification service once
   useEffect(() => {
-    const init = async () => {
-      await notificationService.initialize();
-      await notificationService.requestPermission();
-
-      // Register tap handler — navigates to the chat when user taps notification
-      notificationService.onNotificationTap((contactNumber, contactName) => {
-        if (notificationNavRef.current) {
-          notificationNavRef.current(contactNumber, contactName);
-        }
-      });
-    };
-    init().catch(console.warn);
-
-    const unsubscribePush = listenForForegroundPush();
     const openTimers = new Set<ReturnType<typeof setInterval>>();
-    const unsubscribeOpen = listenForNotificationOpens((contactNumber, contactName) => {
+    const openNotificationChat = (
+      contactNumber: string,
+      contactName: string,
+    ) => {
       const open = () => notificationNavRef.current?.(contactNumber, contactName);
       if (notificationNavRef.current) {
         open();
@@ -66,7 +55,19 @@ export default function App() {
         }
       }, 300);
       openTimers.add(timer);
-    });
+    };
+
+    const init = async () => {
+      await notificationService.initialize();
+      await notificationService.requestPermission();
+
+      // Register tap handler — navigates to the chat when user taps notification
+      notificationService.onNotificationTap(openNotificationChat);
+    };
+    init().catch(console.warn);
+
+    const unsubscribePush = listenForForegroundPush();
+    const unsubscribeOpen = listenForNotificationOpens(openNotificationChat);
     const subscription = AppState.addEventListener('change', nextAppState => {
       if (nextAppState === 'active') {
         socketManager.ensureConnected();
@@ -169,8 +170,7 @@ export default function App() {
   // limited "no project yet" experience (Home / Wallet / Projects tabs),
   // so the only other top-level case left is picking between several
   // existing projects when none is currently selected.
-  const statusBarColor =
-    session && session.selectedProjectId ? theme.header : theme.canvas;
+  const statusBarColor = theme.header;
 
   return (
     <KeyboardProvider>

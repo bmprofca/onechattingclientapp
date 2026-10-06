@@ -12,7 +12,7 @@ import {
   setBackgroundMessageHandler,
   type RemoteMessage,
 } from '@react-native-firebase/messaging';
-import { ApiSession, post } from '../api/client';
+import { post, type ApiSession } from '../api/client';
 let currentSession: ApiSession | null = null;
 let refreshListenerReady = false;
 
@@ -20,16 +20,16 @@ const messaging = getMessaging();
 
 async function showPush(message: RemoteMessage) {
   const data = message.data || {};
-  const title = String(data.contactName || message.notification?.title || '');
-  const body = String(data.messageText || message.notification?.body || '');
   const contactNumber = String(data.contactNumber || '');
-  if (!contactNumber && !title && !body) return;
+  if (!contactNumber) return;
 
   await notificationService.displayMessageNotification(
-    title || contactNumber || 'New message',
-    body,
-    contactNumber || 'message',
+    String(data.contactName || contactNumber),
+    String(data.messageText || message.notification?.body || ''),
+    contactNumber,
     String(data.mediaType || ''),
+    String(data.projectId || ''),
+    String(data.messageWamid || ''),
   );
 }
 

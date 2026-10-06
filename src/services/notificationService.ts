@@ -3,11 +3,16 @@ import notifee, {
   AndroidVisibility,
   EventType,
   Event as NotifeeEvent,
+  Notification,
 } from '@notifee/react-native';
 import { AppState, Platform, PermissionsAndroid } from 'react-native';
+import type { ApiSession } from '../api/client';
+import { markAsRead, sendMessage } from '../api/workspace';
+import { loadSession } from './session';
 
 const MESSAGE_CHANNEL_ID = 'onechat_messages';
 const MESSAGE_CHANNEL_NAME = 'Chat Messages';
+const APP_NAME = 'OneChatting';
 
 /**
  * Callback type for when user taps a notification.
@@ -19,10 +24,19 @@ export type NotificationTapHandler = (
   contactName: string,
 ) => void;
 
+type NotificationTapData = {
+  contactNumber?: string;
+  contactName?: string;
+  projectId?: string;
+  messageWamid?: string;
+};
+
 class NotificationService {
   private channelsCreated = false;
   private activeChatNumber: string | null = null;
   private tapHandler: NotificationTapHandler | null = null;
+  private pendingTap: { contactNumber: string; contactName: string } | null = null;
+  private initialNotificationChecked = false;
   private recentKeys = new Map<string, number>();
 
   /**
@@ -75,6 +89,118 @@ class NotificationService {
    */
   onNotificationTap(handler: NotificationTapHandler) {
     this.tapHandler = handler;
+    if (this.pendingTap) {
+      const { contactNumber, contactName } = this.pendingTap;
+      this.pendingTap = null;
+      handler(contactNumber, contactName);
+    }
+
+    if (this.initialNotificationChecked) return;
+    this.initialNotificationChecked = true;
+    notifee
+      .getInitialNotification()
+      .then(initial => {
+        if (initial?.notification?.data) {
+          this.dispatchTap(
+            initial.notification.data as NotificationTapData,
+          );
+        }
+      })
+      .catch(error => {
+        console.warn('Failed to read initial notification:', error);
+      });
+  }
+
+  async handleBackgroundEvent(event: NotifeeEvent) {
+    if (event.type === EventType.PRESS && event.detail.notification?.data) {
+      this.dispatchTap(event.detail.notification.data as NotificationTapData);
+    } else if (event.type === EventType.ACTION_PRESS) {
+      await this.handleAction(
+        event.detail.notification,
+        event.detail.pressAction?.id,
+        event.detail.input,
+      );
+    }
+  }
+
+  private async handleAction(
+    notification: Notification | undefined,
+    actionId: string | undefined,
+    input?: string,
+  ) {
+    if (
+      !notification ||
+      (actionId !== 'reply' && actionId !== 'mark_as_read')
+    ) {
+      return;
+    }
+
+    const data = (notification.data || {}) as NotificationTapData;
+    const contactNumber = String(data.contactNumber || '');
+    const projectId = String(data.projectId || '');
+
+    if (actionId === 'reply' && !String(input || '').trim()) return;
+
+    try {
+      if (!contactNumber || !projectId) {
+        throw new Error('Notification is missing its chat details.');
+      }
+
+      const storedSession = await loadSession();
+      if (!storedSession?.token || !storedSession.username) {
+        throw new Error('Sign in again to use notification actions.');
+      }
+
+      const session: ApiSession = {
+        token: storedSession.token,
+        username: storedSession.username,
+      };
+
+      if (actionId === 'reply') {
+        await sendMessage(
+          session,
+          projectId,
+          contactNumber,
+          String(input).trim(),
+          data.messageWamid || undefined,
+        );
+      } else {
+        await markAsRead(session, projectId, contactNumber);
+        await this.cancelNotificationsForContact(contactNumber);
+      }
+    } catch (error) {
+      console.warn(`Notification ${actionId} action failed:`, error);
+      await this.showActionFailure(notification, actionId);
+    }
+  }
+
+  private async showActionFailure(
+    notification: Notification,
+    actionId: string,
+  ) {
+    try {
+      await notifee.displayNotification({
+        ...notification,
+        body:
+          actionId === 'reply'
+            ? 'Could not send reply. Open the chat and try again.'
+            : 'Could not mark as read. Open the chat and try again.',
+      });
+    } catch (error) {
+      console.warn('Failed to show notification action error:', error);
+    }
+  }
+
+  private dispatchTap(data: NotificationTapData) {
+    const contactNumber = String(data.contactNumber || '');
+    if (!contactNumber) return;
+    const contactName = String(data.contactName || contactNumber);
+
+    if (this.tapHandler) {
+      this.tapHandler(contactNumber, contactName);
+    } else {
+      this.pendingTap = { contactNumber, contactName };
+    }
   }
 
   /**
@@ -102,6 +228,8 @@ class NotificationService {
     messageText: string,
     contactNumber: string,
     mediaType?: string,
+    projectId?: string,
+    messageWamid?: string,
   ) {
     // Don't show if user is in the same chat and app is in foreground
     if (
@@ -135,16 +263,20 @@ class NotificationService {
     try {
       await notifee.displayNotification({
         id: `chat_${contactNumber}`, // Reuse ID per contact to stack/replace
-        title: contactName || contactNumber,
-        body: displayText || 'New message',
+        title: APP_NAME,
+        body: `${contactName || contactNumber}: ${displayText || 'New message'}`,
         data: {
           contactNumber,
           contactName: contactName || contactNumber,
           type: 'chat_message',
+          projectId: projectId || '',
+          messageWamid: messageWamid || '',
         },
         android: {
           channelId: MESSAGE_CHANNEL_ID,
           smallIcon: 'ic_notification',
+          largeIcon: require('../assets/logo.png'),
+          circularLargeIcon: true,
           color: '#25D366',
           importance: AndroidImportance.HIGH,
           visibility: AndroidVisibility.PUBLIC,
@@ -152,6 +284,20 @@ class NotificationService {
             id: 'default',
             launchActivity: 'default',
           },
+          actions: [
+            {
+              title: 'Reply',
+              pressAction: { id: 'reply' },
+              input: {
+                allowFreeFormInput: true,
+                placeholder: 'Reply...',
+              },
+            },
+            {
+              title: 'Mark as read',
+              pressAction: { id: 'mark_as_read' },
+            },
+          ],
           showTimestamp: true,
           timestamp: Date.now(),
         },
@@ -211,28 +357,15 @@ class NotificationService {
 
   private setupEventListeners() {
     // Foreground events (app is open)
-    notifee.onForegroundEvent(({ type, detail }: NotifeeEvent) => {
+    notifee.onForegroundEvent(async ({ type, detail }: NotifeeEvent) => {
       if (type === EventType.PRESS && detail.notification?.data) {
-        const { contactNumber, contactName } = detail.notification.data as {
-          contactNumber: string;
-          contactName: string;
-        };
-        if (contactNumber && this.tapHandler) {
-          this.tapHandler(contactNumber, contactName);
-        }
-      }
-    });
-
-    // Background events (app is in background)
-    notifee.onBackgroundEvent(async ({ type, detail }: NotifeeEvent) => {
-      if (type === EventType.PRESS && detail.notification?.data) {
-        const { contactNumber, contactName } = detail.notification.data as {
-          contactNumber: string;
-          contactName: string;
-        };
-        if (contactNumber && this.tapHandler) {
-          this.tapHandler(contactNumber, contactName);
-        }
+        this.dispatchTap(detail.notification.data as NotificationTapData);
+      } else if (type === EventType.ACTION_PRESS) {
+        await this.handleAction(
+          detail.notification,
+          detail.pressAction?.id,
+          detail.input,
+        );
       }
     });
   }
