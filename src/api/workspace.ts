@@ -654,6 +654,79 @@ export const getContactList = (
     session,
   );
 
+export const getFavoriteContactList = (
+  session: ApiSession,
+  projectId: string,
+  page = 1,
+  search = '',
+) =>
+  post<any>(
+    '/contact/favorite-contact-list',
+    {
+      project_id: projectId,
+      page_no: page,
+      query: search,
+    },
+    session,
+  );
+
+export const createContact = (
+  session: ApiSession,
+  projectId: string,
+  payload: {
+    name: string;
+    number: string;
+    email?: string;
+    firm_name?: string;
+    website?: string;
+    remark?: string;
+  },
+) =>
+  post<any>(
+    '/contact/create-contact',
+    {
+      project_id: projectId,
+      ...payload,
+    },
+    session,
+  );
+
+export const deleteContacts = (
+  session: ApiSession,
+  projectId: string,
+  options: {
+    contactIds?: Array<string | number>;
+    numbers?: string[];
+    all?: boolean;
+  },
+) =>
+  post<any>(
+    '/contact/delete-contact',
+    {
+      project_id: projectId,
+      all_contact_delete: options.all === true,
+      contact_ids: options.contactIds || [],
+      numbers: options.numbers || [],
+    },
+    session,
+  );
+
+export const setContactFavorite = (
+  session: ApiSession,
+  projectId: string,
+  number: string,
+  action: 'add' | 'delete',
+) =>
+  post<any>(
+    '/contact/mark-as-favorite',
+    {
+      project_id: projectId,
+      number,
+      action,
+    },
+    session,
+  );
+
 export const getContactGroups = (session: ApiSession, projectId: string, page = 1, limit = 50, search = '') =>
   post<any>('/contact/group-list', {
     project_id: projectId,
@@ -706,7 +779,7 @@ export const addContactsToGroups = async (
 
   try {
     return await bulkAddContactsToGroups(session, projectId, gList, cList);
-  } catch (err: any) {
+  } catch {
     // Fallback if bulk endpoint not yet available
     const results = await Promise.all(
       gList.flatMap((gid) =>

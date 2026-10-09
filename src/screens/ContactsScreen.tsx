@@ -1,8 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   ActivityIndicator,
   BackHandler,
   FlatList,
+  Modal,
+  KeyboardAvoidingView as NativeKeyboardAvoidingView,
+  PanResponder,
+  PermissionsAndroid,
   Platform,
   Pressable,
   RefreshControl,
@@ -12,20 +17,22 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import Contacts from 'react-native-contacts';
+import { BlurView } from '@react-native-community/blur';
 import {
   ArrowLeft,
-  Briefcase,
   Building2,
   Check,
-  CheckSquare,
   Edit2,
   FileText,
-  FolderOpen,
   Globe,
   Mail,
+  MoreVertical,
   Phone,
   Plus,
   Search,
+  Smartphone,
+  Star,
   Trash2,
   User,
   Users,
@@ -35,16 +42,22 @@ import Toast from '../ui/toast';
 import { ApiSession } from '../api/client';
 import {
   addContactsToGroups,
-  addContactToGroup,
   getContactAssignedGroups,
+  getContactDetails,
   getContactGroups,
   getContactList,
+  getFavoriteContactList,
   removeContactFromGroup,
+  createContact,
+  deleteContacts,
+  setContactFavorite,
   updateContact,
 } from '../api/workspace';
 import { FadeInView, ScalePressable } from '../components/animations';
 import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
 import { LoadState } from '../components/LoadState';
+import { useKeyboardContext } from '../contexts/KeyboardContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/theme';
 
 export type Group = {
@@ -71,6 +84,8 @@ export function ContactsScreen({
   onOpenGroupDetails,
 }: ContactsProps) {
   const theme = useTheme();
+  const {isKeyboardVisible} = useKeyboardContext();
+  const insets = useSafeAreaInsets();
 
   // Contact list state
   const [contacts, setContacts] = useState<any[]>([]);
@@ -82,6 +97,25 @@ export function ContactsScreen({
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(1);
   const [error, setError] = useState('');
+  const [showFavorites, setShowFavorites] = useState(false);
+  const [favoriteNumbers, setFavoriteNumbers] = useState<Set<string>>(new Set());
+  const [favoriteLoadingNumber, setFavoriteLoadingNumber] = useState<string | null>(null);
+  const [actionMenuContact, setActionMenuContact] = useState<any>(null);
+
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [creatingContact, setCreatingContact] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newNumber, setNewNumber] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newFirmName, setNewFirmName] = useState('');
+  const [newWebsite, setNewWebsite] = useState('');
+  const [newRemark, setNewRemark] = useState('');
+  const [deviceContactsVisible, setDeviceContactsVisible] = useState(false);
+  const [deviceContactsLoading, setDeviceContactsLoading] = useState(false);
+  const [deviceContactsSearch, setDeviceContactsSearch] = useState('');
+  const [deviceContacts, setDeviceContacts] = useState<
+    Array<{ id: string; name: string; number: string; email?: string }>
+  >([]);
 
   // Bulk selection state (for main contacts list)
   const [selected, setSelected] = useState<Array<string | number>>([]);
@@ -97,7 +131,7 @@ export function ContactsScreen({
   const [editFirmName, setEditFirmName] = useState('');
   const [editWebsite, setEditWebsite] = useState('');
   const [editRemark, setEditRemark] = useState('');
-  const [editGroups, setEditGroups] = useState<string[]>([]);
+  const [_editGroups, setEditGroups] = useState<string[]>([]);
   const [assignedContactGroups, setAssignedContactGroups] = useState<any[]>([]);
   const [loadingContactGroups, setLoadingContactGroups] = useState(false);
   const [removingGroupId, setRemovingGroupId] = useState<string | null>(null);
@@ -110,9 +144,34 @@ export function ContactsScreen({
   const [groupSelectionMode, setGroupSelectionMode] = useState(false);
   const [groupPickerSearch, setGroupPickerSearch] = useState('');
 
+  const closeEditModal = () => setEditing(null);
+  const editHeaderPanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_event, gesture) =>
+          gesture.dy > 12 && gesture.dy > Math.abs(gesture.dx) * 1.2,
+        onPanResponderRelease: (_event, gesture) => {
+          if (gesture.dy > 60) setEditing(null);
+        },
+      }),
+    [],
+  );
+
   // Hardware Back Handler
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (actionMenuContact) {
+        setActionMenuContact(null);
+        return true;
+      }
+      if (deviceContactsVisible) {
+        setDeviceContactsVisible(false);
+        return true;
+      }
+      if (createModalVisible) {
+        setCreateModalVisible(false);
+        return true;
+      }
       if (groupPickerVisible) {
         if (groupSelectionMode) {
           setGroupSelectionMode(false);
@@ -123,7 +182,7 @@ export function ContactsScreen({
         return true;
       }
       if (editing) {
-        setEditing(null);
+        closeEditModal();
         return true;
       }
       if (selectionMode) {
@@ -135,7 +194,16 @@ export function ContactsScreen({
       return true;
     });
     return () => sub.remove();
-  }, [onBack, groupPickerVisible, groupSelectionMode, editing, selectionMode]);
+  }, [
+    onBack,
+    actionMenuContact,
+    deviceContactsVisible,
+    createModalVisible,
+    groupPickerVisible,
+    groupSelectionMode,
+    editing,
+    selectionMode,
+  ]);
 
   // Debounce search
   useEffect(() => {
@@ -159,9 +227,10 @@ export function ContactsScreen({
       setError('');
 
       try {
-        const promises: [Promise<any>, Promise<any>?] = [
-          getContactList(session, projectId, pageToLoad, CONTACTS_PAGE_SIZE, searchQuery),
-        ];
+        const contactRequest = showFavorites
+          ? getFavoriteContactList(session, projectId, pageToLoad, searchQuery)
+          : getContactList(session, projectId, pageToLoad, CONTACTS_PAGE_SIZE, searchQuery);
+        const promises: [Promise<any>, Promise<any>?] = [contactRequest];
         if (pageToLoad === 1) {
           promises.push(getContactGroups(session, projectId, 1, 100));
         }
@@ -170,6 +239,17 @@ export function ContactsScreen({
 
         const rawList = contactResponse?.data || contactResponse?.list || [];
         const fetchedList = Array.isArray(rawList) ? rawList : [];
+
+        if (showFavorites) {
+          setFavoriteNumbers((previous) => {
+            const next = pageToLoad === 1 ? new Set<string>() : new Set(previous);
+            fetchedList.forEach((contact: any) => {
+              const number = String(contact.number || contact.contact_number || '');
+              if (number) next.add(number);
+            });
+            return next;
+          });
+        }
 
         if (pageToLoad === 1 || isRefresh) {
           setContacts(fetchedList);
@@ -199,10 +279,12 @@ export function ContactsScreen({
 
         const meta = contactResponse?.meta;
         const total = meta?.total !== undefined ? Number(meta.total) : undefined;
-        if (total !== undefined) {
+        if (showFavorites && typeof contactResponse?.is_last_page === 'boolean') {
+          setHasMore(!contactResponse.is_last_page);
+        } else if (total !== undefined) {
           setHasMore(pageToLoad * CONTACTS_PAGE_SIZE < total);
         } else {
-          setHasMore(fetchedList.length === CONTACTS_PAGE_SIZE);
+          setHasMore(fetchedList.length === (showFavorites ? 20 : CONTACTS_PAGE_SIZE));
         }
         setPage(pageToLoad);
       } catch (err: any) {
@@ -220,7 +302,7 @@ export function ContactsScreen({
         setLoadingMore(false);
       }
     },
-    [projectId, session],
+    [projectId, session, showFavorites],
   );
 
   useEffect(() => {
@@ -233,10 +315,331 @@ export function ContactsScreen({
     return loadContacts(1, debouncedSearch, true);
   }, [loadContacts, debouncedSearch]);
 
+  useEffect(() => {
+    let isMounted = true;
+    const loadFavorites = async () => {
+      try {
+        const numbers = new Set<string>();
+        let pageToLoad = 1;
+        let isLastPage = false;
+        while (!isLastPage) {
+          const response = await getFavoriteContactList(
+            session,
+            projectId,
+            pageToLoad,
+          );
+          const rows = Array.isArray(response?.data) ? response.data : [];
+          rows.forEach((contact: any) => {
+            const number = String(contact.number || contact.contact_number || '');
+            if (number) numbers.add(number);
+          });
+          isLastPage =
+            response?.is_last_page === true ||
+            (typeof response?.is_last_page !== 'boolean' && rows.length < 20);
+          if (!rows.length) isLastPage = true;
+          pageToLoad += 1;
+        }
+        if (isMounted) setFavoriteNumbers(numbers);
+      } catch (err: any) {
+        if (isMounted) {
+          Toast.show({
+            type: 'error',
+            text1: 'Could not load favorites',
+            text2: err?.message,
+          });
+        }
+      }
+    };
+
+    if (projectId && session?.token) {
+      loadFavorites();
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [projectId, session]);
+
   const handleLoadMoreContacts = () => {
-    if (!loading && !loadingMore && hasMore && contacts.length >= CONTACTS_PAGE_SIZE) {
+    if (!loading && !loadingMore && hasMore && contacts.length > 0) {
       loadContacts(page + 1, debouncedSearch);
     }
+  };
+
+  const resetCreateForm = () => {
+    setNewName('');
+    setNewNumber('');
+    setNewEmail('');
+    setNewFirmName('');
+    setNewWebsite('');
+    setNewRemark('');
+    setDeviceContactsSearch('');
+  };
+
+  const loadDeviceContacts = async () => {
+    setDeviceContactsLoading(true);
+    try {
+      let hasPermission = true;
+      if (Platform.OS === 'android') {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.READ_CONTACTS,
+          {
+            title: 'Contacts Permission',
+            message: 'OneChat needs access to your device contacts to add them to this project.',
+            buttonPositive: 'Allow',
+            buttonNegative: 'Deny',
+          },
+        );
+        hasPermission = granted === PermissionsAndroid.RESULTS.GRANTED;
+      }
+
+      if (!hasPermission) {
+        Toast.show({
+          type: 'error',
+          text1: 'Permission Denied',
+          text2: 'Please allow contacts permission to choose a phonebook contact.',
+        });
+        return;
+      }
+
+      const raw = await Contacts.getAllWithoutPhotos();
+      const parsed: Array<{ id: string; name: string; number: string; email?: string }> = [];
+      const seen = new Set<string>();
+      raw.forEach((contact) => {
+        const name =
+          [contact.givenName, contact.middleName, contact.familyName]
+            .filter(Boolean)
+            .join(' ')
+            .trim() ||
+          contact.displayName ||
+          'Unnamed Contact';
+        contact.phoneNumbers?.forEach((phone) => {
+          const number = String(phone.number || '').replace(/[^0-9+]/g, '');
+          const digits = number.replace(/\D/g, '');
+          const key = `${name}-${digits}`;
+          if (digits.length >= 7 && !seen.has(key)) {
+            seen.add(key);
+            parsed.push({
+              id: `${contact.recordID || ''}-${phone.label || ''}-${digits}`,
+              name,
+              number,
+              email: contact.emailAddresses?.[0]?.email || '',
+            });
+          }
+        });
+      });
+      parsed.sort((left, right) => left.name.localeCompare(right.name));
+      setDeviceContacts(parsed);
+      setDeviceContactsSearch('');
+      setDeviceContactsVisible(true);
+    } catch (err: any) {
+      Toast.show({
+        type: 'error',
+        text1: 'Could not load contacts',
+        text2: err?.message || 'Failed to read contacts from device.',
+      });
+    } finally {
+      setDeviceContactsLoading(false);
+    }
+  };
+
+  const filteredDeviceContacts = useMemo(() => {
+    const query = deviceContactsSearch.trim().toLowerCase();
+    if (!query) return deviceContacts;
+    return deviceContacts.filter(
+      (contact) =>
+        contact.name.toLowerCase().includes(query) ||
+        contact.number.toLowerCase().includes(query),
+    );
+  }, [deviceContacts, deviceContactsSearch]);
+
+  const handleCreateContact = async () => {
+    const name = newName.trim();
+    const number = newNumber.replace(/\D/g, '');
+    if (!name || number.length < 7) {
+      Toast.show({
+        type: 'error',
+        text1: 'Name and phone number are required',
+        text2: 'Enter a contact name and a valid number with country code.',
+      });
+      return;
+    }
+
+    setCreatingContact(true);
+    try {
+      const response = await createContact(session, projectId, {
+        name,
+        number,
+        email: newEmail.trim(),
+        firm_name: newFirmName.trim(),
+        website: newWebsite.trim(),
+        remark: newRemark.trim(),
+      });
+      if (response?.error) {
+        throw new Error(
+          typeof response.error === 'string'
+            ? response.error
+            : response?.msg || 'Failed to create contact',
+        );
+      }
+
+      Toast.show({
+        type: 'success',
+        text1: 'Contact created',
+        text2: `${name} was added to this project.`,
+      });
+      setCreateModalVisible(false);
+      resetCreateForm();
+      await load();
+    } catch (err: any) {
+      Toast.show({
+        type: 'error',
+        text1: 'Could not create contact',
+        text2: err?.message || 'Please try again.',
+      });
+    } finally {
+      setCreatingContact(false);
+    }
+  };
+
+  const handleToggleFavorite = async (item: any) => {
+    const number = String(item.number || item.mobile || '');
+    if (!number || favoriteLoadingNumber) return;
+
+    const isFavorite = favoriteNumbers.has(number);
+    setFavoriteLoadingNumber(number);
+    try {
+      const response = await setContactFavorite(
+        session,
+        projectId,
+        number,
+        isFavorite ? 'delete' : 'add',
+      );
+      setFavoriteNumbers((previous) => {
+        const next = new Set(previous);
+        if (response?.is_favorite === true) {
+          next.add(number);
+        } else {
+          next.delete(number);
+        }
+        return next;
+      });
+      if (showFavorites && response?.is_favorite !== true) {
+        setContacts((previous) =>
+          previous.filter(
+            (contact) => String(contact.number || contact.mobile || '') !== number,
+          ),
+        );
+      }
+      Toast.show({
+        type: 'success',
+        text1: response?.is_favorite ? 'Added to favorites' : 'Removed from favorites',
+      });
+    } catch (err: any) {
+      Toast.show({
+        type: 'error',
+        text1: 'Could not change favorite',
+        text2: err?.message,
+      });
+    } finally {
+      setFavoriteLoadingNumber(null);
+    }
+  };
+
+  const confirmDeleteContact = (item: any) => {
+    const number = String(item.number || item.mobile || '');
+    const contactId = idOf(item);
+    const contactName = String(item.name || number || 'this contact');
+    Alert.alert(
+      'Delete contact?',
+      `Remove ${contactName} from this project?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const response = await deleteContacts(session, projectId, {
+                contactIds: contactId ? [contactId] : [],
+                numbers: number ? [number] : [],
+              });
+              if (response?.error) {
+                throw new Error(
+                  typeof response.error === 'string'
+                    ? response.error
+                    : 'Failed to delete contact',
+                );
+              }
+              Toast.show({ type: 'success', text1: 'Contact deleted' });
+              await load();
+            } catch (err: any) {
+              Toast.show({
+                type: 'error',
+                text1: 'Could not delete contact',
+                text2: err?.message,
+              });
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleSelectDeviceContact = (contact: {
+    name: string;
+    number: string;
+    email?: string;
+  }) => {
+    setNewName(contact.name);
+    setNewNumber(contact.number.replace(/\D/g, ''));
+    setNewEmail(contact.email || '');
+    setDeviceContactsVisible(false);
+  };
+
+  const confirmDeleteSelected = () => {
+    if (!selected.length) return;
+    Alert.alert(
+      'Delete selected contacts?',
+      `Remove ${selected.length} selected contact(s) from this project?`,
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setBulkAssignLoading(true);
+            try {
+              const response = await deleteContacts(session, projectId, {
+                contactIds: selected,
+              });
+              if (response?.error) {
+                throw new Error(
+                  typeof response.error === 'string'
+                    ? response.error
+                    : 'Failed to delete contacts',
+                );
+              }
+              Toast.show({
+                type: 'success',
+                text1: 'Contacts deleted',
+                text2: `${response?.deleted_count ?? selected.length} contact(s) removed.`,
+              });
+              setSelectionMode(false);
+              setSelected([]);
+              await load();
+            } catch (err: any) {
+              Toast.show({
+                type: 'error',
+                text1: 'Could not delete contacts',
+                text2: err?.message,
+              });
+            } finally {
+              setBulkAssignLoading(false);
+            }
+          },
+        },
+      ],
+    );
   };
 
   const idOf = (item: any) => item?.contact_id || item?.id;
@@ -264,20 +667,41 @@ export function ContactsScreen({
   };
 
   // Open Edit Contact Page with all attributes and fresh assigned groups
-  const openEdit = (item: any) => {
-    setEditing(item);
+  const openEdit = async (item: any) => {
+    let contact = item;
+    try {
+      const detailsResponse = await getContactDetails(
+        session,
+        projectId,
+        String(item.number || item.mobile || ''),
+      );
+      const details = detailsResponse?.contact || detailsResponse?.data?.contact;
+      if (detailsResponse?.has_contact === true && details) {
+        contact = {...item, ...details};
+      } else {
+        throw new Error('Contact details were not found.');
+      }
+    } catch (err: any) {
+      Toast.show({
+        type: 'error',
+        text1: 'Could not refresh contact details',
+        text2: err?.message || 'Using the contact data already loaded.',
+      });
+    }
+
+    setEditing(contact);
     setEditTab('details');
-    setEditName(item.name || '');
-    setEditNumber(String(item.number || item.mobile || ''));
-    setEditEmail(item.email || '');
-    setEditFirmName(item.firm_name || item.company || '');
-    setEditWebsite(item.website || '');
-    setEditRemark(item.remark || '');
+    setEditName(contact.name || '');
+    setEditNumber(String(contact.number || contact.mobile || ''));
+    setEditEmail(contact.email || '');
+    setEditFirmName(contact.firm_name || contact.company || '');
+    setEditWebsite(contact.website || '');
+    setEditRemark(contact.remark || '');
 
     const initialGroups: any[] = [];
     const initialGroupIds: string[] = [];
-    if (Array.isArray(item.groups)) {
-      item.groups.forEach((g: any) => {
+    if (Array.isArray(contact.groups)) {
+      contact.groups.forEach((g: any) => {
         const gid = String(g.group_id || g.id || g);
         if (gid) {
           initialGroupIds.push(gid);
@@ -288,8 +712,8 @@ export function ContactsScreen({
           );
         }
       });
-    } else if (item.group_id) {
-      const gid = String(item.group_id);
+    } else if (contact.group_id) {
+      const gid = String(contact.group_id);
       initialGroupIds.push(gid);
       initialGroups.push({ id: gid, group_id: gid, name: `Group ${gid}` });
     }
@@ -297,7 +721,7 @@ export function ContactsScreen({
     setEditGroups(initialGroupIds);
 
     // Fetch fresh assigned groups for this contact from server
-    const contactId = idOf(item);
+    const contactId = idOf(contact);
     if (contactId) {
       setLoadingContactGroups(true);
       getContactAssignedGroups(session, projectId, contactId)
@@ -881,21 +1305,52 @@ export function ContactsScreen({
   // =========================================================================
   // PAGE 2: EDIT CONTACT SEPARATE PAGE (Two Tabs: Profile Details & Manage Groups)
   // =========================================================================
-  if (editing) {
-    return (
-      <KeyboardAvoidView
-        style={[styles.container, { backgroundColor: theme.canvas }]}
+  const editModalContent = editing ? (
+      <Modal
+        visible
+        transparent
+        animationType="slide"
+        onRequestClose={closeEditModal}
       >
-        <FadeInView direction="right" distance={12} duration={250} style={{ flex: 1 }}>
+        <NativeKeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardModalRoot}
+        >
+          <View style={styles.sheetBackdrop}>
+            <BlurView
+              style={StyleSheet.absoluteFill}
+              blurType={theme.isDark ? 'dark' : 'light'}
+              blurAmount={6}
+              reducedTransparencyFallbackColor={theme.canvas}
+            />
+            <View
+              pointerEvents="none"
+              style={[
+                StyleSheet.absoluteFill,
+                {backgroundColor: theme.isDark ? 'rgba(0,0,0,0.28)' : 'rgba(0,0,0,0.16)'},
+              ]}
+            />
+            <FadeInView
+              direction="right"
+              distance={12}
+              duration={250}
+              style={[
+                styles.editModalSheet,
+                isKeyboardVisible ? styles.expandedModalSheet : styles.collapsedModalSheet,
+                {paddingTop: isKeyboardVisible ? insets.top : 0},
+                {backgroundColor: theme.canvas},
+              ]}
+            >
           {/* Header */}
           <View
+            {...editHeaderPanResponder.panHandlers}
             style={[
               styles.header,
-              { backgroundColor: theme.header, borderBottomColor: theme.border },
+              { backgroundColor: theme.canvas, borderBottomColor: theme.border },
             ]}
           >
             <ScalePressable
-              onPress={() => setEditing(null)}
+              onPress={closeEditModal}
               hitSlop={8}
               style={styles.backBtn}
             >
@@ -1305,10 +1760,11 @@ export function ContactsScreen({
               )}
             </ScrollView>
           )}
-        </FadeInView>
-      </KeyboardAvoidView>
-    );
-  }
+            </FadeInView>
+          </View>
+        </NativeKeyboardAvoidingView>
+      </Modal>
+    ) : null;
 
   // =========================================================================
   // PAGE 3: MAIN CONTACTS LIST PAGE
@@ -1324,8 +1780,10 @@ export function ContactsScreen({
         <ScalePressable
           accessibilityRole="button"
           onLongPress={() => {
-            setSelectionMode(true);
-            setSelected([id]);
+            if (!showFavorites) {
+              setSelectionMode(true);
+              setSelected([id]);
+            }
           }}
           delayLongPress={450}
           onPress={() => {
@@ -1391,15 +1849,22 @@ export function ContactsScreen({
             ) : null}
           </View>
 
-          {/* Action button: Edit Contact */}
+          {/* Contact actions */}
           {!selectionMode && (
-            <ScalePressable
-              onPress={() => openEdit(item)}
-              style={[styles.editBtn, { backgroundColor: theme.canvas }]}
-              hitSlop={8}
-            >
-              <Edit2 size={16} color={theme.emerald} />
-            </ScalePressable>
+            <View style={styles.contactActions}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`More actions for ${contactName}`}
+                onPress={(event) => {
+                  event.stopPropagation();
+                  setActionMenuContact(item);
+                }}
+                style={[styles.editBtn, { backgroundColor: theme.canvas }]}
+                hitSlop={6}
+              >
+                <MoreVertical size={20} color={theme.ink} />
+              </Pressable>
+            </View>
           )}
         </ScalePressable>
       </FadeInView>
@@ -1421,11 +1886,48 @@ export function ContactsScreen({
           <ArrowLeft size={22} color={theme.ink} strokeWidth={2.5} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.title, { color: theme.ink }]}>All Contacts</Text>
+          <Text style={[styles.title, { color: theme.ink }]}>
+            {showFavorites ? 'Favorite Contacts' : 'All Contacts'}
+          </Text>
           <Text style={[styles.subtitle, { color: theme.muted }]}>
-            Tap to chat · Press and hold to select
+            {showFavorites
+              ? 'Your starred project contacts'
+              : 'Tap to chat · Press and hold to select'}
           </Text>
         </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={showFavorites ? 'Show all contacts' : 'Show favorite contacts'}
+          onPress={() => {
+            setShowFavorites((current) => !current);
+            setSelected([]);
+            setSelectionMode(false);
+            setPage(1);
+            setHasMore(true);
+          }}
+          style={[
+            styles.headerAction,
+            { backgroundColor: showFavorites ? theme.mint : theme.surface },
+          ]}
+          hitSlop={6}
+        >
+          <Star
+            size={18}
+            color={showFavorites ? theme.emerald : theme.muted}
+            fill={showFavorites ? theme.emerald : 'transparent'}
+          />
+        </Pressable>
+        {!showFavorites && !selectionMode && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Create contact"
+            onPress={() => setCreateModalVisible(true)}
+            style={[styles.headerAction, { backgroundColor: theme.emerald }]}
+            hitSlop={6}
+          >
+            <Plus size={20} color="#FFF" strokeWidth={2.5} />
+          </Pressable>
+        )}
       </View>
 
       {/* Search Row */}
@@ -1469,6 +1971,16 @@ export function ContactsScreen({
           </View>
 
           <View style={styles.selectionActions}>
+            <Pressable
+              onPress={confirmDeleteSelected}
+              disabled={!selected.length || bulkAssignLoading}
+              style={[styles.cancelButton, { borderColor: '#FCA5A5' }]}
+              hitSlop={4}
+            >
+              <Text style={[styles.selectAllText, { color: '#DC2626' }]}>
+                Delete
+              </Text>
+            </Pressable>
             <Pressable
               onPress={toggleSelectAll}
               style={[styles.selectAllButton, { borderColor: theme.border }]}
@@ -1565,6 +2077,253 @@ export function ContactsScreen({
           )}
         </ScalePressable>
       )}
+
+      <Modal
+        visible={actionMenuContact !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setActionMenuContact(null)}
+      >
+        <Pressable
+          style={styles.actionMenuBackdrop}
+          onPress={() => setActionMenuContact(null)}
+        >
+          <Pressable
+            style={[styles.actionMenu, {backgroundColor: theme.surface, borderColor: theme.border}]}
+            onPress={(event) => event.stopPropagation()}
+          >
+            <Text style={[styles.actionMenuTitle, {color: theme.ink}]} numberOfLines={1}>
+              {actionMenuContact?.name || actionMenuContact?.number || 'Contact actions'}
+            </Text>
+            <Pressable
+              style={styles.actionMenuItem}
+              onPress={() => {
+                const contact = actionMenuContact;
+                setActionMenuContact(null);
+                if (contact) handleToggleFavorite(contact);
+              }}
+            >
+              <Star
+                size={18}
+                color={
+                  favoriteNumbers.has(
+                    String(actionMenuContact?.number || actionMenuContact?.mobile || ''),
+                  )
+                    ? '#E6A700'
+                    : theme.muted
+                }
+                fill={
+                  favoriteNumbers.has(
+                    String(actionMenuContact?.number || actionMenuContact?.mobile || ''),
+                  )
+                    ? '#E6A700'
+                    : 'transparent'
+                }
+              />
+              <Text style={[styles.actionMenuLabel, {color: theme.ink}]}>
+                {favoriteNumbers.has(
+                  String(actionMenuContact?.number || actionMenuContact?.mobile || ''),
+                )
+                  ? 'Remove from favorites'
+                  : 'Add to favorites'}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={styles.actionMenuItem}
+              onPress={() => {
+                const contact = actionMenuContact;
+                setActionMenuContact(null);
+                if (contact) openEdit(contact);
+              }}
+            >
+              <Edit2 size={18} color={theme.emerald} />
+              <Text style={[styles.actionMenuLabel, {color: theme.ink}]}>Edit contact</Text>
+            </Pressable>
+            <Pressable
+              style={styles.actionMenuItem}
+              onPress={() => {
+                const contact = actionMenuContact;
+                setActionMenuContact(null);
+                if (contact) confirmDeleteContact(contact);
+              }}
+            >
+              <Trash2 size={18} color="#DC2626" />
+              <Text style={[styles.actionMenuLabel, {color: '#DC2626'}]}>Delete contact</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={createModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setCreateModalVisible(false)}
+      >
+        <NativeKeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardModalRoot}
+        >
+          <View style={styles.sheetBackdrop}>
+            <BlurView
+              style={StyleSheet.absoluteFill}
+              blurType={theme.isDark ? 'dark' : 'light'}
+              blurAmount={6}
+              reducedTransparencyFallbackColor={theme.canvas}
+            />
+            <View
+              pointerEvents="none"
+              style={[
+                StyleSheet.absoluteFill,
+                {backgroundColor: theme.isDark ? 'rgba(0,0,0,0.28)' : 'rgba(0,0,0,0.16)'},
+              ]}
+            />
+          <View
+            style={[
+              styles.createModal,
+              isKeyboardVisible ? styles.expandedModalSheet : styles.collapsedModalSheet,
+              {paddingTop: isKeyboardVisible ? insets.top : 20},
+              { backgroundColor: theme.canvas },
+            ]}
+          >
+            <View style={styles.modalHeader}>
+              <View style={{flex: 1}}>
+                <Text style={[styles.title, {color: theme.ink}]}>Create Contact</Text>
+                <Text style={[styles.subtitle, {color: theme.muted}]}>
+                  Add a project contact manually or from your phonebook.
+                </Text>
+              </View>
+              <Pressable onPress={() => setCreateModalVisible(false)} hitSlop={8}>
+                <X size={22} color={theme.muted} />
+              </Pressable>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              onPress={loadDeviceContacts}
+              disabled={deviceContactsLoading}
+              style={[styles.deviceContactButton, {backgroundColor: theme.mint}]}
+            >
+              {deviceContactsLoading ? (
+                <ActivityIndicator size="small" color={theme.emerald} />
+              ) : (
+                <Smartphone size={18} color={theme.emerald} />
+              )}
+              <Text style={[styles.deviceContactButtonText, {color: theme.emerald}]}>
+                Choose from device contacts
+              </Text>
+            </Pressable>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.createForm}
+            >
+              {[
+                {label: 'Name *', value: newName, change: setNewName, placeholder: 'Contact name'},
+                {label: 'Phone number *', value: newNumber, change: setNewNumber, placeholder: 'Include country code', phone: true},
+                {label: 'Email', value: newEmail, change: setNewEmail, placeholder: 'Email address', email: true},
+                {label: 'Firm / company', value: newFirmName, change: setNewFirmName, placeholder: 'Firm or company name'},
+                {label: 'Website', value: newWebsite, change: setNewWebsite, placeholder: 'Website URL'},
+                {label: 'Remark', value: newRemark, change: setNewRemark, placeholder: 'Notes (optional)'},
+              ].map((field) => (
+                <View key={field.label} style={styles.formGroup}>
+                  <Text style={[styles.fieldLabel, {color: theme.muted}]}>{field.label}</Text>
+                  <TextInput
+                    value={field.value}
+                    onChangeText={field.change}
+                    placeholder={field.placeholder}
+                    placeholderTextColor={theme.muted}
+                    keyboardType={field.phone ? 'phone-pad' : field.email ? 'email-address' : 'default'}
+                    autoCapitalize={field.email ? 'none' : 'sentences'}
+                    style={[
+                      styles.input,
+                      {color: theme.ink, borderColor: theme.border, backgroundColor: theme.surface},
+                    ]}
+                  />
+                </View>
+              ))}
+            </ScrollView>
+            <View style={styles.modalFooter}>
+              <Pressable
+                onPress={() => {
+                  setCreateModalVisible(false);
+                  resetCreateForm();
+                }}
+                style={[styles.modalSecondaryButton, {borderColor: theme.border}]}
+              >
+                <Text style={[styles.selectAllText, {color: theme.muted}]}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleCreateContact}
+                disabled={creatingContact}
+                style={[styles.modalPrimaryButton, {backgroundColor: theme.emerald}]}
+              >
+                {creatingContact ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={styles.pickerConfirmBtnText}>Create contact</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+          </View>
+        </NativeKeyboardAvoidingView>
+      </Modal>
+
+      <Modal
+        visible={deviceContactsVisible}
+        animationType="slide"
+        onRequestClose={() => setDeviceContactsVisible(false)}
+      >
+        <View style={[styles.devicePicker, {backgroundColor: theme.canvas}]}>
+          <View style={[styles.header, {backgroundColor: theme.header, borderBottomColor: theme.border}]}>
+            <Pressable onPress={() => setDeviceContactsVisible(false)} style={styles.backBtn} hitSlop={8}>
+              <ArrowLeft size={22} color={theme.ink} />
+            </Pressable>
+            <View style={{flex: 1}}>
+              <Text style={[styles.title, {color: theme.ink}]}>Device Contacts</Text>
+              <Text style={[styles.subtitle, {color: theme.muted}]}>Select a phonebook entry</Text>
+            </View>
+          </View>
+          <View style={[styles.searchRow, {borderColor: theme.border, backgroundColor: theme.surface}]}>
+            <Search size={17} color={theme.muted} />
+            <TextInput
+              value={deviceContactsSearch}
+              onChangeText={setDeviceContactsSearch}
+              placeholder="Search device contacts"
+              placeholderTextColor={theme.muted}
+              style={[styles.searchInput, {color: theme.ink}]}
+            />
+          </View>
+          <FlatList
+            data={filteredDeviceContacts}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+            keyboardShouldPersistTaps="handled"
+            ListEmptyComponent={
+              <Text style={[styles.deviceContactsEmpty, {color: theme.muted}]}>
+                No device contacts with a valid phone number found.
+              </Text>
+            }
+            renderItem={({item}) => (
+              <Pressable
+                onPress={() => handleSelectDeviceContact(item)}
+                style={[styles.deviceContactRow, {backgroundColor: theme.surface, borderColor: theme.border}]}
+              >
+                <View style={[styles.avatar, {backgroundColor: theme.mint}]}>
+                  <Text style={[styles.avatarText, {color: theme.mintText}]}>
+                    {item.name.charAt(0).toUpperCase() || 'C'}
+                  </Text>
+                </View>
+                <View style={{flex: 1}}>
+                  <Text style={[styles.name, {color: theme.ink}]} numberOfLines={1}>{item.name}</Text>
+                  <Text style={[styles.meta, {color: theme.muted}]} numberOfLines={1}>{item.number}</Text>
+                </View>
+                <Check size={18} color={theme.emerald} />
+              </Pressable>
+            )}
+          />
+        </View>
+      </Modal>
+      {editModalContent}
     </KeyboardAvoidView>
   );
 }
@@ -1588,6 +2347,14 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
   subtitle: { fontSize: 11, marginTop: 1 },
+  headerAction: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
   searchRow: {
     marginHorizontal: 16,
     marginTop: 10,
@@ -1682,6 +2449,116 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 10,
     marginLeft: 6,
+  },
+  contactActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 4,
+  },
+  actionMenuBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  actionMenu: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderWidth: 1,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 28,
+  },
+  actionMenuTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 10,
+  },
+  actionMenuItem: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(128,128,128,0.25)',
+  },
+  actionMenuLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  keyboardModalRoot: {flex: 1},
+  sheetBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  editModalSheet: {
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    overflow: 'hidden',
+  },
+  collapsedModalSheet: {
+    height: '60%',
+    maxHeight: '60%',
+  },
+  expandedModalSheet: {
+    flex: 1,
+  },
+  createModal: {
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingTop: 20,
+    paddingHorizontal: 18,
+    paddingBottom: 12,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  deviceContactButton: {
+    height: 44,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 9,
+    marginBottom: 12,
+  },
+  deviceContactButtonText: {fontSize: 13, fontWeight: '800'},
+  createForm: {gap: 12, paddingBottom: 16},
+  modalFooter: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingTop: 12,
+    paddingBottom: 12,
+  },
+  modalSecondaryButton: {
+    flex: 1,
+    height: 46,
+    borderWidth: 1,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalPrimaryButton: {
+    flex: 1.5,
+    height: 46,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  devicePicker: {flex: 1},
+  deviceContactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 10,
+    gap: 12,
+  },
+  deviceContactsEmpty: {
+    textAlign: 'center',
+    padding: 24,
+    fontSize: 14,
   },
 
   // Bulk Action FAB
