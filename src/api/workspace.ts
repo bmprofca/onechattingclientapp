@@ -526,19 +526,28 @@ export const sendAudioMessage = (
 // Project Create/Edit
 // --------------------------------------------------
 
+export type CreateProjectPayload = {
+  company_name: string;
+  project_name: string;
+  package_id: string;
+  pan?: string;
+  gst?: string;
+  firm_type?: string;
+  team_volume?: string;
+  client_volume?: string;
+  annual_revenue?: string;
+  industry?: string;
+  website?: string;
+  city?: string;
+};
+
 export async function createProject(
   session: ApiSession,
-  companyName: string,
-  projectName: string,
-  packageId: string,
+  payload: CreateProjectPayload,
 ) {
   return post<any>(
     '/project/create-project',
-    {
-      company_name: companyName,
-      project_name: projectName,
-      package_id: packageId,
-    },
+    payload,
     session,
   );
 }
@@ -593,11 +602,18 @@ export async function editProject(
 
 export type CreateCampaignPayload = {
   project_id: string;
-  campaign_name: string;
+  campaign_name?: string;
+  name?: string;
   template_id: string;
+  source?: 'contact' | 'excel' | 'sheet' | 'group';
   component?: any[];
   numbers?: string[];
   contact_list?: string[];
+  url?: string;
+  phone_index?: number;
+  start_row?: number;
+  end_row?: number;
+  schedule_date?: string | null;
   schedule_time?: string;
   is_scheduled?: boolean;
   file_url?: string;
@@ -608,26 +624,13 @@ export async function createCampaign(
   session: ApiSession,
   payload: CreateCampaignPayload,
 ) {
-  try {
-    return await post<any>(
-      '/campaign/create-campaign',
-      payload,
-      session,
-    );
-  } catch (error: any) {
-    if (
-      error?.message?.includes('404') ||
-      error?.message?.includes('Cannot POST')
-    ) {
-      return await post<any>(
-        '/campaign/create',
-        payload,
-        session,
-      );
-    }
+  const source = payload.source || (payload.file_url || payload.url ? 'excel' : 'contact');
+  // The web app sends Google Sheet campaigns through the Excel handler too;
+  // there is no /campaign/create/sheet route on the server.
+  const endpointSource = source === 'sheet' ? 'excel' : source;
+  const endpoint = `/campaign/create/${endpointSource}`;
 
-    throw error;
-  }
+  return post<any>(endpoint, payload, session);
 }
 
 // --------------------------------------------------

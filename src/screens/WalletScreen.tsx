@@ -40,8 +40,8 @@ import { ScalePressable, FadeInView } from '../components/animations';
 async function pollUntilSettled(
   session: ApiSession,
   order_id: string,
-  maxAttempts = 10,
-  intervalMs = 2500,
+  maxAttempts = 150,
+  intervalMs = 2000,
 ): Promise<PaymentStatusResponse> {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (attempt > 0) {
@@ -52,7 +52,8 @@ async function pollUntilSettled(
       return result;
     }
   }
-  // Exhausted retries — return last known state (likely still PENDING)
+  // Match the web app's five-minute polling window. A delayed webhook should
+  // remain pending instead of being presented as a failed payment.
   return checkPaymentStatus(session, order_id);
 }
 
@@ -171,7 +172,8 @@ export function WalletScreen({
           return;
         }
 
-        // Step 3 — SDK returned success; poll server to confirm wallet credit
+        // Step 3 — SDK returned success. The server/webhook settles the order;
+        // poll long enough to cover delayed webhook delivery.
         console.log('[razorpay] SDK success:', rzpData.razorpay_payment_id);
         setVerifying(true);
         const statusResult = await pollUntilSettled(session, res.order_id);

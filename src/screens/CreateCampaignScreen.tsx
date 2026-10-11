@@ -502,18 +502,22 @@ export function CreateCampaignScreen({
     try {
       const payload: any = {
         project_id: projectId,
-        campaign_name: campaignName.trim(),
-        template_id: selectedTemplate.template_id || selectedTemplate.id,
+        name: campaignName.trim(),
+        template_id: String(selectedTemplate.template_id || selectedTemplate.id),
         component: formattedComponents,
-        is_scheduled: sendType === 'scheduled',
-        ...(sendType === 'scheduled' && scheduleTime ? { schedule_time: scheduleTime } : {}),
+        schedule_date: sendType === 'scheduled' ? (scheduleTime.trim() || null) : null,
       };
 
       if (recipientMode === 'csv') {
-        payload.file_url = csvFileUrl;
+        payload.source = 'excel';
+        payload.url = csvFileUrl;
+        // Uploaded audience files use the first column for the number and the
+        // first row for headers. The server derives the final row count.
+        payload.phone_index = 0;
+        payload.start_row = 1;
       } else {
+        payload.source = 'contact';
         payload.numbers = numbers;
-        payload.contact_list = numbers;
       }
 
       const res = await createCampaign(session, payload);

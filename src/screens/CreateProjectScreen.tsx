@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   BackHandler,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -18,11 +19,81 @@ import {
   CreditCard,
   DollarSign,
   ArrowLeft,
+  ChevronDown,
 } from 'lucide-react-native';
 import { ApiError, ApiSession } from '../api/client';
 import { createProject, getPlans, PlanPackages } from '../api/workspace';
 import { useTheme } from '../theme/theme';
 import { ScalePressable, FadeInView, FadeScaleModal } from '../components/animations';
+
+const FIRM_TYPES = ['Proprietorship', 'Partnership', 'LLP', 'Private Limited', 'Public Limited', 'Other'];
+const TEAM_VOLUMES = ['1-5', '6-20', '21-50', '51-200', '200+'];
+const CLIENT_VOLUMES = ['1-50', '51-200', '201-1000', '1000+'];
+const REVENUE_RANGES = [
+  { value: 'Under ₹10L', label: 'Under ₹10L' },
+  { value: '₹10L-₹50L', label: '₹10L–₹50L' },
+  { value: '₹50L-₹1Cr', label: '₹50L–₹1Cr' },
+  { value: '₹1Cr-₹5Cr', label: '₹1Cr–₹5Cr' },
+  { value: '₹5Cr+', label: '₹5Cr+' },
+];
+
+function formatOptionLabel(value: string) {
+  return value || 'Select an option';
+}
+
+function OptionPicker({
+  label,
+  value,
+  options,
+  onChange,
+  theme,
+}: {
+  label: string;
+  value: string;
+  options: Array<string | { value: string; label: string }>;
+  onChange: (value: string) => void;
+  theme: any;
+}) {
+  const [visible, setVisible] = useState(false);
+  const selected = options.find(option => (typeof option === 'string' ? option : option.value) === value);
+  const selectedLabel = selected ? (typeof selected === 'string' ? selected : selected.label) : formatOptionLabel(value);
+
+  return (
+    <View style={styles.field}>
+      <Text style={[styles.label, { color: theme.muted }]}>{label}</Text>
+      <Pressable
+        onPress={() => setVisible(true)}
+        style={[styles.inputRow, { backgroundColor: theme.canvas, borderColor: theme.border }]}
+      >
+        <Text style={[styles.input, { color: value ? theme.ink : theme.muted }]}>{selectedLabel}</Text>
+        <ChevronDown size={18} color={theme.muted} />
+      </Pressable>
+      <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
+        <Pressable style={styles.pickerOverlay} onPress={() => setVisible(false)}>
+          <View style={[styles.pickerSheet, { backgroundColor: theme.surface }]}>
+            <Text style={[styles.pickerTitle, { color: theme.ink }]}>{label}</Text>
+            {options.map(option => {
+              const optionValue = typeof option === 'string' ? option : option.value;
+              const optionLabel = typeof option === 'string' ? option : option.label;
+              return (
+                <Pressable
+                  key={optionValue}
+                  onPress={() => {
+                    onChange(optionValue);
+                    setVisible(false);
+                  }}
+                  style={[styles.pickerOption, { borderBottomColor: theme.border }]}
+                >
+                  <Text style={[styles.pickerOptionText, { color: theme.ink }]}>{optionLabel}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Pressable>
+      </Modal>
+    </View>
+  );
+}
 
 export function CreateProjectScreen({
   session,
@@ -38,6 +109,15 @@ export function CreateProjectScreen({
   const theme = useTheme();
   const [companyName, setCompanyName] = useState('');
   const [projectName, setProjectName] = useState('');
+  const [pan, setPan] = useState('');
+  const [gst, setGst] = useState('');
+  const [firmType, setFirmType] = useState('');
+  const [industry, setIndustry] = useState('');
+  const [teamVolume, setTeamVolume] = useState('');
+  const [clientVolume, setClientVolume] = useState('');
+  const [annualRevenue, setAnnualRevenue] = useState('');
+  const [city, setCity] = useState('');
+  const [website, setWebsite] = useState('');
   const [loading, setLoading] = useState(false);
 
   const [plans, setPlans] = useState<PlanPackages | null>(null);
@@ -100,10 +180,38 @@ export function CreateProjectScreen({
       Toast.show({ type: 'error', text1: 'Package Not Ready', text2: 'Please wait for packages to load.' });
       return;
     }
+    const normalizedPan = pan.trim().toUpperCase();
+    const normalizedGst = gst.trim().toUpperCase();
+    const normalizedWebsite = website.trim();
+    if (normalizedPan && !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(normalizedPan)) {
+      Toast.show({ type: 'error', text1: 'Invalid PAN', text2: 'Enter a valid 10-character PAN.' });
+      return;
+    }
+    if (normalizedGst && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(normalizedGst)) {
+      Toast.show({ type: 'error', text1: 'Invalid GSTIN', text2: 'Enter a valid 15-character GSTIN.' });
+      return;
+    }
+    if (normalizedWebsite && !/^(https?:\/\/)?[\w.-]+\.[a-z]{2,}([/?#].*)?$/i.test(normalizedWebsite)) {
+      Toast.show({ type: 'error', text1: 'Invalid Website', text2: 'Enter a valid website address.' });
+      return;
+    }
 
     setLoading(true);
     try {
-      const res = await createProject(session, companyName.trim(), projectName.trim(), selectedPlan.package_id);
+      const res = await createProject(session, {
+        company_name: companyName.trim(),
+        project_name: projectName.trim(),
+        package_id: selectedPlan.package_id,
+        pan: normalizedPan,
+        gst: normalizedGst,
+        firm_type: firmType,
+        team_volume: teamVolume,
+        client_volume: clientVolume,
+        annual_revenue: annualRevenue,
+        industry: industry.trim(),
+        website: normalizedWebsite,
+        city: city.trim(),
+      });
       Toast.show({ type: 'success', text1: 'Project Created', text2: 'Your new workspace is ready.' });
       if (res.data?.project_id) {
         onCreated({ id: String(res.data.project_id), name: res.data.name });
@@ -178,6 +286,112 @@ export function CreateProjectScreen({
                     onChangeText={setProjectName}
                     autoCapitalize="words"
                     placeholder="Main Workspace"
+                    placeholderTextColor={theme.muted}
+                    style={[styles.input, { color: theme.ink }]}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.field}>
+                <Text style={[styles.label, { color: theme.muted }]}>PAN <Text style={styles.optional}>(optional)</Text></Text>
+                <View style={[styles.inputRow, fieldStyle]}>
+                  <TextInput
+                    value={pan}
+                    onChangeText={value => setPan(value.toUpperCase())}
+                    autoCapitalize="characters"
+                    maxLength={10}
+                    placeholder="ABCDE1234F"
+                    placeholderTextColor={theme.muted}
+                    style={[styles.input, { color: theme.ink }]}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.field}>
+                <Text style={[styles.label, { color: theme.muted }]}>GST <Text style={styles.optional}>(optional)</Text></Text>
+                <View style={[styles.inputRow, fieldStyle]}>
+                  <TextInput
+                    value={gst}
+                    onChangeText={value => setGst(value.toUpperCase())}
+                    autoCapitalize="characters"
+                    maxLength={15}
+                    placeholder="22AAAAA0000A1Z5"
+                    placeholderTextColor={theme.muted}
+                    style={[styles.input, { color: theme.ink }]}
+                  />
+                </View>
+              </View>
+
+              <OptionPicker
+                label="FIRM TYPE (OPTIONAL)"
+                value={firmType}
+                options={FIRM_TYPES}
+                onChange={setFirmType}
+                theme={theme}
+              />
+
+              <View style={styles.field}>
+                <Text style={[styles.label, { color: theme.muted }]}>INDUSTRY <Text style={styles.optional}>(optional)</Text></Text>
+                <View style={[styles.inputRow, fieldStyle]}>
+                  <TextInput
+                    value={industry}
+                    onChangeText={setIndustry}
+                    maxLength={120}
+                    placeholder="Retail, education, healthcare..."
+                    placeholderTextColor={theme.muted}
+                    style={[styles.input, { color: theme.ink }]}
+                  />
+                </View>
+              </View>
+
+              <OptionPicker
+                label="TEAM VOLUME (OPTIONAL)"
+                value={teamVolume}
+                options={TEAM_VOLUMES}
+                onChange={setTeamVolume}
+                theme={theme}
+              />
+
+              <OptionPicker
+                label="CLIENT VOLUME (OPTIONAL)"
+                value={clientVolume}
+                options={CLIENT_VOLUMES}
+                onChange={setClientVolume}
+                theme={theme}
+              />
+
+              <OptionPicker
+                label="ANNUAL REVENUE (OPTIONAL)"
+                value={annualRevenue}
+                options={REVENUE_RANGES}
+                onChange={setAnnualRevenue}
+                theme={theme}
+              />
+
+              <View style={styles.field}>
+                <Text style={[styles.label, { color: theme.muted }]}>CITY <Text style={styles.optional}>(optional)</Text></Text>
+                <View style={[styles.inputRow, fieldStyle]}>
+                  <TextInput
+                    value={city}
+                    onChangeText={setCity}
+                    maxLength={100}
+                    placeholder="City"
+                    placeholderTextColor={theme.muted}
+                    style={[styles.input, { color: theme.ink }]}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.field}>
+                <Text style={[styles.label, { color: theme.muted }]}>WEBSITE <Text style={styles.optional}>(optional)</Text></Text>
+                <View style={[styles.inputRow, fieldStyle]}>
+                  <TextInput
+                    value={website}
+                    onChangeText={setWebsite}
+                    autoCapitalize="none"
+                    keyboardType="url"
+                    maxLength={255}
+                    placeholder="https://example.com"
                     placeholderTextColor={theme.muted}
                     style={[styles.input, { color: theme.ink }]}
                   />
@@ -358,6 +572,7 @@ const styles = StyleSheet.create({
   },
   field: { marginTop: 14 },
   label: { fontSize: 10, fontWeight: '800', letterSpacing: 1.1, marginBottom: 7 },
+  optional: { fontSize: 10, fontWeight: '500', letterSpacing: 0 },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -368,6 +583,21 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   input: { flex: 1, fontSize: 15, height: '100%' },
+
+  pickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  pickerSheet: {
+    borderRadius: 20,
+    padding: 18,
+    maxHeight: '80%',
+  },
+  pickerTitle: { fontSize: 17, fontWeight: '800', marginBottom: 8 },
+  pickerOption: { paddingVertical: 14, borderBottomWidth: 1 },
+  pickerOptionText: { fontSize: 15 },
 
   packageLoading: { height: 52, alignItems: 'center', justifyContent: 'center' },
   segmentWrap: {
