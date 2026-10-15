@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { BackHandler, Modal, Pressable, ScrollView, StyleSheet, Text, View, Animated, Easing } from 'react-native';
+import { BackHandler, Dimensions, Modal, Pressable, ScrollView, StyleSheet, Text, View, Animated, Easing } from 'react-native';
 import { ArrowLeftRight, Home, MessageCircle, Megaphone, User, Wallet, MoreVertical, Briefcase, HelpCircle, Brain, Settings, ReceiptText, QrCode, FolderOpen, Users, FileText } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { getAccountProfile } from '../api/auth';
@@ -151,6 +151,8 @@ export function WorkspaceScreen({
   const [templatesTarget, setTemplatesTarget] = useState(false);
   const [templateEditorTarget, setTemplateEditorTarget] = useState<any>(null);
   const [isMenuVisible, setIsMenuVisible] = useState(false);
+  const menuButtonRef = useRef<View>(null);
+  const [menuAnchor, setMenuAnchor] = useState({ top: 0, right: 12 });
   const [projectQrModalOpen, setProjectQrModalOpen] = useState(false);
   const [projectProfileImage, setProjectProfileImage] = useState<string>('');
   const [totalUnreadCount, setTotalUnreadCount] = useState<number>(0);
@@ -1047,15 +1049,26 @@ export function WorkspaceScreen({
                     </View>
                   </View>
                 </ScalePressable>
-                <ScalePressable
-                  accessibilityRole="button"
-                  accessibilityLabel="More options"
-                  onPress={() => setIsMenuVisible(true)}
-                  style={styles.actionBtn}
-                  hitSlop={8}
-                >
-                  <MoreVertical size={20} color={theme.ink} strokeWidth={2.5} />
-                </ScalePressable>
+                <View ref={menuButtonRef} collapsable={false}>
+                  <ScalePressable
+                    accessibilityRole="button"
+                    accessibilityLabel="More options"
+                    onPress={() => {
+                      menuButtonRef.current?.measureInWindow((x, y, width, height) => {
+                        const screenWidth = Dimensions.get('window').width;
+                        setMenuAnchor({
+                          top: y + height,
+                          right: Math.max(0, screenWidth - (x + width)),
+                        });
+                        setIsMenuVisible(true);
+                      });
+                    }}
+                    style={styles.actionBtn}
+                    hitSlop={8}
+                  >
+                    <MoreVertical size={20} color={theme.ink} strokeWidth={2.5} />
+                  </ScalePressable>
+                </View>
               </>
             )}
           </View>
@@ -1235,8 +1248,8 @@ export function WorkspaceScreen({
                 if (tab.key === 'inbox') setInboxFilter(undefined);
                 setPage(tab.key);
               }}
+              android_ripple={null}
               style={styles.tabItem}
-              hitSlop={4}
             >
               <View
                 style={[
@@ -1290,6 +1303,7 @@ export function WorkspaceScreen({
         <Modal
           visible={isMenuVisible}
           transparent
+          statusBarTranslucent
           animationType="none"
           onRequestClose={() => setIsMenuVisible(false)}
         >
@@ -1301,6 +1315,8 @@ export function WorkspaceScreen({
               style={[
                 styles.menuContent,
                 {
+                  top: menuAnchor.top,
+                  right: menuAnchor.right,
                   backgroundColor: theme.surface,
                   borderColor: theme.border,
                   opacity: menuOpacity,
@@ -1569,12 +1585,20 @@ const styles = StyleSheet.create({
   body: { flex: 1 },
   tabBar: {
     flexDirection: 'row',
+    alignItems: 'stretch',
     borderTopWidth: 1,
-    paddingTop: 6,
-    paddingBottom: 8,
-    paddingHorizontal: 8,
+    zIndex: 5,
+    elevation: 8,
   },
-  tabItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 8,
+    paddingBottom: 10,
+    // Android does not deliver presses to fully transparent empty space.
+    backgroundColor: 'rgba(0,0,0,0.01)',
+  },
   tabPill: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -1646,8 +1670,6 @@ const styles = StyleSheet.create({
   menuOverlay: { flex: 1, backgroundColor: 'transparent' },
   menuContent: {
     position: 'absolute',
-    top: 120,
-    right: 5,
     width: 180,
     borderRadius: 12,
     borderWidth: 1,

@@ -1,4 +1,4 @@
-import { ApiSession, post } from './client';
+import { ApiSession, get, post } from './client';
 
 // ─── Response Types ──────────────────────────────────────────────────────────
 
@@ -23,6 +23,8 @@ export interface PaymentStatusResponse {
   type?: string;
   payment_id?: string;
   amount: number;
+  surcharge?: number;
+  payable?: number;
   utr?: string;
   name?: string;
   email?: string;
@@ -37,6 +39,17 @@ export interface PaymentStatusResponse {
 }
 
 // ─── API Functions ───────────────────────────────────────────────────────────
+
+export type WalletSurcharge = { percent: number; flat: number };
+
+/** Current wallet recharge surcharge. The server applies the same rates when the order is created. */
+export async function getWalletSurcharge(session: ApiSession): Promise<WalletSurcharge> {
+  const result = await get<WalletSurcharge>('/payment/wallet-surcharge', undefined, session);
+  return {
+    percent: Number(result.percent) || 0,
+    flat: Number(result.flat) || 0,
+  };
+}
 
 /** Step 1: Create a payment order on the server and get gateway credentials. */
 export async function topupWallet(

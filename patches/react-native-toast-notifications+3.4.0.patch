@@ -1,5 +1,5 @@
 diff --git a/node_modules/react-native-toast-notifications/src/toast-container.tsx b/node_modules/react-native-toast-notifications/src/toast-container.tsx
-index b0bce14..e5c6c2f 100644
+index 5d2a8b4..569965d 100644
 --- a/node_modules/react-native-toast-notifications/src/toast-container.tsx
 +++ b/node_modules/react-native-toast-notifications/src/toast-container.tsx
 @@ -4,8 +4,9 @@ import {
@@ -13,3 +13,21 @@ index b0bce14..e5c6c2f 100644
  import Toast, { ToastOptions, ToastProps } from "./toast";
  
  const { height, width } = Dimensions.get("window");
+@@ -124,7 +125,7 @@ class ToastContainer extends Component<Props, State> {
+         style={[styles.container, style]}
+         pointerEvents="box-none"
+       >
+-        <SafeAreaView>
++        <SafeAreaView pointerEvents="box-none">
+           {toasts
+             .filter((t) => !t.placement || t.placement === "bottom")
+             .map((toast) => (
+@@ -150,7 +151,7 @@ class ToastContainer extends Component<Props, State> {
+         style={[styles.container, style]}
+         pointerEvents="box-none"
+       >
+-        <SafeAreaView>
++        <SafeAreaView pointerEvents="box-none">
+           {toasts
+             .filter((t) => t.placement === "top")
+             .map((toast) => (

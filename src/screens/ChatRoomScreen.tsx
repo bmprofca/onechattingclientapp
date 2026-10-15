@@ -3,6 +3,7 @@ import Toast from '../ui/toast';
 import { MessageInfoHandle, MessageInfoModal } from '../components/MessageInfoModal';
 import {
   ActivityIndicator,
+  Dimensions,
   FlatList,
   Image,
   Keyboard,
@@ -237,6 +238,8 @@ export function ChatRoomScreen({
 
   // ── Chat assign + case status/menu state (mirrors the web app) ─────────
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
+  const headerMenuButtonRef = useRef<View>(null);
+  const [headerMenuAnchor, setHeaderMenuAnchor] = useState({ top: 0, right: 12 });
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [assignmentInfo, setAssignmentInfo] = useState<any>(null);
   const [assignActionLoading, setAssignActionLoading] = useState(false);
@@ -1242,13 +1245,24 @@ export function ChatRoomScreen({
         </View>
 
         <View style={styles.headerRightActions}>
-          <ScalePressable
-            style={styles.headerIconBtn}
-            hitSlop={8}
-            onPress={() => setHeaderMenuOpen((open) => !open)}
-          >
-            <MoreVertical size={20} color={theme.ink} />
-          </ScalePressable>
+          <View ref={headerMenuButtonRef} collapsable={false}>
+            <ScalePressable
+              style={styles.headerIconBtn}
+              hitSlop={8}
+              onPress={() => {
+                headerMenuButtonRef.current?.measureInWindow((x, y, width, height) => {
+                  const screenWidth = Dimensions.get('window').width;
+                  setHeaderMenuAnchor({
+                    top: y + height,
+                    right: Math.max(0, screenWidth - (x + width)),
+                  });
+                  setHeaderMenuOpen(true);
+                });
+              }}
+            >
+              <MoreVertical size={20} color={theme.ink} />
+            </ScalePressable>
+          </View>
         </View>
       </FadeInView>
 
@@ -1256,13 +1270,22 @@ export function ChatRoomScreen({
       <Modal
         visible={headerMenuOpen}
         transparent
+        statusBarTranslucent
         animationType="fade"
         onRequestClose={() => setHeaderMenuOpen(false)}
       >
         <Pressable style={StyleSheet.absoluteFill} onPress={() => setHeaderMenuOpen(false)}>
           <View
             onStartShouldSetResponder={() => true}
-            style={[styles.headerDropdown, { backgroundColor: theme.header, borderColor: theme.border }]}
+            style={[
+              styles.headerDropdown,
+              {
+                top: headerMenuAnchor.top,
+                right: headerMenuAnchor.right,
+                backgroundColor: theme.header,
+                borderColor: theme.border,
+              },
+            ]}
           >
             <ScalePressable style={styles.headerDropdownItem} onPress={openAssignModal}>
               <View style={[styles.headerDropdownIconWrap, { backgroundColor: theme.inputBg }]}>
@@ -1952,8 +1975,6 @@ const styles = StyleSheet.create({
   },
   headerDropdown: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 92 :110,
-    right: 6,
     width: 180,
     borderRadius: 10,
     borderWidth: 1,

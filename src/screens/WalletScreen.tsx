@@ -26,7 +26,7 @@ import {
 } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { getAccountProfile } from '../api/auth';
-import { checkPaymentStatus, PaymentStatusResponse, topupWallet } from '../api/payment';
+import { checkPaymentStatus, getWalletSurcharge, PaymentStatusResponse, topupWallet } from '../api/payment';
 import { useTheme } from '../theme/theme';
 import { ScalePressable, FadeInView } from '../components/animations';
 
@@ -76,6 +76,8 @@ export function WalletScreen({
   const [verifying, setVerifying] = useState(false);
   const [liveBalance, setLiveBalance] = useState<string | number | undefined>(balance);
   const [paymentResult, setPaymentResult] = useState<PaymentStatusResponse | null>(null);
+  const [surchargePercent, setSurchargePercent] = useState(0);
+  const [surchargeFlat, setSurchargeFlat] = useState(0);
 
   const balanceUpdatedRef = React.useRef(onBalanceUpdated);
   balanceUpdatedRef.current = onBalanceUpdated;
@@ -95,6 +97,18 @@ export function WalletScreen({
   useEffect(() => {
     fetchLatestBalance();
   }, [fetchLatestBalance]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getWalletSurcharge(session)
+      .then((config) => {
+        if (cancelled) return;
+        setSurchargePercent(config.percent);
+        setSurchargeFlat(config.flat);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [session.token, session.username]);
 
   useEffect(() => {
     if (balance !== undefined) {
@@ -201,6 +215,17 @@ export function WalletScreen({
   };
 
   const quickAmounts = ['500', '1000', '2000', '5000'];
+  const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+  const creditAmount = Number(amount);
+  const surchargeAmount = !amount || isNaN(creditAmount) || creditAmount <= 0
+    ? 0
+    : roundMoney(roundMoney((creditAmount * surchargePercent) / 100) + surchargeFlat);
+  const payableAmount = roundMoney((Number.isFinite(creditAmount) ? creditAmount : 0) + surchargeAmount);
+  const feeLabel = [
+    surchargePercent > 0 ? `${surchargePercent}%` : '',
+    surchargeFlat > 0 ? `₹${surchargeFlat}` : '',
+  ].filter(Boolean).join(' + ');
+  const rupee = (value: number) => `₹${value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   // ─── Verifying overlay ──────────────────────────────────────────────────────
   if (verifying) {
@@ -264,7 +289,13 @@ export function WalletScreen({
     const detailRows: { label: string; value: string; highlight?: boolean }[] = [
       { label: 'Order ID', value: paymentResult.order_id },
       ...(paymentResult.amount
-        ? [{ label: 'Amount', value: `₹${Number(paymentResult.amount).toFixed(2)}` }]
+        ? [{ label: Number(paymentResult.surcharge) > 0 ? 'Wallet credit' : 'Amount', value: `₹${Number(paymentResult.amount).toFixed(2)}` }]
+        : []),
+      ...(Number(paymentResult.surcharge) > 0
+        ? [
+            { label: 'Platform fee', value: `₹${Number(paymentResult.surcharge).toFixed(2)}` },
+            { label: 'Amount paid', value: `₹${Number(paymentResult.payable ?? paymentResult.amount).toFixed(2)}` },
+          ]
         : []),
       ...(paymentResult.payment_id
         ? [{ label: 'Payment Ref', value: paymentResult.payment_id }]
@@ -422,6 +453,23 @@ export function WalletScreen({
                 </View>
               </View>
 
+              {surchargeAmount > 0 && (
+                <View style={[styles.feeBox, { borderColor: theme.border }]}>
+                  <View style={styles.feeRow}>
+                    <Text style={[styles.feeLabel, { color: theme.muted }]}>Wallet credit</Text>
+                    <Text style={[styles.feeValue, { color: theme.ink }]}>{rupee(creditAmount)}</Text>
+                  </View>
+                  <View style={styles.feeRow}>
+                    <Text style={[styles.feeLabel, { color: theme.muted }]}>Platform fee{feeLabel ? ` (${feeLabel})` : ''}</Text>
+                    <Text style={[styles.feeValue, { color: theme.ink }]}>{rupee(surchargeAmount)}</Text>
+                  </View>
+                  <View style={styles.feeRow}>
+                    <Text style={[styles.feeLabel, { color: theme.ink, fontWeight: '700' }]}>You pay</Text>
+                    <Text style={[styles.feeValue, { color: theme.ink, fontWeight: '700' }]}>{rupee(payableAmount)}</Text>
+                  </View>
+                </View>
+              )}
+
               {/* Pay button */}
               <ScalePressable
                 accessibilityRole="button"
@@ -435,7 +483,7 @@ export function WalletScreen({
                 {loading ? (
                   <ActivityIndicator color="#FFF" />
                 ) : (
-                  <Text style={styles.buttonText}>Proceed to Pay</Text>
+                  <Text style={styles.buttonText}>{surchargeAmount > 0 ? `Pay ${rupee(payableAmount)}` : 'Proceed to Pay'}</Text>
                 )}
               </ScalePressable>
             </View>
@@ -518,6 +566,10 @@ const styles = StyleSheet.create({
   quickAmountText: { fontSize: 15, fontWeight: '600' },
 
   field: { marginBottom: 20 },
+  feeBox: { borderTopWidth: 1, marginBottom: 16, paddingTop: 12, gap: 8 },
+  feeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+  feeLabel: { fontSize: 13, flex: 1 },
+  feeValue: { fontSize: 13 },
   fieldLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.1, marginBottom: 8 },
   inputRow: {
     flexDirection: 'row',
