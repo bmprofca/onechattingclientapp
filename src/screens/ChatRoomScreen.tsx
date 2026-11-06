@@ -35,6 +35,7 @@ import {
   CheckCircle2,
   Briefcase,
   Edit2,
+  ShoppingBag,
 } from 'lucide-react-native';
 import {
   launchImageLibrary,
@@ -67,6 +68,7 @@ import {
 import { uploadFile, PickedFile } from '../api/upload';
 import { LoadState } from '../components/LoadState';
 import { TemplateModal } from '../components/TemplateModal';
+import { ProductCatalogsModal } from '../components/ProductCatalogsModal';
 import { MediaViewerModal } from '../components/MediaViewerModal';
 import { resolveTemplateBodyText, getTemplateHeaderMedia } from '../utils/templateUtils';
 import { useTheme } from '../theme/theme';
@@ -210,6 +212,7 @@ export function ChatRoomScreen({
   const [hasMore, setHasMore] = useState(true);
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
+  const [catalogsModalOpen, setCatalogsModalOpen] = useState(false);
   const [uploadingKind, setUploadingKind] = useState<AttachmentKind | null>(null);
   // NEW: holds a picked-but-not-yet-sent attachment, shown as a preview above the input bar
   const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null);
@@ -1646,6 +1649,15 @@ export function ChatRoomScreen({
               }}
               theme={theme}
             />
+            <AttachmentOption
+              label="Catalogs"
+              icon={ShoppingBag}
+              onPress={() => {
+                setAttachMenuOpen(false);
+                setCatalogsModalOpen(true);
+              }}
+              theme={theme}
+            />
           </View>
         </FadeInView>
       )}
@@ -1788,6 +1800,13 @@ export function ChatRoomScreen({
         session={session}
         projectId={projectId}
         onSelectTemplate={handleSendTemplate}
+      />
+
+      <ProductCatalogsModal
+        visible={catalogsModalOpen}
+        onClose={() => setCatalogsModalOpen(false)}
+        session={session}
+        projectId={projectId}
       />
 
       <MediaViewerModal

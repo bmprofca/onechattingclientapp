@@ -252,6 +252,30 @@ export const getChatHistory = (
     session,
   );
 
+export const getProductCatalogs = (
+  session: ApiSession,
+  projectId: string,
+  cursor?: { after?: string; before?: string },
+  verifyConnection = false,
+) =>
+  post<any>(
+    '/catalog/product-catalogs',
+    {
+      project_id: projectId,
+      ...(cursor?.after ? { after: cursor.after } : {}),
+      ...(cursor?.before ? { before: cursor.before } : {}),
+      ...(verifyConnection ? { verify_connection: true } : {}),
+    },
+    session,
+  );
+
+export const getProductCatalogConnectLink = (session: ApiSession, projectId: string) =>
+  post<any>(
+    '/catalog/connect-link',
+    { project_id: projectId },
+    session,
+  );
+
 export const markAsRead = (
   session: ApiSession,
   projectId: string,
