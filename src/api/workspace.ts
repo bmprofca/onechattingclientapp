@@ -346,6 +346,24 @@ export const getContactDetails = (
     session,
   );
 
+export const getContactTimeline = (
+  session: ApiSession,
+  projectId: string,
+  contactNumber: string,
+  page = 1,
+  limit = 20,
+) =>
+  post<any>(
+    '/inbox/contact-timeline',
+    {
+      project_id: projectId,
+      number: contactNumber,
+      page,
+      limit,
+    },
+    session,
+  );
+
 export const getOpenCaseCount = (
   session: ApiSession,
   projectId: string,

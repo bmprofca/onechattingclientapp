@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Toast from '../ui/toast';
 import { MessageInfoHandle, MessageInfoModal } from '../components/MessageInfoModal';
+import { ContactTimelineModal } from '../components/ContactTimelineModal';
 import {
   ActivityIndicator,
   Dimensions,
@@ -36,6 +37,7 @@ import {
   Briefcase,
   Edit2,
   ShoppingBag,
+  Activity,
 } from 'lucide-react-native';
 import {
   launchImageLibrary,
@@ -234,6 +236,7 @@ export function ChatRoomScreen({
   const [interactiveModalOpen, setInteractiveModalOpen] = useState(false);
   const [activeInteractiveMsg, setActiveInteractiveMsg] = useState<any | null>(null);
   const [activeInteractiveOptions, setActiveInteractiveOptions] = useState<any[]>([]);
+  const [contactTimelineVisible, setContactTimelineVisible] = useState(false);
 
   // Reply state
   const [replyingTo, setReplyingTo] = useState<any | null>(null);
@@ -1248,6 +1251,15 @@ export function ChatRoomScreen({
         </View>
 
         <View style={styles.headerRightActions}>
+          <ScalePressable
+            style={styles.headerIconBtn}
+            hitSlop={8}
+            onPress={() => setContactTimelineVisible(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Open contact timeline"
+          >
+            <Activity size={20} color={theme.ink} />
+          </ScalePressable>
           <View ref={headerMenuButtonRef} collapsable={false}>
             <ScalePressable
               style={styles.headerIconBtn}
@@ -1268,6 +1280,14 @@ export function ChatRoomScreen({
           </View>
         </View>
       </FadeInView>
+
+      <ContactTimelineModal
+        visible={contactTimelineVisible}
+        onClose={() => setContactTimelineVisible(false)}
+        projectId={projectId}
+        number={contactNumber}
+        session={session}
+      />
 
       {/* Header dropdown: Chat Assign + Case (same two actions as the web app's ⋮ menu) */}
       <Modal
