@@ -19,6 +19,7 @@ import { useTheme } from './src/theme/theme';
 import { socketManager } from './src/services/socketManager';
 import { notificationService } from './src/services/notificationService';
 import { listenForForegroundPush, listenForNotificationOpens, registerDevicePush, unregisterDevicePush } from './src/services/pushService';
+import type { NotificationTarget } from './src/services/notificationTarget';
 import { ScreenTransition } from './src/components/animations';
 import { ConnectionBanner } from './src/components/ConnectionBanner';
 
@@ -28,19 +29,16 @@ export default function App() {
   const theme = useTheme();
   const [session, setSession] = useState<Session | null | undefined>(undefined);
 
-  // Ref for notification tap → navigate to chat
+  // Ref for notification tap → navigate to its project-scoped target
   const notificationNavRef = useRef<
-    ((contactNumber: string, contactName: string) => void) | null
+    ((target: NotificationTarget) => void) | null
   >(null);
 
   // Initialize notification service once
   useEffect(() => {
     const openTimers = new Set<ReturnType<typeof setInterval>>();
-    const openNotificationChat = (
-      contactNumber: string,
-      contactName: string,
-    ) => {
-      const open = () => notificationNavRef.current?.(contactNumber, contactName);
+    const openNotificationTarget = (target: NotificationTarget) => {
+      const open = () => notificationNavRef.current?.(target);
       if (notificationNavRef.current) {
         open();
         return;
@@ -62,12 +60,12 @@ export default function App() {
       await notificationService.requestPermission();
 
       // Register tap handler — navigates to the chat when user taps notification
-      notificationService.onNotificationTap(openNotificationChat);
+      notificationService.onNotificationTap(openNotificationTarget);
     };
     init().catch(console.warn);
 
     const unsubscribePush = listenForForegroundPush();
-    const unsubscribeOpen = listenForNotificationOpens(openNotificationChat);
+    const unsubscribeOpen = listenForNotificationOpens(openNotificationTarget);
     const subscription = AppState.addEventListener('change', nextAppState => {
       if (nextAppState === 'active') {
         socketManager.ensureConnected();

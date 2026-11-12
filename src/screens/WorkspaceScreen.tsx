@@ -37,6 +37,8 @@ import { TemplatesScreen } from './TemplatesScreen';
 import { TemplateEditorScreen } from './TemplateEditorScreen';
 import { socketManager } from '../services/socketManager';
 import { notificationService } from '../services/notificationService';
+import type { NotificationTarget } from '../services/notificationTarget';
+import Toast from '../ui/toast';
 import {
   ScalePressable,
   FadeInView,
@@ -89,7 +91,7 @@ export function WorkspaceScreen({
     name: string;
   }) => void | Promise<void>;
   notificationNavRef?: React.MutableRefObject<
-    ((contactNumber: string, contactName: string) => void) | null
+    ((target: NotificationTarget) => void) | null
   >;
   onSignOut: () => void;
 }) {
@@ -166,11 +168,59 @@ export function WorkspaceScreen({
   // Wire notification tap → navigate to chat
   useEffect(() => {
     if (notificationNavRef) {
-      notificationNavRef.current = (
-        contactNumber: string,
-        contactName: string,
-      ) => {
-        setChatTarget({ number: contactNumber, name: contactName });
+      notificationNavRef.current = async (target: NotificationTarget) => {
+        const targetProjectId = target.projectId;
+        if (!targetProjectId) {
+          Toast.show({
+            type: 'error',
+            text1: 'Could not open notification',
+            text2: 'The notification does not identify a project.',
+          });
+          return;
+        }
+        if (targetProjectId !== projectId) {
+          const canAccessProject = session.projects?.some(
+            project => String(project.id) === targetProjectId,
+          );
+          if (!canAccessProject) {
+            Toast.show({
+              type: 'error',
+              text1: 'Could not open notification',
+              text2: 'This project is not available in the current account.',
+            });
+            return;
+          }
+          try {
+            await onSelectProject(targetProjectId);
+          } catch (error) {
+            Toast.show({
+              type: 'error',
+              text1: 'Could not switch project',
+              text2: error instanceof Error ? error.message : String(error),
+            });
+            return;
+          }
+        }
+
+        setChatTarget(null);
+        setCaseDetailsTarget(null);
+        setCampaignTarget(null);
+        if (target.type === 'campaign') {
+          setCampaignTarget({
+            id: target.campaignId,
+            name: target.campaignName,
+          });
+        } else if (target.type === 'case') {
+          setCaseDetailsTarget({
+            number: target.contactNumber,
+            name: target.contactName,
+          });
+        } else {
+          setChatTarget({
+            number: target.contactNumber,
+            name: target.contactName,
+          });
+        }
       };
     }
     return () => {
@@ -178,7 +228,7 @@ export function WorkspaceScreen({
         notificationNavRef.current = null;
       }
     };
-  }, [notificationNavRef]);
+  }, [notificationNavRef, onSelectProject, projectId, session.projects]);
 
   // Track active chat for notification suppression
   useEffect(() => {
@@ -219,8 +269,8 @@ export function WorkspaceScreen({
         (res as any)?.unread_count ??
         0;
       setTotalUnreadCount(Number(count) || 0);
-    } catch {
-      // ignore — badge just won't update this cycle
+    } catch (error) {
+      console.warn('Failed to load unread count:', error);
     }
   }, [apiSession, hasProject, projectId]);
 
@@ -534,6 +584,7 @@ export function WorkspaceScreen({
       >
         <ScreenTransition>
           <ChatRoomScreen
+            key={`${projectId}:${chatTarget.number}`}
             projectId={projectId}
             session={apiSession}
             contactNumber={chatTarget.number}
@@ -1495,6 +1546,7 @@ export function WorkspaceScreen({
         >
           <ScreenTransition>
             <ChatRoomScreen
+              key={`${projectId}:${chatTarget.number}`}
               projectId={projectId}
               session={apiSession}
               contactNumber={chatTarget.number}

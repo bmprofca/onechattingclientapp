@@ -9,6 +9,10 @@ import { AppState, Platform, PermissionsAndroid } from 'react-native';
 import type { ApiSession } from '../api/client';
 import { markAsRead, sendMessage } from '../api/workspace';
 import { loadSession } from './session';
+import {
+  getNotificationTarget,
+  type NotificationTarget,
+} from './notificationTarget';
 
 const MESSAGE_CHANNEL_ID = 'onechat_messages';
 const MESSAGE_CHANNEL_NAME = 'Chat Messages';
@@ -16,12 +20,11 @@ const APP_NAME = 'OneChatting';
 
 /**
  * Callback type for when user taps a notification.
- * The handler receives the contact number and name so the app can
- * navigate to the correct chat room.
+ * The handler receives a validated target so the app can open the correct
+ * project-scoped screen.
  */
 export type NotificationTapHandler = (
-  contactNumber: string,
-  contactName: string,
+  target: NotificationTarget,
 ) => void;
 
 type NotificationTapData = {
@@ -29,13 +32,14 @@ type NotificationTapData = {
   contactName?: string;
   projectId?: string;
   messageWamid?: string;
+  [key: string]: unknown;
 };
 
 class NotificationService {
   private channelsCreated = false;
   private activeChatNumber: string | null = null;
   private tapHandler: NotificationTapHandler | null = null;
-  private pendingTap: { contactNumber: string; contactName: string } | null = null;
+  private pendingTap: NotificationTarget | null = null;
   private initialNotificationChecked = false;
   private recentKeys = new Map<string, number>();
 
@@ -90,9 +94,9 @@ class NotificationService {
   onNotificationTap(handler: NotificationTapHandler) {
     this.tapHandler = handler;
     if (this.pendingTap) {
-      const { contactNumber, contactName } = this.pendingTap;
+      const target = this.pendingTap;
       this.pendingTap = null;
-      handler(contactNumber, contactName);
+      handler(target);
     }
 
     if (this.initialNotificationChecked) return;
@@ -192,14 +196,16 @@ class NotificationService {
   }
 
   private dispatchTap(data: NotificationTapData) {
-    const contactNumber = String(data.contactNumber || '');
-    if (!contactNumber) return;
-    const contactName = String(data.contactName || contactNumber);
+    const target = getNotificationTarget(data);
+    if (!target) {
+      console.warn('Ignoring notification without a supported, project-scoped target.');
+      return;
+    }
 
     if (this.tapHandler) {
-      this.tapHandler(contactNumber, contactName);
+      this.tapHandler(target);
     } else {
-      this.pendingTap = { contactNumber, contactName };
+      this.pendingTap = target;
     }
   }
 

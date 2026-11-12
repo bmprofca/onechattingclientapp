@@ -19,6 +19,7 @@ export type PickedFile = {
   uri: string;
   name: string;
   type: string; // mime type, e.g. 'image/png'
+  size?: number;
 };
 
 export async function uploadFile(file: PickedFile): Promise<UploadedFile> {

@@ -12,6 +12,10 @@ import {
   setBackgroundMessageHandler,
   type RemoteMessage,
 } from '@react-native-firebase/messaging';
+import {
+  getNotificationTarget,
+  type NotificationTarget,
+} from './notificationTarget';
 import { post, type ApiSession } from '../api/client';
 let currentSession: ApiSession | null = null;
 let refreshListenerReady = false;
@@ -81,13 +85,17 @@ export function listenForForegroundPush() {
 }
 
 export function listenForNotificationOpens(
-  onOpen: (contactNumber: string, contactName: string) => void,
+  onOpen: (target: NotificationTarget) => void,
 ) {
   const openFrom = (message: RemoteMessage | null) => {
+    if (!message) return;
     const data = message?.data || {};
-    const contactNumber = String(data.contactNumber || '');
-    if (!contactNumber) return;
-    onOpen(contactNumber, String(data.contactName || contactNumber));
+    const target = getNotificationTarget(data);
+    if (target) {
+      onOpen(target);
+    } else {
+      console.warn('Ignoring push without a supported, project-scoped target.');
+    }
   };
 
   const unsubscribe = onNotificationOpenedApp(messaging, openFrom);

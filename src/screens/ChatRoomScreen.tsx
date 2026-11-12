@@ -10,6 +10,7 @@ import {
   Keyboard,
   Modal,
   Platform,
+  PermissionsAndroid,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -38,6 +39,10 @@ import {
   Edit2,
   ShoppingBag,
   Activity,
+  Mic,
+  Pause,
+  Play,
+  Square,
 } from 'lucide-react-native';
 import {
   launchImageLibrary,
@@ -76,6 +81,15 @@ import { resolveTemplateBodyText, getTemplateHeaderMedia } from '../utils/templa
 import { useTheme } from '../theme/theme';
 import { socketManager } from '../services/socketManager';
 import { Image as ImageIcon, Video, FileText, Music, LayoutTemplate } from 'lucide-react-native';
+import ReactNativeBlobUtil from 'react-native-blob-util';
+import {
+  createVoiceNoteSound,
+  getVoiceNoteAudioSet,
+  getVoiceNoteFormat,
+  MAX_VOICE_NOTE_SIZE_BYTES,
+  validateVoiceNoteSize,
+  type VoiceNoteSound,
+} from '../services/voiceNotes';
 import { ScalePressable, FadeInView } from '../components/animations';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 type ChatRow =
@@ -179,12 +193,32 @@ function buildChatRows(messages: any[]): ChatRow[] {
   return rows;
 }
 
-type AttachmentKind = 'photo' | 'video' | 'document' | 'audio';
+type AttachmentKind = 'photo' | 'video' | 'document' | 'audio' | 'voice';
 
 type PendingAttachment = {
   kind: AttachmentKind;
   file: PickedFile;
+  durationMs?: number;
 };
+
+function getLocalFilePath(uri: string) {
+  return uri.replace(/^file:\/\//, '');
+}
+
+async function removeVoiceNoteFile(uri: string) {
+  try {
+    await ReactNativeBlobUtil.fs.unlink(getLocalFilePath(uri));
+  } catch (error) {
+    console.warn('Could not remove temporary voice note:', error);
+  }
+}
+
+function formatVoiceDuration(durationMs: number) {
+  const totalSeconds = Math.floor(durationMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
 
 export function ChatRoomScreen({
   projectId,
@@ -218,6 +252,56 @@ export function ChatRoomScreen({
   const [uploadingKind, setUploadingKind] = useState<AttachmentKind | null>(null);
   // NEW: holds a picked-but-not-yet-sent attachment, shown as a preview above the input bar
   const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null);
+  const [voiceRecording, setVoiceRecording] = useState(false);
+  const [voiceActionBusy, setVoiceActionBusy] = useState(false);
+  const [voiceRecordingMs, setVoiceRecordingMs] = useState(0);
+  const [voicePlaying, setVoicePlaying] = useState(false);
+  const [voicePlaybackMs, setVoicePlaybackMs] = useState(0);
+  const voiceSoundRef = useRef<VoiceNoteSound | null>(null);
+  const voiceRecordingRef = useRef(false);
+  const voiceRecordingDurationRef = useRef(0);
+  const voicePlayerStartedRef = useRef(false);
+  const voicePlayingRef = useRef(false);
+  const pendingVoiceUriRef = useRef<string | null>(null);
+  const voiceUploadActiveRef = useRef(false);
+
+  const getVoiceSound = () => {
+    if (!voiceSoundRef.current) {
+      voiceSoundRef.current = createVoiceNoteSound();
+    }
+    return voiceSoundRef.current;
+  };
+
+  useEffect(() => {
+    return () => {
+      const sound = voiceSoundRef.current;
+      sound?.removeRecordBackListener();
+      sound?.removePlayBackListener();
+      sound?.removePlaybackEndListener();
+      if (voiceRecordingRef.current && sound) {
+        voiceRecordingRef.current = false;
+        sound
+          .stopRecorder()
+          .then(removeVoiceNoteFile)
+          .catch(recordingError =>
+            console.warn('Could not stop voice recording:', recordingError),
+          );
+      }
+      if (voicePlayerStartedRef.current && sound) {
+        voicePlayerStartedRef.current = false;
+        voicePlayingRef.current = false;
+        sound
+          .stopPlayer()
+          .catch(playbackError =>
+            console.warn('Could not stop voice preview:', playbackError),
+          );
+      }
+      if (pendingVoiceUriRef.current && !voiceUploadActiveRef.current) {
+        removeVoiceNoteFile(pendingVoiceUriRef.current);
+        pendingVoiceUriRef.current = null;
+      }
+    };
+  }, []);
 
   // Media viewer state
   const [viewerVisible, setViewerVisible] = useState(false);
@@ -365,7 +449,9 @@ export function ChatRoomScreen({
 
   useEffect(() => {
     loadHistory();
-    markAsRead(session, projectId, contactNumber).catch(() => { });
+    markAsRead(session, projectId, contactNumber).catch(readError => {
+      console.warn('Could not mark chat as read:', readError);
+    });
   }, []);
 
   // Fetch open-case count whenever the chat changes, same as the web header badge.
@@ -603,6 +689,190 @@ export function ChatRoomScreen({
     fetchCaseStatus,
   ]);
 
+  const stopVoicePreview = async () => {
+    if (!voicePlayerStartedRef.current) return;
+    try {
+      const sound = getVoiceSound();
+      await sound.stopPlayer();
+      sound.removePlayBackListener();
+      sound.removePlaybackEndListener();
+      voicePlayerStartedRef.current = false;
+      voicePlayingRef.current = false;
+      setVoicePlaying(false);
+      setVoicePlaybackMs(0);
+    } catch (playbackError) {
+      console.warn('Could not stop voice preview:', playbackError);
+      Toast.show({
+        type: 'error',
+        text1: 'Could not stop voice note preview',
+        text2:
+          playbackError instanceof Error
+            ? playbackError.message
+            : String(playbackError),
+      });
+    }
+  };
+
+  const toggleVoicePreview = async (uri: string) => {
+    let sound: VoiceNoteSound | null = null;
+    try {
+      const voiceSound = getVoiceSound();
+      sound = voiceSound;
+      if (voicePlayingRef.current) {
+        await voiceSound.pausePlayer();
+        voicePlayingRef.current = false;
+        setVoicePlaying(false);
+        return;
+      }
+
+      if (voicePlayerStartedRef.current) {
+        await voiceSound.resumePlayer();
+      } else {
+        voiceSound.addPlayBackListener(event => {
+          setVoicePlaybackMs(event.currentPosition);
+        });
+        voiceSound.addPlaybackEndListener(() => {
+          voiceSound.removePlayBackListener();
+          voiceSound.removePlaybackEndListener();
+          voicePlayerStartedRef.current = false;
+          voicePlayingRef.current = false;
+          setVoicePlaying(false);
+          setVoicePlaybackMs(0);
+        });
+        await voiceSound.startPlayer(uri);
+        voicePlayerStartedRef.current = true;
+      }
+      voicePlayingRef.current = true;
+      setVoicePlaying(true);
+    } catch (playbackError) {
+      sound?.removePlayBackListener();
+      sound?.removePlaybackEndListener();
+      voicePlayerStartedRef.current = false;
+      voicePlayingRef.current = false;
+      setVoicePlaying(false);
+      Toast.show({
+        type: 'error',
+        text1: 'Could not play voice note',
+        text2:
+          playbackError instanceof Error
+            ? playbackError.message
+            : String(playbackError),
+      });
+    }
+  };
+
+  const startVoiceRecording = async () => {
+    if (voiceActionBusy || voiceRecordingRef.current || pendingAttachment) return;
+    setAttachMenuOpen(false);
+    setVoiceActionBusy(true);
+
+    try {
+      if (Platform.OS === 'android') {
+        const permission = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+        );
+        if (permission !== PermissionsAndroid.RESULTS.GRANTED) {
+          throw new Error('Microphone permission is required to record a voice note.');
+        }
+      }
+
+      const sound = getVoiceSound();
+      sound.removeRecordBackListener();
+      const platform = Platform.OS === 'android' ? 'android' : 'ios';
+      const format = getVoiceNoteFormat(platform);
+      const recordingPath =
+        platform === 'android'
+          ? `${ReactNativeBlobUtil.fs.dirs.CacheDir}/voice-note-${Date.now()}.${
+              format.extension
+            }`
+          : undefined;
+      await sound.startRecorder(recordingPath, getVoiceNoteAudioSet(platform));
+      voiceRecordingDurationRef.current = 0;
+      setVoiceRecordingMs(0);
+      voiceRecordingRef.current = true;
+      setVoiceRecording(true);
+      sound.addRecordBackListener(event => {
+        const elapsed = Math.max(0, event.currentPosition || 0);
+        voiceRecordingDurationRef.current = elapsed;
+        setVoiceRecordingMs(elapsed);
+      });
+    } catch (recordingError) {
+      Toast.show({
+        type: 'error',
+        text1: 'Could not start voice recording',
+        text2:
+          recordingError instanceof Error
+            ? recordingError.message
+            : String(recordingError),
+        visibilityTime: 6000,
+      });
+    } finally {
+      setVoiceActionBusy(false);
+    }
+  };
+
+  const stopVoiceRecording = async (discard = false) => {
+    if (voiceActionBusy || !voiceRecordingRef.current) return;
+    setVoiceActionBusy(true);
+    let completedPath: string | null = null;
+
+    try {
+      const sound = getVoiceSound();
+      const recordingPath = await sound.stopRecorder();
+      completedPath = recordingPath;
+      voiceRecordingRef.current = false;
+      sound.removeRecordBackListener();
+      setVoiceRecording(false);
+
+      if (discard) {
+        await removeVoiceNoteFile(recordingPath);
+        setVoiceRecordingMs(0);
+        voiceRecordingDurationRef.current = 0;
+        return;
+      }
+
+      const filePath = getLocalFilePath(recordingPath);
+      const fileStat = await ReactNativeBlobUtil.fs.stat(filePath);
+      const size = Number(fileStat.size);
+      validateVoiceNoteSize(size);
+
+      const uri = recordingPath.startsWith('file://')
+        ? recordingPath
+        : `file://${recordingPath}`;
+      const platform = Platform.OS === 'android' ? 'android' : 'ios';
+      const format = getVoiceNoteFormat(platform);
+      const file: PickedFile = {
+        uri,
+        name: `voice-note-${Date.now()}.${format.extension}`,
+        type: format.mimeType,
+        size,
+      };
+      pendingVoiceUriRef.current = uri;
+      setPendingAttachment({
+        kind: 'voice',
+        file,
+        durationMs: voiceRecordingDurationRef.current,
+      });
+    } catch (recordingError) {
+      if (completedPath) {
+        await removeVoiceNoteFile(completedPath);
+        setVoiceRecording(false);
+        voiceRecordingRef.current = false;
+      }
+      Toast.show({
+        type: 'error',
+        text1: discard ? 'Could not discard recording' : 'Could not prepare voice note',
+        text2:
+          recordingError instanceof Error
+            ? recordingError.message
+            : String(recordingError),
+        visibilityTime: 6000,
+      });
+    } finally {
+      setVoiceActionBusy(false);
+    }
+  };
+
   // Picks a file and stores it as a pending preview — does NOT upload or send yet.
   const handlePickAttachment = async (kind: AttachmentKind) => {
     setAttachMenuOpen(false);
@@ -632,16 +902,27 @@ export function ChatRoomScreen({
           kind === 'audio' ? [DocumentPickerTypes.audio] : [DocumentPickerTypes.allFiles];
 
         const [result] = await pick({ type: docTypes });
+        const size =
+          typeof result.size === 'number' ? result.size : undefined;
+        if (kind === 'audio' && size !== undefined) {
+          validateVoiceNoteSize(size);
+        }
 
         picked = {
           uri: result.uri,
           name: result.name || `${kind}-${Date.now()}`,
           type: result.type || 'application/octet-stream',
+          size,
         };
       }
 
       if (!picked) return;
 
+      if (pendingAttachment?.kind === 'voice') {
+        await stopVoicePreview();
+        await removeVoiceNoteFile(pendingAttachment.file.uri);
+      }
+      pendingVoiceUriRef.current = null;
       setPendingAttachment({ kind, file: picked });
     } catch (err) {
       if (isErrorWithCode(err) && err.code === errorCodes.OPERATION_CANCELED) return;
@@ -663,7 +944,12 @@ export function ChatRoomScreen({
     }
   };
 
-  const cancelPendingAttachment = () => {
+  const cancelPendingAttachment = async () => {
+    if (pendingAttachment?.kind === 'voice') {
+      await stopVoicePreview();
+      await removeVoiceNoteFile(pendingAttachment.file.uri);
+      pendingVoiceUriRef.current = null;
+    }
     setPendingAttachment(null);
   };
 
@@ -672,11 +958,24 @@ export function ChatRoomScreen({
   // send-image/video/document routes accept a `message` field used as the caption.
   // Audio has no caption support on the backend, so it's ignored here and handled
   // separately as a follow-up text message in handleSend.
-  const sendPendingAttachment = async (attachment: PendingAttachment, caption: string) => {
+  const sendPendingAttachment = async (
+    attachment: PendingAttachment,
+    caption: string,
+  ): Promise<boolean> => {
     const { kind, file } = attachment;
     setUploadingKind(kind);
+    if (kind === 'voice') {
+      voiceUploadActiveRef.current = true;
+      await stopVoicePreview();
+    }
 
     try {
+      if (kind === 'audio' && file.size === undefined) {
+        const fileStat = await ReactNativeBlobUtil.fs.stat(
+          getLocalFilePath(file.uri),
+        );
+        validateVoiceNoteSize(Number(fileStat.size));
+      }
       const uploaded = await uploadFile(file);
 
       switch (kind) {
@@ -699,9 +998,17 @@ export function ChatRoomScreen({
         case 'audio':
           await sendAudioMessage(session, projectId, contactNumber, uploaded.url, false);
           break;
+        case 'voice':
+          await sendAudioMessage(session, projectId, contactNumber, uploaded.url, true);
+          break;
       }
 
+      if (kind === 'voice') {
+        pendingVoiceUriRef.current = null;
+        await removeVoiceNoteFile(file.uri);
+      }
       setPendingAttachment(null);
+      return true;
     } catch (err) {
       console.warn(`Failed to send ${kind}`, err);
 
@@ -719,8 +1026,10 @@ export function ChatRoomScreen({
         visibilityTime: 6000,
       });
       // Keep the pending attachment so the user can retry instead of re-picking it.
+      return false;
     } finally {
       setUploadingKind(null);
+      voiceUploadActiveRef.current = false;
     }
   };
 
@@ -737,21 +1046,30 @@ export function ChatRoomScreen({
 
     if (!hasAttachment && !textToSend) return;
 
-    const captionRidesWithAttachment = hasAttachment && attachment!.kind !== 'audio';
+    const captionRidesWithAttachment =
+      hasAttachment &&
+      attachment!.kind !== 'audio' &&
+      attachment!.kind !== 'voice';
 
     setSending(true);
     try {
+      let attachmentSent = true;
       if (hasAttachment) {
         const caption = captionRidesWithAttachment ? textToSend : '';
-        await sendPendingAttachment(attachment as PendingAttachment, caption);
-        if (captionRidesWithAttachment && textToSend) {
+        attachmentSent = await sendPendingAttachment(
+          attachment as PendingAttachment,
+          caption,
+        );
+        if (attachmentSent && captionRidesWithAttachment && textToSend) {
           setInputText('');
         }
       }
 
       // Only send a standalone text message when there's no attachment at all,
       // or the attachment was audio (which can't carry a caption).
-      const shouldSendStandaloneText = textToSend && (!hasAttachment || !captionRidesWithAttachment);
+      const shouldSendStandaloneText =
+        textToSend &&
+        (!hasAttachment || (!captionRidesWithAttachment && attachmentSent));
       if (shouldSendStandaloneText) {
         setInputText('');
 
@@ -1231,7 +1549,13 @@ export function ChatRoomScreen({
   const isUploading = uploadingKind !== null;
   // Chat is locked for sending when it's assigned to someone else (mirrors web app Conversation.js behaviour)
   const isLockedByAssignment = isAssigned && !assignmentInfo?.assigned_to_me;
-  const canSend = !sending && !isUploading && !isLockedByAssignment && (!!pendingAttachment || !!inputText.trim());
+  const canSend =
+    !sending &&
+    !isUploading &&
+    !voiceRecording &&
+    !voiceActionBusy &&
+    !isLockedByAssignment &&
+    (!!pendingAttachment || !!inputText.trim());
 
   return (
     <Animated.View style={[styles.safe, { backgroundColor: theme.header, paddingTop: insets.top, paddingBottom: keyboardHeightAnim }]}>
@@ -1691,7 +2015,13 @@ export function ChatRoomScreen({
             ) : (
               <View style={[styles.previewIconBox, { backgroundColor: theme.inputBg }]}>
                 <Text style={styles.previewIconText}>
-                  {pendingAttachment.kind === 'video' ? '🎬' : pendingAttachment.kind === 'audio' ? '🎵' : '📄'}
+                  {pendingAttachment.kind === 'video'
+                    ? '🎬'
+                    : pendingAttachment.kind === 'voice'
+                      ? '🎤'
+                      : pendingAttachment.kind === 'audio'
+                        ? '🎵'
+                        : '📄'}
                 </Text>
               </View>
             )}
@@ -1703,14 +2033,43 @@ export function ChatRoomScreen({
               <Text style={[styles.previewKind, { color: theme.muted }]}>
                 {isUploading
                   ? 'Sending…'
-                  : pendingAttachment.kind.charAt(0).toUpperCase() + pendingAttachment.kind.slice(1)}
+                  : pendingAttachment.kind === 'voice'
+                    ? `Voice note · ${formatVoiceDuration(pendingAttachment.durationMs || 0)}`
+                    : pendingAttachment.kind.charAt(0).toUpperCase() + pendingAttachment.kind.slice(1)}
               </Text>
+              {pendingAttachment.kind === 'voice' && voicePlaying ? (
+                <Text style={[styles.previewKind, { color: theme.muted }]}>
+                  {formatVoiceDuration(voicePlaybackMs)} /{' '}
+                  {formatVoiceDuration(pendingAttachment.durationMs || 0)}
+                </Text>
+              ) : null}
             </View>
+
+            {pendingAttachment.kind === 'voice' && !isUploading ? (
+              <ScalePressable
+                accessibilityRole="button"
+                accessibilityLabel={voicePlaying ? 'Pause voice note' : 'Play voice note'}
+                onPress={() => toggleVoicePreview(pendingAttachment.file.uri)}
+                disabled={voiceActionBusy}
+                style={styles.previewCancel}
+              >
+                {voicePlaying ? (
+                  <Pause size={19} color={theme.emerald} />
+                ) : (
+                  <Play size={19} color={theme.emerald} />
+                )}
+              </ScalePressable>
+            ) : null}
 
             {isUploading ? (
               <ActivityIndicator size="small" color={theme.muted} style={styles.previewCancel} />
             ) : (
-              <ScalePressable onPress={cancelPendingAttachment} hitSlop={8} style={styles.previewCancel}>
+              <ScalePressable
+                onPress={cancelPendingAttachment}
+                hitSlop={8}
+                disabled={voiceActionBusy}
+                style={styles.previewCancel}
+              >
                 <Text style={[styles.previewCancelText, { color: theme.ink }]}>✕</Text>
               </ScalePressable>
             )}
@@ -1751,7 +2110,7 @@ export function ChatRoomScreen({
       )}
 
       {/* Assignment Lock Banner — replaces the input bar when chat is assigned to someone else */}
-      {isLockedByAssignment ? (
+      {isLockedByAssignment && !voiceRecording ? (
         <ScalePressable
           onPress={openAssignModal}
           style={[styles.assignedLockBanner, { backgroundColor: theme.surface, borderTopColor: theme.border }]}
@@ -1770,13 +2129,57 @@ export function ChatRoomScreen({
           </View>
           <Text style={[styles.assignedLockChevron, { color: theme.muted }]}>›</Text>
         </ScalePressable>
+      ) : voiceRecording ? (
+        <View
+          style={[
+            styles.inputContainer,
+            styles.recordingContainer,
+            {
+              backgroundColor: theme.inputContainerBg,
+              borderTopColor: theme.border,
+            },
+          ]}
+        >
+          <View style={styles.recordingDot} />
+          <View style={styles.recordingInfo}>
+            <Text style={[styles.recordingTitle, { color: theme.ink }]}>
+              Recording voice note
+            </Text>
+            <Text style={[styles.recordingTime, { color: theme.muted }]}>
+              {formatVoiceDuration(voiceRecordingMs)} · max{' '}
+              {MAX_VOICE_NOTE_SIZE_BYTES / (1024 * 1024)} MB
+            </Text>
+          </View>
+          <ScalePressable
+            accessibilityRole="button"
+            accessibilityLabel="Discard voice recording"
+            onPress={() => stopVoiceRecording(true)}
+            disabled={voiceActionBusy}
+            style={styles.recordingAction}
+          >
+            <X size={20} color={theme.muted} />
+          </ScalePressable>
+          <ScalePressable
+            accessibilityRole="button"
+            accessibilityLabel="Finish voice recording"
+            onPress={() => stopVoiceRecording()}
+            disabled={voiceActionBusy}
+            style={[styles.recordingAction, styles.recordingStop]}
+          >
+            {voiceActionBusy ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Square size={17} color="#FFFFFF" fill="#FFFFFF" />
+            )}
+          </ScalePressable>
+        </View>
       ) : (
         /* Input Bar */
         <View style={[styles.inputContainer, { backgroundColor: theme.inputContainerBg, borderTopWidth: 1, borderTopColor: theme.border }]}>
           <ScalePressable
             style={styles.attachButton}
             hitSlop={8}
-            disabled={isUploading}
+            disabled={isUploading || voiceActionBusy}
             onPress={() => setAttachMenuOpen(open => !open)}
           >
             {attachMenuOpen ? (
@@ -1791,26 +2194,55 @@ export function ChatRoomScreen({
               style={[styles.textInput, { color: theme.ink }]}
               value={inputText}
               onChangeText={setInputText}
-              placeholder={pendingAttachment ? 'Add a caption…' : 'Message'}
+              placeholder={
+                pendingAttachment?.kind === 'audio' ||
+                pendingAttachment?.kind === 'voice'
+                  ? 'Add a message…'
+                  : pendingAttachment
+                    ? 'Add a caption…'
+                    : 'Message'
+              }
               placeholderTextColor={theme.muted}
               multiline
             />
           </View>
-          <ScalePressable
-            style={[
-              styles.sendButton,
-              { backgroundColor: theme.emerald },
-              !canSend && { backgroundColor: theme.muted },
-            ]}
-            onPress={handleSend}
-            disabled={!canSend}
-          >
-            {sending || isUploading ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <Text style={styles.sendButtonIcon}>➤</Text>
-            )}
-          </ScalePressable>
+          {!inputText.trim() && !pendingAttachment ? (
+            <ScalePressable
+              accessibilityRole="button"
+              accessibilityLabel="Record voice note"
+              style={[
+                styles.sendButton,
+                { backgroundColor: theme.emerald },
+                (voiceActionBusy || isUploading) && {
+                  backgroundColor: theme.muted,
+                },
+              ]}
+              onPress={startVoiceRecording}
+              disabled={voiceActionBusy || isUploading}
+            >
+              {voiceActionBusy ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Mic size={20} color="#FFFFFF" />
+              )}
+            </ScalePressable>
+          ) : (
+            <ScalePressable
+              style={[
+                styles.sendButton,
+                { backgroundColor: theme.emerald },
+                !canSend && { backgroundColor: theme.muted },
+              ]}
+              onPress={handleSend}
+              disabled={!canSend}
+            >
+              {sending || isUploading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.sendButtonIcon}>➤</Text>
+              )}
+            </ScalePressable>
+          )}
         </View>
       )}
 
@@ -2368,6 +2800,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 8,
     alignItems: 'center',
+  },
+  recordingContainer: {
+    borderTopWidth: 1,
+  },
+  recordingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#EF4444',
+    marginHorizontal: 12,
+  },
+  recordingInfo: {
+    flex: 1,
+  },
+  recordingTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  recordingTime: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  recordingAction: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 4,
+  },
+  recordingStop: {
+    backgroundColor: '#EF4444',
   },
   attachButton: {
     width: 40,
