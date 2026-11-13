@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   ScrollView,
   Image,
+  Pressable,
 } from 'react-native';
 import { KeyboardAvoidView } from './KeyboardAvoidView';
 import { X, Search, FileText, ArrowLeft, Upload } from 'lucide-react-native';
@@ -44,6 +45,7 @@ export function TemplateModal({
   const [loading, setLoading] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('ALL');
 
   const [selectedTemplate, setSelectedTemplate] = useState<any | null>(null);
   const [variables, setVariables] = useState<string[]>([]);
@@ -77,18 +79,30 @@ export function TemplateModal({
       setHeaderMediaUrl('');
       setUploadedFileName('');
       setUploadingMedia(false);
+      setSearchQuery('');
+      setCategoryFilter('ALL');
     }
   }, [loadTemplates, visible, projectId, session]);
 
+  const categories = useMemo(() => Array.from(new Set(
+    templates
+      .map(template => String(template.category || '').trim().toUpperCase())
+      .filter(Boolean),
+  )).sort(), [templates]);
+
   const filteredTemplates = useMemo(() => {
-    if (!searchQuery.trim()) return templates;
-    const lower = searchQuery.toLowerCase();
+    const lower = searchQuery.trim().toLowerCase();
     return templates.filter(
-      (t) =>
-        t.template_name?.toLowerCase().includes(lower) ||
-        t.category?.toLowerCase().includes(lower)
+      template => {
+        const name = String(template.template_name || template.name || '').toLowerCase();
+        const category = String(template.category || '').toLowerCase();
+        const matchesQuery = !lower || name.includes(lower) || category.includes(lower);
+        const matchesCategory =
+          categoryFilter === 'ALL' || category.toUpperCase() === categoryFilter;
+        return matchesQuery && matchesCategory;
+      },
     );
-  }, [templates, searchQuery]);
+  }, [templates, searchQuery, categoryFilter]);
 
   const handleSelect = (template: any) => {
     let hasVariables = false;
@@ -394,6 +408,40 @@ export function TemplateModal({
                   />
                   <SearchClearButton value={searchQuery} onClear={() => setSearchQuery('')} color={theme.muted} />
                 </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.categoryFilters}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {['ALL', ...categories].map(category => {
+                    const selected = categoryFilter === category;
+                    return (
+                      <Pressable
+                        key={category}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                        onPress={() => setCategoryFilter(category)}
+                        style={[
+                          styles.categoryFilter,
+                          {
+                            backgroundColor: selected ? theme.emerald : theme.canvas,
+                            borderColor: selected ? theme.emerald : theme.border,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.categoryFilterText,
+                            { color: selected ? '#FFF' : theme.ink },
+                          ]}
+                        >
+                          {category === 'ALL' ? 'All categories' : category}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
               </View>
 
               {loading ? (
@@ -449,6 +497,20 @@ const styles = StyleSheet.create({
   searchContainer: {
     padding: 12,
     borderBottomWidth: 1,
+  },
+  categoryFilters: {
+    gap: 8,
+    paddingTop: 10,
+  },
+  categoryFilter: {
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  categoryFilterText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   searchBar: {
     flexDirection: 'row',

@@ -76,11 +76,18 @@ import { resolveTemplateBodyText, getTemplateHeaderMedia } from '../utils/templa
 import { useTheme } from '../theme/theme';
 import { socketManager } from '../services/socketManager';
 import { Image as ImageIcon, Video, FileText, Music, LayoutTemplate } from 'lucide-react-native';
-import { ScalePressable, FadeInView } from '../components/animations';
+import { ScalePressable, FadeInView, DismissibleSheet } from '../components/animations';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 type ChatRow =
   | { kind: 'message'; key: string; message: any }
   | { kind: 'date'; key: string; label: string };
+
+type GalleryMedia = {
+  key: string;
+  url: string;
+  type: 'image' | 'video';
+  name?: string;
+};
 
 function parseChatDate(value: any): Date | null {
   if (value == null || value === '') return null;
@@ -224,11 +231,39 @@ export function ChatRoomScreen({
   const [viewerUrl, setViewerUrl] = useState('');
   const [viewerType, setViewerType] = useState<'image' | 'video' | 'document' | 'audio'>('image');
   const [viewerName, setViewerName] = useState('');
+  const [viewerGalleryIndex, setViewerGalleryIndex] = useState(-1);
 
-  const openMediaViewer = (url: string, type: 'image' | 'video' | 'document' | 'audio', name?: string) => {
+  const galleryMedia = useMemo<GalleryMedia[]>(() => messages
+    .map((message): GalleryMedia | null => {
+      const templateMedia = getTemplateHeaderMedia(message);
+      const messageType = String(message.type || message.message_type || '').toLowerCase();
+      const rawType = String(templateMedia?.type || messageType).toLowerCase();
+      const type = rawType === 'photo' ? 'image' : rawType;
+      const url = templateMedia?.url || message.media_url;
+
+      if ((type !== 'image' && type !== 'video') || !url) return null;
+      return {
+        key: `${messageRowKey(message)}-${url}`,
+        url: String(url),
+        type,
+        name: templateMedia?.filename || message.media_name || undefined,
+      };
+    })
+    .filter((item): item is GalleryMedia => item !== null), [messages]);
+
+  const openMediaViewer = (
+    url: string,
+    type: 'image' | 'video' | 'document' | 'audio',
+    name?: string,
+    messageKey?: string,
+  ) => {
     setViewerUrl(url);
     setViewerType(type);
     setViewerName(name || '');
+    setViewerGalleryIndex(type === 'image' || type === 'video'
+      ? galleryMedia.findIndex(item =>
+        item.key === `${messageKey}-${url}` || (item.url === url && item.type === type))
+      : -1);
     setViewerVisible(true);
   };
 
@@ -1162,7 +1197,7 @@ export function ChatRoomScreen({
       if (isImg && mediaUrl) {
         return (
           <>
-            <Pressable onPress={() => openMediaViewer(mediaUrl, 'image', mediaName)}>
+            <Pressable onPress={() => openMediaViewer(mediaUrl, 'image', mediaName, messageRowKey(msg))}>
               <Image source={{ uri: mediaUrl }} style={styles.mediaImage} resizeMode="cover" />
             </Pressable>
             {textContent ? (
@@ -1177,7 +1212,7 @@ export function ChatRoomScreen({
       if (isVid && mediaUrl) {
         return (
           <>
-            <Pressable onPress={() => openMediaViewer(mediaUrl, 'video', mediaName)} style={styles.mediaPlaceholder}>
+            <Pressable onPress={() => openMediaViewer(mediaUrl, 'video', mediaName, messageRowKey(msg))} style={styles.mediaPlaceholder}>
               <Text style={styles.mediaPlaceholderIcon}>▶</Text>
               <Text style={[styles.mediaPlaceholderLabel, { color: textColor }]}>Video</Text>
             </Pressable>
@@ -1361,7 +1396,12 @@ export function ChatRoomScreen({
         onRequestClose={() => setAssignModalOpen(false)}
       >
         <Pressable style={styles.sheetBackdrop} onPress={() => setAssignModalOpen(false)}>
-          <Pressable style={[styles.sheet, { backgroundColor: theme.header }]} onPress={() => {}}>
+          <Pressable onPress={() => {}}>
+            <DismissibleSheet
+              visible={assignModalOpen}
+              style={[styles.sheet, { backgroundColor: theme.header }]}
+              onDismiss={() => setAssignModalOpen(false)}
+            >
             <View style={styles.sheetHeader}>
               <Text style={[styles.sheetTitle, { color: theme.ink }]}>Assign chat</Text>
               <ScalePressable onPress={() => setAssignModalOpen(false)} hitSlop={8}>
@@ -1422,6 +1462,7 @@ export function ChatRoomScreen({
             {assignActionLoading && (
               <ActivityIndicator style={{ marginTop: 10 }} color={theme.emerald} />
             )}
+            </DismissibleSheet>
           </Pressable>
         </Pressable>
       </Modal>
@@ -1434,7 +1475,12 @@ export function ChatRoomScreen({
         onRequestClose={() => setCaseListModalOpen(false)}
       >
         <Pressable style={styles.sheetBackdrop} onPress={() => setCaseListModalOpen(false)}>
-          <Pressable style={[styles.sheet, { backgroundColor: theme.header }]} onPress={() => {}}>
+          <Pressable onPress={() => {}}>
+            <DismissibleSheet
+              visible={caseListModalOpen}
+              style={[styles.sheet, { backgroundColor: theme.header }]}
+              onDismiss={() => setCaseListModalOpen(false)}
+            >
             <View style={styles.sheetHeader}>
               <Text style={[styles.sheetTitle, { color: theme.ink }]}>Cases</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
@@ -1498,6 +1544,7 @@ export function ChatRoomScreen({
                 )}
               </ScrollView>
             )}
+            </DismissibleSheet>
           </Pressable>
         </Pressable>
       </Modal>
@@ -1510,7 +1557,12 @@ export function ChatRoomScreen({
         onRequestClose={() => setCaseFormOpen(false)}
       >
         <Pressable style={styles.sheetBackdrop} onPress={() => setCaseFormOpen(false)}>
-          <Pressable style={[styles.sheet, { backgroundColor: theme.header }]} onPress={() => {}}>
+          <Pressable onPress={() => {}}>
+            <DismissibleSheet
+              visible={caseFormOpen}
+              style={[styles.sheet, { backgroundColor: theme.header }]}
+              onDismiss={() => setCaseFormOpen(false)}
+            >
             <View style={styles.sheetHeader}>
               <Text style={[styles.sheetTitle, { color: theme.ink }]}>
                 {caseFormMode === 'create' ? 'Create case' : 'Edit case'}
@@ -1577,6 +1629,7 @@ export function ChatRoomScreen({
                 <Text style={styles.submitBtnText}>{caseFormMode === 'create' ? 'Create' : 'Save'}</Text>
               )}
             </ScalePressable>
+            </DismissibleSheet>
           </Pressable>
         </Pressable>
       </Modal>
@@ -1835,6 +1888,8 @@ export function ChatRoomScreen({
         mediaUrl={viewerUrl}
         mediaType={viewerType}
         mediaName={viewerName}
+        galleryItems={galleryMedia}
+        initialGalleryIndex={viewerGalleryIndex}
       />
 
       {/* Interactive Options Modal Sheet */}
@@ -1845,7 +1900,12 @@ export function ChatRoomScreen({
         onRequestClose={() => setInteractiveModalOpen(false)}
       >
         <Pressable style={styles.sheetBackdrop} onPress={() => setInteractiveModalOpen(false)}>
-          <Pressable style={[styles.sheet, { backgroundColor: theme.surface }]} onPress={() => {}}>
+          <Pressable onPress={() => {}}>
+            <DismissibleSheet
+              visible={interactiveModalOpen}
+              style={[styles.sheet, { backgroundColor: theme.surface }]}
+              onDismiss={() => setInteractiveModalOpen(false)}
+            >
             <View style={styles.sheetHeader}>
               <Text style={[styles.sheetTitle, { color: theme.ink }]}>
                 {activeInteractiveMsg?.interactive?.header?.text || activeInteractiveMsg?.interactive?.action?.button || 'Select an Option'}
@@ -1882,6 +1942,7 @@ export function ChatRoomScreen({
                 </ScalePressable>
               ))}
             </ScrollView>
+            </DismissibleSheet>
           </Pressable>
         </Pressable>
       </Modal>

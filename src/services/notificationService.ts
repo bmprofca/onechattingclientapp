@@ -22,6 +22,7 @@ const APP_NAME = 'OneChatting';
 export type NotificationTapHandler = (
   contactNumber: string,
   contactName: string,
+  projectId?: string,
 ) => void;
 
 type NotificationTapData = {
@@ -34,8 +35,13 @@ type NotificationTapData = {
 class NotificationService {
   private channelsCreated = false;
   private activeChatNumber: string | null = null;
+  private activeChatProjectId: string | null = null;
   private tapHandler: NotificationTapHandler | null = null;
-  private pendingTap: { contactNumber: string; contactName: string } | null = null;
+  private pendingTap: {
+    contactNumber: string;
+    contactName: string;
+    projectId?: string;
+  } | null = null;
   private initialNotificationChecked = false;
   private recentKeys = new Map<string, number>();
 
@@ -90,9 +96,9 @@ class NotificationService {
   onNotificationTap(handler: NotificationTapHandler) {
     this.tapHandler = handler;
     if (this.pendingTap) {
-      const { contactNumber, contactName } = this.pendingTap;
+      const { contactNumber, contactName, projectId } = this.pendingTap;
       this.pendingTap = null;
-      handler(contactNumber, contactName);
+      handler(contactNumber, contactName, projectId);
     }
 
     if (this.initialNotificationChecked) return;
@@ -195,20 +201,21 @@ class NotificationService {
     const contactNumber = String(data.contactNumber || '');
     if (!contactNumber) return;
     const contactName = String(data.contactName || contactNumber);
+    const projectId = String(data.projectId || '') || undefined;
 
     if (this.tapHandler) {
-      this.tapHandler(contactNumber, contactName);
+      this.tapHandler(contactNumber, contactName, projectId);
     } else {
-      this.pendingTap = { contactNumber, contactName };
+      this.pendingTap = { contactNumber, contactName, projectId };
     }
   }
 
   /**
-   * Set the contact number of the chat currently being viewed.
-   * Notifications for this contact will be suppressed.
+   * Set the active chat so notifications for that project and contact can be suppressed.
    */
-  setActiveChat(contactNumber: string | null) {
+  setActiveChat(contactNumber: string | null, projectId?: string) {
     this.activeChatNumber = contactNumber ? String(contactNumber) : null;
+    this.activeChatProjectId = contactNumber ? projectId || null : null;
   }
 
   /**
@@ -216,6 +223,7 @@ class NotificationService {
    */
   clearActiveChat() {
     this.activeChatNumber = null;
+    this.activeChatProjectId = null;
   }
 
   /**
@@ -235,6 +243,7 @@ class NotificationService {
     if (
       this.activeChatNumber &&
       String(contactNumber) === this.activeChatNumber &&
+      (projectId || null) === this.activeChatProjectId &&
       AppState.currentState === 'active'
     ) {
       return;

@@ -4,6 +4,7 @@ import {
   Dimensions,
   Easing,
   Modal,
+  PanResponder,
   Pressable,
   StyleProp,
   StyleSheet,
@@ -24,6 +25,79 @@ interface SlideUpModalProps {
   dismissOnBackdrop?: boolean;
 }
 
+type SheetDragHandleProps = {
+  onDismiss: () => void;
+  onDrag?: (distance: number) => void;
+};
+
+export function SheetDragHandle({ onDismiss, onDrag }: SheetDragHandleProps) {
+  const onDismissRef = useRef(onDismiss);
+  const onDragRef = useRef(onDrag);
+  onDismissRef.current = onDismiss;
+  onDragRef.current = onDrag;
+
+  const responder = useRef(PanResponder.create({
+    onMoveShouldSetPanResponder: (_, gesture) =>
+      gesture.dy > 5 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+    onPanResponderMove: (_, gesture) =>
+      onDragRef.current?.(Math.max(gesture.dy, 0)),
+    onPanResponderRelease: (_, gesture) => {
+      if (gesture.dy > 64 || gesture.vy > 0.8) {
+        onDismissRef.current();
+      } else {
+        onDragRef.current?.(0);
+      }
+    },
+    onPanResponderTerminate: () => onDragRef.current?.(0),
+  })).current;
+
+  return (
+    <View
+      {...responder.panHandlers}
+      accessibilityLabel="Drag down to close"
+      style={styles.dragHandleTouch}
+    >
+      <View style={styles.dragHandle} />
+    </View>
+  );
+}
+
+export function DismissibleSheet({
+  visible,
+  onDismiss,
+  children,
+  style,
+}: {
+  visible: boolean;
+  onDismiss: () => void;
+  children: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const dragY = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) dragY.setValue(0);
+  }, [dragY, visible]);
+
+  const handleDrag = (distance: number) => {
+    if (distance > 0) {
+      dragY.setValue(distance);
+    } else {
+      Animated.spring(dragY, {
+        toValue: 0,
+        useNativeDriver: false,
+      }).start();
+    }
+  };
+
+  return (
+    <Animated.View style={[style, { transform: [{ translateY: dragY }] }]}>
+      <SheetDragHandle onDismiss={onDismiss} onDrag={handleDrag} />
+      {children}
+    </Animated.View>
+  );
+}
+
 export function SlideUpModal({
   visible,
   onClose,
@@ -36,9 +110,22 @@ export function SlideUpModal({
 }: SlideUpModalProps) {
   const [modalVisible, setModalVisible] = useState(visible);
   const animValue = useRef(new Animated.Value(0)).current;
+  const dragY = useRef(new Animated.Value(0)).current;
+
+  const handleDrag = (distance: number) => {
+    if (distance > 0) {
+      dragY.setValue(distance);
+    } else {
+      Animated.spring(dragY, {
+        toValue: 0,
+        useNativeDriver: false,
+      }).start();
+    }
+  };
 
   useEffect(() => {
     if (visible) {
+      dragY.setValue(0);
       setModalVisible(true);
       Animated.parallel([
         Animated.timing(animValue, {
@@ -58,7 +145,7 @@ export function SlideUpModal({
         setModalVisible(false);
       });
     }
-  }, [visible, modalVisible, animValue]);
+  }, [visible, modalVisible, animValue, dragY]);
 
   const handleClose = () => {
     Animated.timing(animValue, {
@@ -112,11 +199,12 @@ export function SlideUpModal({
             styles.sheet,
             {
               maxHeight,
-              transform: [{ translateY }],
+              transform: [{ translateY: Animated.add(translateY, dragY) }],
             },
             contentStyle,
           ]}
         >
+          <SheetDragHandle onDismiss={handleClose} onDrag={handleDrag} />
           {children}
         </Animated.View>
       </View>
@@ -142,5 +230,19 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.18,
     shadowRadius: 16,
     elevation: 20,
+  },
+  dragHandleTouch: {
+    width: '100%',
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    zIndex: 1,
+  },
+  dragHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(120, 130, 140, 0.65)',
   },
 });

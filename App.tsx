@@ -30,7 +30,7 @@ export default function App() {
 
   // Ref for notification tap → navigate to chat
   const notificationNavRef = useRef<
-    ((contactNumber: string, contactName: string) => void) | null
+    ((contactNumber: string, contactName: string, projectId?: string) => void) | null
   >(null);
 
   // Initialize notification service once
@@ -39,8 +39,10 @@ export default function App() {
     const openNotificationChat = (
       contactNumber: string,
       contactName: string,
+      projectId?: string,
     ) => {
-      const open = () => notificationNavRef.current?.(contactNumber, contactName);
+      const open = () =>
+        notificationNavRef.current?.(contactNumber, contactName, projectId);
       if (notificationNavRef.current) {
         open();
         return;

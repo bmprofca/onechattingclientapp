@@ -81,13 +81,17 @@ export function listenForForegroundPush() {
 }
 
 export function listenForNotificationOpens(
-  onOpen: (contactNumber: string, contactName: string) => void,
+  onOpen: (contactNumber: string, contactName: string, projectId?: string) => void,
 ) {
   const openFrom = (message: RemoteMessage | null) => {
     const data = message?.data || {};
     const contactNumber = String(data.contactNumber || '');
     if (!contactNumber) return;
-    onOpen(contactNumber, String(data.contactName || contactNumber));
+    onOpen(
+      contactNumber,
+      String(data.contactName || contactNumber),
+      String(data.projectId || '') || undefined,
+    );
   };
 
   const unsubscribe = onNotificationOpenedApp(messaging, openFrom);

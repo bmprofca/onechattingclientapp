@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Modal,
   View,
@@ -13,12 +13,21 @@ import {
   Alert,
   StatusBar,
   Share,
+  PanResponder,
 } from 'react-native';
-import { X, Download, ExternalLink, FileText } from 'lucide-react-native';
+import { X, Download, ExternalLink, FileText, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import ReactNativeBlobUtil from 'react-native-blob-util';
 import { CameraRoll } from '@react-native-camera-roll/camera-roll';
 import { ScalePressable, FadeInView } from './animations';
 import { openLink } from '../utils/openLink';
+import Toast from '../ui/toast';
+
+export type MediaViewerItem = {
+  key: string;
+  url: string;
+  type: 'image' | 'video';
+  name?: string;
+};
 
 type MediaViewerProps = {
   visible: boolean;
@@ -26,6 +35,8 @@ type MediaViewerProps = {
   mediaUrl: string;
   mediaType: 'image' | 'video' | 'document' | 'audio';
   mediaName?: string;
+  galleryItems?: MediaViewerItem[];
+  initialGalleryIndex?: number;
 };
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -36,11 +47,43 @@ export function MediaViewerModal({
   mediaUrl,
   mediaType,
   mediaName,
+  galleryItems = [],
+  initialGalleryIndex = -1,
 }: MediaViewerProps) {
   const [downloading, setDownloading] = useState(false);
   const [imgLoading, setImgLoading] = useState(true);
+  const [galleryIndex, setGalleryIndex] = useState(initialGalleryIndex);
+  const galleryLengthRef = useRef(galleryItems.length);
 
-  const fileName = mediaName || mediaUrl.split('/').pop() || 'download';
+  galleryLengthRef.current = galleryItems.length;
+
+  useEffect(() => {
+    setGalleryIndex(initialGalleryIndex);
+  }, [initialGalleryIndex, visible]);
+
+  const activeGalleryItem = galleryIndex >= 0 ? galleryItems[galleryIndex] : undefined;
+  const activeMediaUrl = activeGalleryItem?.url || mediaUrl;
+  const activeMediaType = activeGalleryItem?.type || mediaType;
+  const activeMediaName = activeGalleryItem?.name || mediaName;
+  const fileName = activeMediaName || activeMediaUrl.split('/').pop() || 'download';
+
+  useEffect(() => {
+    setImgLoading(true);
+  }, [activeMediaUrl]);
+
+  const galleryPanResponder = useRef(PanResponder.create({
+    onMoveShouldSetPanResponder: (_, gesture) =>
+      galleryLengthRef.current > 1 &&
+      Math.abs(gesture.dx) > 24 &&
+      Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.2,
+    onPanResponderRelease: (_, gesture) => {
+      if (gesture.dx < -45) {
+        setGalleryIndex(current => Math.min(current + 1, galleryLengthRef.current - 1));
+      } else if (gesture.dx > 45) {
+        setGalleryIndex(current => Math.max(current - 1, 0));
+      }
+    },
+  })).current;
 
   // --- Android: download to public Downloads via DownloadManager ---
   const saveAndroid = async () => {
@@ -83,14 +126,18 @@ export function MediaViewerModal({
         description: 'Downloading file',
         title: fileName,
       },
-    }).fetch('GET', mediaUrl);
+    }).fetch('GET', activeMediaUrl);
 
     const timeout = new Promise((_, reject) =>
       setTimeout(() => reject(new Error('Download timed out after 30s')), 30000),
     );
 
     await Promise.race([task, timeout]);
-    Alert.alert('Saved!', `File saved to Downloads as ${fileName}`);
+    Toast.show({
+      type: 'success',
+      text1: 'Download complete',
+      text2: `${fileName} saved to Downloads.`,
+    });
   };
 
   // --- iOS: images/video go to Photos, documents go through Share sheet ---
@@ -98,15 +145,15 @@ export function MediaViewerModal({
     // Fetch into a temp cache location first
     const res = await ReactNativeBlobUtil.config({ fileCache: true }).fetch(
       'GET',
-      mediaUrl,
+      activeMediaUrl,
     );
     const tmpPath = res.path();
 
-    if (mediaType === 'image' || mediaType === 'video') {
+    if (activeMediaType === 'image' || activeMediaType === 'video') {
       // Save directly into Photos — this is the only place iOS users expect
       // media to land, and it needs NSPhotoLibraryAddUsageDescription in Info.plist.
       await CameraRoll.save(`file://${tmpPath}`, {
-        type: mediaType === 'video' ? 'video' : 'photo',
+        type: activeMediaType === 'video' ? 'video' : 'photo',
       });
       Alert.alert('Saved!', 'Saved to your Photos.');
     } else {
@@ -118,7 +165,7 @@ export function MediaViewerModal({
   };
 
   const handleSave = async () => {
-    if (!mediaUrl) return;
+    if (!activeMediaUrl) return;
     setDownloading(true);
     try {
       if (Platform.OS === 'android') {
@@ -135,21 +182,21 @@ export function MediaViewerModal({
   };
 
   const handleOpenExternal = () => {
-    if (!mediaUrl) return;
-    openLink(mediaUrl).catch(() =>
+    if (!activeMediaUrl) return;
+    openLink(activeMediaUrl).catch(() =>
       Alert.alert('Cannot open', 'Could not open this file.'),
     );
   };
 
   const renderContent = () => {
-    if (mediaType === 'image') {
+    if (activeMediaType === 'image') {
       return (
         <View style={styles.imageContainer}>
           {imgLoading && (
             <ActivityIndicator size="large" color="#10B981" style={styles.imgLoader} />
           )}
           <Image
-            source={{ uri: mediaUrl }}
+            source={{ uri: activeMediaUrl }}
             style={styles.fullImage}
             resizeMode="contain"
             onLoadEnd={() => setImgLoading(false)}
@@ -158,7 +205,7 @@ export function MediaViewerModal({
       );
     }
 
-    if (mediaType === 'video') {
+    if (activeMediaType === 'video') {
       return (
         <View style={styles.placeholderContainer}>
           <View style={styles.videoIconCircle}>
@@ -179,7 +226,7 @@ export function MediaViewerModal({
           {fileName}
         </Text>
         <Text style={styles.placeholderSub}>
-          {mediaType === 'audio' ? 'Audio file' : 'Document file'}
+          {activeMediaType === 'audio' ? 'Audio file' : 'Document file'}
         </Text>
       </View>
     );
@@ -205,9 +252,36 @@ export function MediaViewerModal({
           <View style={{ width: 36 }} />
         </FadeInView>
 
-        <FadeInView scale startScale={0.92} duration={350} style={styles.body}>
-          {renderContent()}
-        </FadeInView>
+        <View style={styles.body} {...galleryPanResponder.panHandlers}>
+          <FadeInView scale startScale={0.92} duration={350} style={StyleSheet.absoluteFill}>
+            {renderContent()}
+          </FadeInView>
+          {galleryItems.length > 1 && galleryIndex >= 0 ? (
+            <>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Previous media"
+                disabled={galleryIndex === 0}
+                onPress={() => setGalleryIndex(index => Math.max(index - 1, 0))}
+                style={[styles.galleryArrow, styles.galleryArrowLeft, galleryIndex === 0 && styles.galleryArrowDisabled]}
+              >
+                <ChevronLeft size={24} color="#FFF" />
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Next media"
+                disabled={galleryIndex === galleryItems.length - 1}
+                onPress={() => setGalleryIndex(index => Math.min(index + 1, galleryItems.length - 1))}
+                style={[styles.galleryArrow, styles.galleryArrowRight, galleryIndex === galleryItems.length - 1 && styles.galleryArrowDisabled]}
+              >
+                <ChevronRight size={24} color="#FFF" />
+              </Pressable>
+              <Text style={styles.galleryCounter}>
+                {galleryIndex + 1} / {galleryItems.length}
+              </Text>
+            </>
+          ) : null}
+        </View>
 
         <FadeInView direction="up" distance={20} duration={300} style={styles.bottomBar}>
           <Pressable style={[styles.actionBtn, styles.openBtn]} onPress={handleOpenExternal}>
@@ -255,6 +329,32 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
   },
   body: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  galleryArrow: {
+    position: 'absolute',
+    top: '50%',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  galleryArrowLeft: { left: 12 },
+  galleryArrowRight: { right: 12 },
+  galleryArrowDisabled: { opacity: 0.35 },
+  galleryCounter: {
+    position: 'absolute',
+    bottom: 14,
+    alignSelf: 'center',
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '700',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    overflow: 'hidden',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+  },
   imageContainer: { flex: 1, width: SCREEN_W, justifyContent: 'center', alignItems: 'center' },
   imgLoader: { position: 'absolute', zIndex: 1 },
   fullImage: { width: SCREEN_W, height: SCREEN_H * 0.7 },

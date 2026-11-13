@@ -14,7 +14,7 @@ The solution combines three parts:
 ┌─────────────────────────────────────────────────────────┐
 │                     <SlideUpModal>                      │
 │  (Handles translucent backdrop, spring slide-up anim,   │
-│   backdrop touch dismissal & hardware back button)      │
+│   drag-handle/backdrop dismissal & hardware back button)│
 │                                                         │
 │   ┌─────────────────────────────────────────────────┐   │
 │   │             <KeyboardAvoidView>                 │   │
@@ -37,6 +37,7 @@ The solution combines three parts:
 - Anchors content to `justifyContent: 'flex-end'` within a translucent modal.
 - Provides smooth cubic slide-up/slide-down transitions.
 - Supports customizable `maxHeight` (e.g. `'80%'` or `'90%'`).
+- Includes a top drag handle that dismisses the sheet when pulled down.
 
 ### B. [`KeyboardAvoidView`](file:///c:/Users/modak/OneDrive/Desktop/OneChatClient/src/components/KeyboardAvoidView.tsx)
 - Connects directly to `KeyboardContext` via `keyboardHeightAnim`.
@@ -187,3 +188,4 @@ const styles = StyleSheet.create({
 2. **Always set `keyboardShouldPersistTaps="handled"`** on `FlatList` or `ScrollView` inside the modal so selecting an item triggers on the very first touch while the keyboard is visible.
 3. **Debounce queries (250–350ms)** to prevent multiple concurrent API calls and state jitter while typing.
 4. **Reset search query state** when opening the sheet to ensure clean state transitions.
+5. **Use `<SlideUpModal>` for bottom sheets** so drag-to-dismiss is included. When a sheet must use React Native `Modal` directly, wrap its content in `DismissibleSheet` from `components/animations` and pass its `visible` state and close handler.

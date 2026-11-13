@@ -50,7 +50,7 @@ import { uploadFile } from '../api/upload';
 import { formatImageUrl } from '../utils/imageUrl';
 import { LoadState } from '../components/LoadState';
 import { useTheme } from '../theme/theme';
-import { ScalePressable, FadeInView } from '../components/animations';
+import { ScalePressable, FadeInView, DismissibleSheet } from '../components/animations';
 import { ProjectQRModal } from '../components/Modals/ProjectQRModal';
 
 // ------ Business Verticals (matching web app) ------
@@ -950,8 +950,12 @@ export function ManageProjectScreen({
         onRequestClose={() => setShowVerticalPicker(false)}
       >
         <Pressable style={styles.pickerOverlay} onPress={() => setShowVerticalPicker(false)}>
-          <View style={[styles.pickerSheet, { backgroundColor: theme.surface }]}>
-            <View style={[styles.pickerHandle, { backgroundColor: theme.border }]} />
+          <Pressable onPress={() => {}}>
+            <DismissibleSheet
+              visible={showVerticalPicker}
+              style={[styles.pickerSheet, { backgroundColor: theme.surface }]}
+              onDismiss={() => setShowVerticalPicker(false)}
+            >
             <Text style={[styles.pickerSheetTitle, { color: theme.ink }]}>Select Industry</Text>
             <ScrollView showsVerticalScrollIndicator={false}>
               {BUSINESS_VERTICALS.filter(v => v.value !== '').map(vertical => (
@@ -979,7 +983,8 @@ export function ManageProjectScreen({
                 </Pressable>
               ))}
             </ScrollView>
-          </View>
+            </DismissibleSheet>
+          </Pressable>
         </Pressable>
       </Modal>
     </View>
@@ -1152,7 +1157,6 @@ const styles = StyleSheet.create({
   // Vertical picker modal
   pickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   pickerSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '70%' },
-  pickerHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
   pickerSheetTitle: { fontSize: 18, fontWeight: '800', marginBottom: 14 },
   pickerOption: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

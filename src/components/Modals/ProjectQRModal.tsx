@@ -1,16 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Dimensions,
-  Linking,
   Modal,
   Pressable,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
+import Clipboard from '@react-native-clipboard/clipboard';
+import ReactNativeBlobUtil from 'react-native-blob-util';
+import NativeShare from 'react-native-share';
+import { Social } from 'react-native-share';
 import Svg, { Path } from 'react-native-svg';
 import {
   X,
@@ -63,6 +65,7 @@ export function ProjectQRModal({
   const [qrList, setQrList] = useState<QRCodeItem[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [copied, setCopied] = useState(false);
+  const qrSvgRef = useRef<{ toDataURL: (callback: (base64: string) => void) => void } | null>(null);
 
   useEffect(() => {
     if (!visible || !projectId) return;
@@ -101,49 +104,86 @@ export function ProjectQRModal({
   // Construct standard public URL for this QR code
   const publicQrUrl = `https://app.onechatting.com/qr/${qrId}`;
 
+  const createQrImage = async () => {
+    if (!qrSvgRef.current) {
+      throw new Error('QR code is not ready to share.');
+    }
+
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Could not render the QR image.')), 10000);
+      try {
+        qrSvgRef.current?.toDataURL(data => {
+          clearTimeout(timeout);
+          if (data) resolve(data);
+          else reject(new Error('Could not render the QR image.'));
+        });
+      } catch (error) {
+        clearTimeout(timeout);
+        reject(error);
+      }
+    });
+
+    const path = `${ReactNativeBlobUtil.fs.dirs.CacheDir}/onechat-qr-${Date.now()}.png`;
+    await ReactNativeBlobUtil.fs.writeFile(path, base64, 'base64');
+    return `file://${path}`;
+  };
+
+  const shareMessage = `Scan or open this QR link to connect with ${projectName}:\n${publicQrUrl}`;
+
   const handleShare = async () => {
     try {
-      await Share.share({
+      const imageUrl = await createQrImage();
+      await NativeShare.open({
         title: `${projectName} QR Code`,
-        message: `Scan or open this QR link to connect with ${projectName}:\n${publicQrUrl}`,
-        url: publicQrUrl,
+        message: shareMessage,
+        url: imageUrl,
+        type: 'image/png',
+        failOnCancel: false,
       });
     } catch (err) {
-      console.error('Error sharing QR code:', err);
+      Toast.show({
+        type: 'error',
+        text1: 'Could not share QR code',
+        text2: err instanceof Error ? err.message : String(err),
+      });
     }
   };
 
-  const handleWhatsAppShare = () => {
-    const text = encodeURIComponent(
-      `👋 Connect with *${projectName}* on WhatsApp!\n\nScan our QR code or click the link below to get started:\n${publicQrUrl}`
-    );
-    const whatsappUrl = `whatsapp://send?text=${text}`;
-    Linking.canOpenURL(whatsappUrl)
-      .then((supported) => {
-        if (supported) {
-          return Linking.openURL(whatsappUrl);
-        } else {
-          return openLink(`https://api.whatsapp.com/send?text=${text}`);
-        }
-      })
-      .catch(() => {
-        Toast.show({
-          type: 'error',
-          text1: 'WhatsApp Not Available',
-          text2: 'Could not open WhatsApp. Please use regular Share.',
-        });
+  const handleWhatsAppShare = async () => {
+    try {
+      const imageUrl = await createQrImage();
+      await NativeShare.shareSingle({
+        social: Social.Whatsapp,
+        title: `${projectName} QR Code`,
+        message: `Connect with ${projectName} on WhatsApp!\n${publicQrUrl}`,
+        url: imageUrl,
+        type: 'image/png',
       });
+    } catch (err) {
+      Toast.show({
+        type: 'error',
+        text1: 'Could not share on WhatsApp',
+        text2: err instanceof Error ? err.message : String(err),
+      });
+    }
   };
 
-  const handleCopyLink = () => {
-    // In React Native, fallback share / copy representation
-    setCopied(true);
-    Toast.show({
-      type: 'success',
-      text1: 'QR Link Copied',
-      text2: publicQrUrl,
-    });
-    setTimeout(() => setCopied(false), 2500);
+  const handleCopyLink = async () => {
+    try {
+      await Clipboard.setString(publicQrUrl);
+      setCopied(true);
+      Toast.show({
+        type: 'success',
+        text1: 'QR link copied',
+      });
+      setTimeout(() => setCopied(false), 2500);
+    } catch (err) {
+      Toast.show({
+        type: 'error',
+        text1: 'Could not copy QR link',
+        text2: err instanceof Error ? err.message : String(err),
+      });
+    }
   };
 
   const handleOpenLink = () => {
@@ -297,6 +337,7 @@ export function ProjectQRModal({
                     color="#1E293B"
                     backgroundColor="#FFFFFF"
                     quietZone={14}
+                    getRef={ref => { qrSvgRef.current = ref; }}
                   />
                 </View>
                 <Text style={[styles.scanHint, { color: theme.muted }]}>
@@ -317,7 +358,7 @@ export function ProjectQRModal({
                   accessibilityLabel="Share on WhatsApp"
                 >
                   <WhatsAppIcon size={19} color="#FFF" />
-                  {/* <Text style={styles.actionBtnText}>WhatsApp</Text> */}
+                  <Text style={styles.actionBtnText}>WhatsApp</Text>
                 </Pressable>
 
                 {/* Share Sheet */}
@@ -330,7 +371,7 @@ export function ProjectQRModal({
                   ]}
                 >
                   <Share2 size={16} color="#FFF" />
-                  {/* <Text style={styles.actionBtnText}>Share</Text> */}
+                  <Text style={styles.actionBtnText}>Share</Text>
                 </Pressable>
 
                 {/* Copy Link */}
@@ -348,14 +389,9 @@ export function ProjectQRModal({
                   ) : (
                     <Copy size={16} color={theme.ink} />
                   )}
-                  {/* <Text
-                    style={[
-                      styles.secondaryActionBtnText,
-                      { color: copied ? theme.emerald : theme.ink },
-                    ]}
-                  >
-                    {copied ? 'Copied' : 'Copy'}
-                  </Text> */}
+                  <Text style={[styles.secondaryActionBtnText, { color: copied ? theme.emerald : theme.ink }]}>
+                    {copied ? 'Copied' : 'Copy link'}
+                  </Text>
                 </Pressable>
 
                 {/* Open Link */}
@@ -369,9 +405,7 @@ export function ProjectQRModal({
                   ]}
                 >
                   <ExternalLink size={16} color={theme.ink} />
-                  {/* <Text style={[styles.secondaryActionBtnText, { color: theme.ink }]}>
-                    Open
-                  </Text> */}
+                  <Text style={[styles.secondaryActionBtnText, { color: theme.ink }]}>Open</Text>
                 </Pressable>
               </View>
             </ScrollView>
@@ -539,12 +573,14 @@ const styles = StyleSheet.create({
   },
   actionGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     width: '100%',
     gap: 8,
     justifyContent: 'space-between',
   },
   actionBtn: {
-    flex: 1,
+    flexBasis: '48%',
+    flexGrow: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

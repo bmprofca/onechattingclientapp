@@ -15,7 +15,7 @@ import { RefreshCw, Search, ShoppingBag, X } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { getProductCatalogConnectLink, getProductCatalogs } from '../api/workspace';
 import { useTheme } from '../theme/theme';
-import { ScalePressable } from './animations';
+import { ScalePressable, DismissibleSheet } from './animations';
 
 type Catalog = {
   id: string;
@@ -152,10 +152,12 @@ export function ProductCatalogsModal({
       onRequestClose={onClose}
     >
       <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable
-          style={[styles.sheet, { backgroundColor: theme.surface }]}
-          onPress={() => {}}
-        >
+        <Pressable onPress={() => {}}>
+          <DismissibleSheet
+            visible={visible}
+            style={[styles.sheet, { backgroundColor: theme.surface }]}
+            onDismiss={onClose}
+          >
           <View style={[styles.header, { borderBottomColor: theme.border }]}>
             <View style={styles.titleWrap}>
               <ShoppingBag size={20} color={theme.emerald} />
@@ -280,6 +282,7 @@ export function ProductCatalogsModal({
               }
             />
           )}
+          </DismissibleSheet>
         </Pressable>
       </Pressable>
     </Modal>

@@ -53,7 +53,7 @@ import {
   setContactFavorite,
   updateContact,
 } from '../api/workspace';
-import { FadeInView, ScalePressable } from '../components/animations';
+import { FadeInView, ScalePressable, DismissibleSheet } from '../components/animations';
 import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
 import { LoadState } from '../components/LoadState';
 import { useKeyboardContext } from '../contexts/KeyboardContext';
@@ -2178,13 +2178,15 @@ export function ContactsScreen({
                 {backgroundColor: theme.isDark ? 'rgba(0,0,0,0.28)' : 'rgba(0,0,0,0.16)'},
               ]}
             />
-          <View
+          <DismissibleSheet
+            visible={createModalVisible}
             style={[
               styles.createModal,
               isKeyboardVisible ? styles.expandedModalSheet : styles.collapsedModalSheet,
               {paddingTop: isKeyboardVisible ? insets.top : 20},
               { backgroundColor: theme.canvas },
             ]}
+            onDismiss={() => setCreateModalVisible(false)}
           >
             <View style={styles.modalHeader}>
               <View style={{flex: 1}}>
@@ -2263,7 +2265,7 @@ export function ContactsScreen({
                 )}
               </Pressable>
             </View>
-          </View>
+          </DismissibleSheet>
           </View>
         </NativeKeyboardAvoidingView>
       </Modal>

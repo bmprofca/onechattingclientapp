@@ -45,7 +45,7 @@ import {
   QRCodeItem,
 } from '../api/qrcode';
 import { useTheme } from '../theme/theme';
-import { ScalePressable, FadeInView } from '../components/animations';
+import { ScalePressable, FadeInView, DismissibleSheet } from '../components/animations';
 import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
 import Toast from '../ui/toast';
 import { ScreenSkeleton } from '../components/Skeleton';
@@ -470,7 +470,11 @@ export function ScannedUsersScreen({
       {/* Add / Edit Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={() => setModalVisible(false)}>
         <KeyboardAvoidView style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
+          <DismissibleSheet
+            visible={modalVisible}
+            style={[styles.modalSheet, { backgroundColor: theme.surface }]}
+            onDismiss={() => setModalVisible(false)}
+          >
             <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
               <Text style={[styles.modalTitle, { color: theme.ink }]}>
                 {isEditMode ? 'Edit Scanned User' : 'Add Scanned User'}
@@ -640,7 +644,7 @@ export function ScannedUsersScreen({
                 )}
               </ScalePressable>
             </View>
-          </View>
+          </DismissibleSheet>
         </KeyboardAvoidView>
       </Modal>
 
@@ -670,9 +674,13 @@ export function ScannedUsersScreen({
         >
           <Pressable style={styles.datePickerOverlay} onPress={closeDatePicker}>
             <Pressable
-              style={[styles.datePickerSheet, { backgroundColor: theme.surface }]}
               onPress={(e) => e.stopPropagation()}
             >
+              <DismissibleSheet
+                visible={!!activeDateField}
+                style={[styles.datePickerSheet, { backgroundColor: theme.surface }]}
+                onDismiss={closeDatePicker}
+              >
               <View style={styles.datePickerHeader}>
                 <Text style={[styles.datePickerTitle, { color: theme.ink }]}>
                   {activeDateField === 'dob' ? 'Select Date of Birth' : 'Select Anniversary'}
@@ -698,6 +706,7 @@ export function ScannedUsersScreen({
               >
                 <Text style={styles.datePickerDoneText}>Done</Text>
               </Pressable>
+              </DismissibleSheet>
             </Pressable>
           </Pressable>
         </Modal>

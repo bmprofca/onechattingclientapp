@@ -12,6 +12,7 @@ import { Activity, RefreshCw, X } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { getContactTimeline } from '../api/workspace';
 import { useTheme } from '../theme/theme';
+import { DismissibleSheet } from './animations';
 
 type TimelineEvent = {
   event_id: string;
@@ -121,7 +122,11 @@ export function ContactTimelineModal({
     >
       <View style={styles.backdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close contact timeline" />
-        <View style={[styles.sheet, { backgroundColor: theme.header, borderColor: theme.border }]}>
+        <DismissibleSheet
+          visible={visible}
+          style={[styles.sheet, { backgroundColor: theme.header, borderColor: theme.border }]}
+          onDismiss={onClose}
+        >
           <View style={[styles.header, { borderBottomColor: theme.border }]}>
             <View style={[styles.headerIcon, { backgroundColor: theme.inputBg }]}>
               <Activity size={18} color={theme.emerald} />
@@ -176,7 +181,7 @@ export function ContactTimelineModal({
               )}
             />
           )}
-        </View>
+        </DismissibleSheet>
       </View>
     </Modal>
   );

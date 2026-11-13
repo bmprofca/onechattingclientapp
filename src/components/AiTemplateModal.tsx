@@ -19,6 +19,7 @@ import { generateAiTemplate, generateAiHeaderMedia, createTemplate, getAiStatus,
 import { uploadFile } from '../api/upload';
 import { useTheme } from '../theme/theme';
 import { KeyboardAvoidView } from './KeyboardAvoidView';
+import { DismissibleSheet } from './animations';
 import { openLink } from '../utils/openLink';
 
 type AiTemplateModalProps = {
@@ -280,7 +281,11 @@ export function AiTemplateModal({
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidView style={styles.overlay}>
-        <View style={[styles.container, { backgroundColor: theme.canvas }]}>
+        <DismissibleSheet
+          visible={visible}
+          style={[styles.container, { backgroundColor: theme.canvas }]}
+          onDismiss={onClose}
+        >
           {/* Header */}
           <View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
             <View style={styles.headerLeft}>
@@ -605,7 +610,7 @@ export function AiTemplateModal({
             </View>
 
           </ScrollView>
-        </View>
+        </DismissibleSheet>
       </KeyboardAvoidView>
     </Modal>
   );

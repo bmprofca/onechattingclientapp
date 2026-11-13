@@ -49,6 +49,7 @@ import { ProjectQRModal } from '../components/Modals/ProjectQRModal';
 import { formatImageUrl } from '../utils/imageUrl';
 import { useKeyboardContext } from '../contexts/KeyboardContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Toast from '../ui/toast';
 
 type Page =
   | 'dashboard'
@@ -89,7 +90,7 @@ export function WorkspaceScreen({
     name: string;
   }) => void | Promise<void>;
   notificationNavRef?: React.MutableRefObject<
-    ((contactNumber: string, contactName: string) => void) | null
+    ((contactNumber: string, contactName: string, projectId?: string) => void) | null
   >;
   onSignOut: () => void;
 }) {
@@ -169,8 +170,42 @@ export function WorkspaceScreen({
       notificationNavRef.current = (
         contactNumber: string,
         contactName: string,
+        notificationProjectId?: string,
       ) => {
-        setChatTarget({ number: contactNumber, name: contactName });
+        const openChat = async () => {
+          if (notificationProjectId && notificationProjectId !== projectId) {
+            if (!projects.some(item => String(item.id) === notificationProjectId)) {
+              Toast.show({
+                type: 'error',
+                text1: 'Project unavailable',
+                text2: 'This notification belongs to a project you can no longer access.',
+              });
+              return;
+            }
+
+            try {
+              await onSelectProject(notificationProjectId);
+            } catch (error) {
+              Toast.show({
+                type: 'error',
+                text1: 'Could not switch project',
+                text2: error instanceof Error ? error.message : String(error),
+              });
+              return;
+            }
+          }
+
+          setPage('inbox');
+          setChatTarget({ number: contactNumber, name: contactName });
+        };
+
+        openChat().catch(error => {
+          Toast.show({
+            type: 'error',
+            text1: 'Could not open chat',
+            text2: error instanceof Error ? error.message : String(error),
+          });
+        });
       };
     }
     return () => {
@@ -178,18 +213,18 @@ export function WorkspaceScreen({
         notificationNavRef.current = null;
       }
     };
-  }, [notificationNavRef]);
+  }, [notificationNavRef, onSelectProject, projectId, projects]);
 
   // Track active chat for notification suppression
   useEffect(() => {
     if (chatTarget) {
-      notificationService.setActiveChat(chatTarget.number);
+      notificationService.setActiveChat(chatTarget.number, projectId);
       // Cancel any existing notification for this contact
       notificationService.cancelNotificationsForContact(chatTarget.number);
     } else {
       notificationService.clearActiveChat();
     }
-  }, [chatTarget]);
+  }, [chatTarget, projectId]);
 
   const apiSession = useMemo<ApiSession>(
     () => ({ token: session.token, username: session.username }),
