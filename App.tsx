@@ -19,16 +19,18 @@ import { useTheme } from './src/theme/theme';
 import { socketManager } from './src/services/socketManager';
 import { notificationService } from './src/services/notificationService';
 import { listenForForegroundPush, listenForNotificationOpens, registerDevicePush, unregisterDevicePush } from './src/services/pushService';
+import type { NotificationTarget } from './src/services/notificationTarget';
 import { ScreenTransition } from './src/components/animations';
 import { ConnectionBanner } from './src/components/ConnectionBanner';
 
 import { KeyboardProvider } from './src/contexts/KeyboardContext';
+import { ThemeProvider } from './src/contexts/ThemeContext';
 
-export default function App() {
+function AppContent() {
   const theme = useTheme();
   const [session, setSession] = useState<Session | null | undefined>(undefined);
 
-  // Ref for notification tap → navigate to chat
+  // Ref for notification tap → navigate to its project-scoped target
   const notificationNavRef = useRef<
     ((contactNumber: string, contactName: string, projectId?: string) => void) | null
   >(null);
@@ -64,12 +66,12 @@ export default function App() {
       await notificationService.requestPermission();
 
       // Register tap handler — navigates to the chat when user taps notification
-      notificationService.onNotificationTap(openNotificationChat);
+      notificationService.onNotificationTap(openNotificationTarget);
     };
     init().catch(console.warn);
 
     const unsubscribePush = listenForForegroundPush();
-    const unsubscribeOpen = listenForNotificationOpens(openNotificationChat);
+    const unsubscribeOpen = listenForNotificationOpens(openNotificationTarget);
     const subscription = AppState.addEventListener('change', nextAppState => {
       if (nextAppState === 'active') {
         socketManager.ensureConnected();
@@ -267,5 +269,13 @@ export default function App() {
       </AppToastProvider>
       </SafeAreaProvider>
     </KeyboardProvider>
+  );
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
   );
 }

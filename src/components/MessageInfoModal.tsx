@@ -183,7 +183,7 @@ export const MessageInfoModal = forwardRef<MessageInfoHandle, { chatName?: strin
             ) : null}
 
             <Pressable onPress={close} style={[styles.close, { backgroundColor: theme.emerald }]}>
-              <Text style={styles.closeText}>Close</Text>
+              <Text style={[styles.closeText, { color: theme.onPrimary }]}>Close</Text>
             </Pressable>
           </Pressable>
         </Animated.View>

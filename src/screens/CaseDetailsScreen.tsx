@@ -19,7 +19,7 @@ import {
 } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { getCaseList } from '../api/workspace';
-import { useTheme } from '../theme/theme';
+import { useTheme, radii, cardShadow } from '../theme/theme';
 import { ScalePressable } from '../components/animations';
 
 type Props = {
@@ -130,11 +130,11 @@ export function CaseDetailsScreen({
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <ScalePressable
             onPress={() => onOpenChat(contactNumber, displayName)}
-            style={[styles.chatHeaderBtn, { backgroundColor: theme.mint }]}
+            style={[styles.chatHeaderBtn, { backgroundColor: theme.primary }]}
             hitSlop={6}
           >
-            <MessageCircle size={16} color={theme.emerald} />
-            <Text style={[styles.chatHeaderBtnText, { color: theme.emerald }]}>Chat</Text>
+            <MessageCircle size={16} color={theme.onPrimary} />
+            <Text style={[styles.chatHeaderBtnText, { color: theme.onPrimary }]}>Chat</Text>
           </ScalePressable>
         </View>
       </View>
@@ -153,18 +153,18 @@ export function CaseDetailsScreen({
         <View
           style={[
             styles.searchContainer,
-            { backgroundColor: theme.canvas, borderColor: theme.border },
+            { backgroundColor: theme.fieldBg },
           ]}
         >
-          <Search size={15} color={theme.muted} />
+          <Search size={18} color={theme.muted} />
           <TextInput
             value={search}
             onChangeText={(val) => {
               setSearch(val);
               fetchCases(val, statusFilter);
             }}
-            placeholder="Filter cases by title, remark..."
-            placeholderTextColor={theme.muted}
+            placeholder="Filter cases by title or remark"
+            placeholderTextColor={theme.placeholder}
             style={[styles.searchInput, { color: theme.ink }]}
           />
           {search.length > 0 && (
@@ -193,17 +193,17 @@ export function CaseDetailsScreen({
                 }}
                 style={[
                   styles.filterChip,
-                  { borderColor: theme.border, backgroundColor: theme.canvas },
+                  { borderColor: theme.border, backgroundColor: theme.surface },
                   active && {
-                    backgroundColor: theme.emerald,
-                    borderColor: theme.emerald,
+                    backgroundColor: theme.primary,
+                    borderColor: theme.primary,
                   },
                 ]}
               >
                 <Text
                   style={[
                     styles.filterChipText,
-                    { color: active ? '#FFF' : theme.muted },
+                    { color: active ? theme.onPrimary : theme.inkSoft },
                   ]}
                 >
                   {label}
@@ -257,7 +257,12 @@ export function CaseDetailsScreen({
                 key={row.id || row.case_id || idx}
                 style={[
                   styles.caseCard,
-                  { backgroundColor: theme.surface, borderColor: theme.border },
+                  cardShadow,
+                  {
+                    backgroundColor: theme.surface,
+                    borderColor: theme.border,
+                    shadowColor: theme.shadow,
+                  },
                 ]}
               >
                 <View style={styles.caseCardHeader}>
@@ -273,23 +278,23 @@ export function CaseDetailsScreen({
                     <View
                       style={[
                         styles.statusPill,
-                        { backgroundColor: isOpen ? '#FEF3C7' : '#DCFCE7' },
+                        { backgroundColor: isOpen ? theme.mint : theme.fieldBg },
                       ]}
                     >
                       <Text
                         style={[
                           styles.statusPillText,
-                          { color: isOpen ? '#B45309' : '#15803D' },
+                          { color: isOpen ? theme.mintText : theme.inkSoft },
                         ]}
                       >
-                        {isOpen ? 'OPEN' : 'CLOSED'}
+                        {isOpen ? 'Open' : 'Closed'}
                       </Text>
                     </View>
                     <ScalePressable
                       onPress={() => onEditCase(row)}
                       style={[
                         styles.editCaseBtn,
-                        { backgroundColor: theme.canvas, borderColor: theme.border },
+                        { backgroundColor: theme.fieldBg, borderColor: theme.fieldBg },
                       ]}
                       hitSlop={6}
                     >
@@ -300,9 +305,9 @@ export function CaseDetailsScreen({
 
                 {row.remark ? (
                   <View
-                    style={[styles.remarkBox, { backgroundColor: theme.canvas }]}
+                    style={[styles.remarkBox, { backgroundColor: theme.fieldBg }]}
                   >
-                    <Text style={[styles.remarkText, { color: theme.ink }]}>
+                    <Text style={[styles.remarkText, { color: theme.inkSoft }]}>
                       {row.remark}
                     </Text>
                   </View>
@@ -338,6 +343,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
+    letterSpacing: -0.2,
   },
   headerSubtitle: {
     fontSize: 12,
@@ -346,13 +352,13 @@ const styles = StyleSheet.create({
   chatHeaderBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    gap: 6,
+    height: 40,
+    paddingHorizontal: 14,
+    borderRadius: 12,
   },
   chatHeaderBtnText: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
   },
   filtersRow: {
@@ -364,34 +370,36 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 40,
-    borderRadius: 10,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    gap: 6,
+    height: 46,
+    borderRadius: radii.md,
+    paddingHorizontal: 14,
+    gap: 10,
   },
   searchInput: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 15,
+    paddingVertical: 0,
   },
   filterChipsRow: {
     flexDirection: 'row',
     gap: 8,
   },
   filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 14,
+    height: 32,
+    paddingHorizontal: 14,
+    borderRadius: 16,
     borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   filterChipText: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '600',
   },
   caseCard: {
     borderWidth: 1,
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: radii.lg,
+    padding: 16,
   },
   caseCardHeader: {
     flexDirection: 'row',
@@ -399,38 +407,38 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   caseCardTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
   },
   caseDate: {
-    fontSize: 11,
+    fontSize: 13,
     marginTop: 2,
   },
   statusPill: {
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 6,
+    borderRadius: radii.xs,
   },
   statusPillText: {
-    fontSize: 10,
-    fontWeight: '800',
+    fontSize: 11,
+    fontWeight: '700',
   },
   editCaseBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 10,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   remarkBox: {
-    marginTop: 8,
-    padding: 10,
-    borderRadius: 8,
+    marginTop: 10,
+    padding: 12,
+    borderRadius: radii.sm,
   },
   remarkText: {
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 13,
+    lineHeight: 18,
   },
   emptyTitle: {
     fontSize: 16,

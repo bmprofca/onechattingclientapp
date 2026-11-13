@@ -329,8 +329,8 @@ export function TemplateModal({
                   style={[styles.uploadBtn, { backgroundColor: theme.emerald }]}
                   onPress={handlePickHeaderMedia}
                 >
-                  <Upload size={18} color="#FFF" />
-                  <Text style={styles.uploadBtnText}>Choose File</Text>
+                  <Upload size={18} color={theme.onPrimary} />
+                  <Text style={[styles.uploadBtnText, { color: theme.onPrimary }]}>Choose File</Text>
                 </ScalePressable>
               )}
             </View>
@@ -357,7 +357,7 @@ export function TemplateModal({
             style={[styles.sendBtn, { backgroundColor: theme.emerald }]}
             onPress={() => submitTemplate(selectedTemplate, variables, headerMediaUrl)}
           >
-            <Text style={styles.sendBtnText}>Send Template</Text>
+            <Text style={[styles.sendBtnText, { color: theme.onPrimary }]}>Send Template</Text>
           </ScalePressable>
         </View>
       </FadeInView>

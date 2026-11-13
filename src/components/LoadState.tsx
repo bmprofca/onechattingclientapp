@@ -32,7 +32,7 @@ export function LoadState({
           onPress={onRetry}
           style={[styles.retryBtn, { backgroundColor: theme.emerald }]}
         >
-          <Text style={styles.retryBtnText}>Retry</Text>
+          <Text style={[styles.retryBtnText, { color: theme.onPrimary }]}>Retry</Text>
         </Pressable>
       </View>
     );

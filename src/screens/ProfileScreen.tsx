@@ -7,13 +7,13 @@ import {
   Text,
   View,
 } from 'react-native';
-import { ArrowLeft } from 'lucide-react-native';
+import { ArrowLeft, AtSign, Briefcase, Building2, FolderKanban, LogOut, Mail, Moon, Phone, Smartphone, Sun, Tag, User, UserRound, Wallet } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { getAccountProfile } from '../api/auth';
 import { Session } from '../services/session';
 import { LoadState } from '../components/LoadState';
 import { ScreenSkeleton } from '../components/Skeleton';
-import { useTheme } from '../theme/theme';
+import { ThemeColors, ThemeMode, useTheme, useThemeMode } from '../theme/theme';
 
 import { formatImageUrl } from '../utils/imageUrl';
 import { Image } from 'react-native';
@@ -30,6 +30,7 @@ export function ProfileScreen({
   onBack?: () => void;
 }) {
   const theme = useTheme();
+  const { mode: themeMode, setMode: setThemeMode } = useThemeMode();
   const [profileData, setProfileData] = useState<any>(session);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -68,9 +69,15 @@ export function ProfileScreen({
   const profileImgUrl = formatImageUrl(rawProfileImg);
   const name = profile.name || session.username || 'User';
   const email = profile.email || 'No email specified';
-  const mobile = profile.mobile
-    ? `+${profile.country_code || '91'} ${profile.mobile}`
-    : 'No mobile specified';
+  // country_code may arrive as "91" or "+91", and some accounts store the
+  // mobile with its code already — normalise so we never print "++91".
+  const rawMobile = String(profile.mobile || '').trim();
+  const dialCode = String(profile.country_code || '91').trim().replace(/^\++/, '');
+  const mobile = !rawMobile
+    ? 'No mobile specified'
+    : rawMobile.startsWith('+')
+      ? rawMobile
+      : `+${dialCode} ${rawMobile}`;
   const gender = profile.gender
     ? profile.gender.charAt(0).toUpperCase() + profile.gender.slice(1)
     : 'Not specified';
@@ -89,11 +96,11 @@ export function ProfileScreen({
     <View style={[styles.safe, { backgroundColor: theme.canvas }]}>
       {onBack && (
         <View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
-          <Pressable onPress={onBack} style={styles.backButton} hitSlop={8}>
-            <ArrowLeft size={22} color={theme.ink} />
+          <Pressable onPress={onBack} style={[styles.backButton, { backgroundColor: theme.fieldBg }]} hitSlop={8} accessibilityRole="button" accessibilityLabel="Back">
+            <ArrowLeft size={20} color={theme.ink} />
           </Pressable>
           <Text style={[styles.headerTitle, { color: theme.ink }]}>Profile</Text>
-          <View style={{ width: 40 }} />
+          <View style={{ width: 38 }} />
         </View>
       )}
       <ScrollView
@@ -111,79 +118,98 @@ export function ProfileScreen({
           <LoadState loading={false} error={error} empty={false} onRetry={loadProfile} />
         ) : (
         <>
-        {/* Profile Header Hero */}
-        <View style={[styles.heroCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-        {profileImgUrl && !imgError ? (
-          <View style={[styles.avatar, { borderColor: theme.emerald, overflow: 'hidden' }]}>
-            <Image
-              source={{ uri: profileImgUrl }}
-              style={{ width: '100%', height: '100%' }}
-              resizeMode="cover"
-              onError={() => setImgError(true)}
-            />
+          {/* Identity card */}
+          <View style={[styles.identityCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            {profileImgUrl && !imgError ? (
+              <View style={[styles.avatar, { backgroundColor: theme.mint }]}>
+                <Image
+                  source={{ uri: profileImgUrl }}
+                  style={styles.avatarImage}
+                  resizeMode="cover"
+                  onError={() => setImgError(true)}
+                />
+              </View>
+            ) : (
+              <View style={[styles.avatar, { backgroundColor: theme.mint }]}>
+                <Text style={[styles.avatarText, { color: theme.mintText }]}>{initial}</Text>
+              </View>
+            )}
+            <View style={styles.identityCopy}>
+              <Text style={[styles.userName, { color: theme.ink }]} numberOfLines={1}>{name}</Text>
+              <Text style={[styles.userMeta, { color: theme.muted }]} numberOfLines={1}>{email}</Text>
+              <Text style={[styles.userMeta, { color: theme.muted }]} numberOfLines={1}>{mobile}</Text>
+            </View>
           </View>
-        ) : (
-          <View style={[styles.avatar, { backgroundColor: theme.mint, borderColor: theme.emerald }]}>
-            <Text style={[styles.avatarText, { color: theme.emerald }]}>{initial}</Text>
+
+          {/* Account overview */}
+          <Text style={[styles.sectionHeader, { color: theme.muted }]}>Account</Text>
+          <View style={[styles.groupCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <DetailRow icon={Wallet} tint={{ bg: theme.mint, fg: theme.mintText }} label="Wallet balance" value={`₹${balance}`} theme={theme} />
+            <DetailRow icon={FolderKanban} tint={{ bg: theme.infoBg, fg: theme.info }} label="Total projects" value={String(projectCount)} theme={theme} isLast />
           </View>
-        )}
-        <Text style={[styles.userName, { color: theme.ink }]}>{name}</Text>
-        <Text style={[styles.userEmail, { color: theme.muted }]}>{email}</Text>
-        <Text style={[styles.userMobile, { color: theme.emerald }]}>{mobile}</Text>
-      </View>
 
-      {/* Balance & Account Overview */}
-      <View style={styles.statsRow}>
-        <View style={[
-          styles.statCard, 
-          { 
-            backgroundColor: theme.isDark ? theme.surface : '#EEF2FF',
-            borderColor: theme.isDark ? theme.border : '#E0E7FF',
-            borderWidth: 1,
-          }
-        ]}>
-          <Text style={[styles.statLabel, { color: theme.isDark ? theme.muted : '#4338CA' }]}>WALLET BALANCE</Text>
-          <Text style={[styles.statValue, { color: theme.ink }]}>₹{balance}</Text>
-        </View>
-        <View style={[
-          styles.statCard, 
-          { 
-            backgroundColor: theme.isDark ? theme.surface : '#E6F4ED',
-            borderColor: theme.isDark ? theme.border : '#D1E7DD',
-            borderWidth: 1,
-          }
-        ]}>
-          <Text style={[styles.statLabel, { color: theme.isDark ? theme.muted : '#047857' }]}>TOTAL PROJECTS</Text>
-          <Text style={[styles.statValue, { color: theme.ink }]}>{projectCount}</Text>
-        </View>
-      </View>
+          {/* Personal information */}
+          <Text style={[styles.sectionHeader, { color: theme.muted }]}>Personal information</Text>
+          <View style={[styles.groupCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <DetailRow icon={User} tint={{ bg: theme.mint, fg: theme.mintText }} label="Full name" value={name} theme={theme} />
+            <DetailRow icon={Mail} tint={{ bg: theme.infoBg, fg: theme.info }} label="Email address" value={email} theme={theme} />
+            <DetailRow icon={Phone} tint={{ bg: theme.mint, fg: theme.mintText }} label="Mobile number" value={mobile} theme={theme} />
+            <DetailRow icon={UserRound} tint={{ bg: theme.violetBg, fg: theme.violet }} label="Gender" value={gender} theme={theme} />
+            <DetailRow icon={AtSign} tint={{ bg: theme.warnBg, fg: theme.warning }} label="Username ID" value={username} theme={theme} isLast />
+          </View>
 
-      {/* Account Info Details */}
-      <Text style={[styles.sectionHeader, { color: theme.ink }]}>Personal Information</Text>
-      <View style={[styles.detailsCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-        <DetailRow label="Full Name" value={name} theme={theme} />
-        <DetailRow label="Email Address" value={email} theme={theme} />
-        <DetailRow label="Mobile Number" value={mobile} theme={theme} />
-        <DetailRow label="Gender" value={gender} theme={theme} />
-        <DetailRow label="Username ID" value={username} theme={theme} isLast />
-      </View>
+          {/* Business information */}
+          <Text style={[styles.sectionHeader, { color: theme.muted }]}>Business information</Text>
+          <View style={[styles.groupCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <DetailRow icon={Briefcase} tint={{ bg: theme.infoBg, fg: theme.info }} label="Firm name" value={firmName} theme={theme} />
+            <DetailRow icon={Building2} tint={{ bg: theme.violetBg, fg: theme.violet }} label="Business name" value={businessName} theme={theme} />
+            <DetailRow icon={Tag} tint={{ bg: theme.warnBg, fg: theme.warning }} label="Business type" value={businessType} theme={theme} isLast />
+          </View>
 
-      {/* Business Details */}
-      <Text style={[styles.sectionHeader, { color: theme.ink }]}>Business Information</Text>
-      <View style={[styles.detailsCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-        <DetailRow label="Firm Name" value={firmName} theme={theme} />
-        <DetailRow label="Business Name" value={businessName} theme={theme} />
-        <DetailRow label="Business Type" value={businessType} theme={theme} isLast />
-      </View>
+          {/* Appearance */}
+          <Text style={[styles.sectionHeader, { color: theme.muted }]}>Appearance</Text>
+          <View style={[styles.groupCard, styles.appearanceCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <View
+              accessibilityRole="radiogroup"
+              style={[styles.segmentTrack, { backgroundColor: theme.fieldBg }]}
+            >
+              {THEME_OPTIONS.map(option => {
+                const active = themeMode === option.value;
+                const Icon = option.icon;
+                return (
+                  <Pressable
+                    key={option.value}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={`${option.label} theme`}
+                    onPress={() => setThemeMode(option.value)}
+                    style={[
+                      styles.segment,
+                      active && [styles.segmentActive, { backgroundColor: theme.surface, shadowColor: theme.shadow }],
+                    ]}
+                  >
+                    <Icon size={16} color={active ? theme.ink : theme.muted} strokeWidth={2.25} />
+                    <Text style={[styles.segmentText, { color: active ? theme.ink : theme.muted }]}>
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
 
-      {/* Logout Button (Only Situated Here) */}
-      <Pressable
-        accessibilityRole="button"
-        onPress={onSignOut}
-        style={[styles.logoutButton, { backgroundColor: theme.isDark ? theme.danger : theme.dangerBg, borderColor: theme.isDark ? theme.danger : theme.dangerBorder }]}
-      >
-        <Text style={[styles.logoutButtonText, { color: '#FFFFFF' }]}>Log Out</Text>
-      </Pressable>
+          {/* Log out */}
+          <Pressable
+            accessibilityRole="button"
+            onPress={onSignOut}
+            style={({ pressed }) => [
+              styles.logoutButton,
+              { backgroundColor: pressed ? theme.dangerBg : theme.surface, borderColor: theme.dangerBorder },
+            ]}
+          >
+            <LogOut size={18} color={theme.danger} strokeWidth={2.25} />
+            <Text style={[styles.logoutButtonText, { color: theme.danger }]}>Log out</Text>
+          </Pressable>
         </>
         )}
       </ScrollView>
@@ -191,21 +217,38 @@ export function ProfileScreen({
   );
 }
 
+const THEME_OPTIONS: {
+  value: ThemeMode;
+  label: string;
+  icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+}[] = [
+  { value: 'system', label: 'System', icon: Smartphone },
+  { value: 'light', label: 'Light', icon: Sun },
+  { value: 'dark', label: 'Dark', icon: Moon },
+];
+
 function DetailRow({
+  icon: Icon,
+  tint,
   label,
   value,
   theme,
   isLast = false,
 }: {
+  icon: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>;
+  tint: { bg: string; fg: string };
   label: string;
   value: string;
-  theme: any;
+  theme: ThemeColors;
   isLast?: boolean;
 }) {
   return (
-    <View style={[styles.detailRow, !isLast && { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
-      <Text style={[styles.detailLabel, { color: theme.muted }]}>{label}</Text>
-      <Text style={[styles.detailValue, { color: theme.ink }]} numberOfLines={1}>{value}</Text>
+    <View style={[styles.detailRow, !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.divider }]}>
+      <View style={[styles.iconTile, { backgroundColor: tint.bg }]}>
+        <Icon size={16} color={tint.fg} strokeWidth={2.25} />
+      </View>
+      <Text style={[styles.detailLabel, { color: theme.ink }]} numberOfLines={1}>{label}</Text>
+      <Text style={[styles.detailValue, { color: theme.muted }]} numberOfLines={1}>{value}</Text>
     </View>
   );
 }
@@ -216,126 +259,145 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: -0.3,
+    fontSize: 17,
+    fontWeight: '700',
   },
   container: {
     flex: 1,
   },
   scrollContent: {
-    padding: 20,
+    padding: 16,
     paddingBottom: 40,
   },
-  heroCard: {
-    borderRadius: 20,
-    padding: 24,
+  identityCard: {
+    borderRadius: 18,
+    padding: 16,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 14,
     borderWidth: 1,
-    marginBottom: 16,
   },
   avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
-    borderWidth: 2,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   avatarText: {
-    fontSize: 32,
+    fontSize: 24,
     fontWeight: '800',
+  },
+  identityCopy: {
+    flex: 1,
+    minWidth: 0,
   },
   userName: {
-    fontSize: 22,
+    fontSize: 17,
     fontWeight: '800',
-    marginBottom: 4,
+    marginBottom: 3,
   },
-  userEmail: {
-    fontSize: 14,
-    marginBottom: 2,
-  },
-  userMobile: {
+  userMeta: {
     fontSize: 13,
-    fontWeight: '600',
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
-  },
-  statCard: {
-    flex: 1,
-    borderRadius: 16,
-    padding: 16,
-  },
-  statLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#ffffff',
-    letterSpacing: 0.8,
-    marginBottom: 6,
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#FFF',
+    marginTop: 1,
   },
   sectionHeader: {
-    fontSize: 13,
-    fontWeight: '800',
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 22,
     marginBottom: 8,
-    marginTop: 4,
+    marginLeft: 4,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
-  detailsCard: {
-    borderRadius: 16,
+  groupCard: {
+    borderRadius: 18,
     borderWidth: 1,
-    paddingHorizontal: 16,
-    marginBottom: 20,
+    paddingHorizontal: 14,
+    overflow: 'hidden',
   },
   detailRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 14,
+    minHeight: 54,
+    gap: 12,
   },
-  detailLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  detailValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    maxWidth: '60%',
-    textAlign: 'right',
-  },
-  logoutButton: {
-    height: 52,
-    borderRadius: 16,
+  iconTile: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 12,
+  },
+  detailLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    flexShrink: 0,
+  },
+  detailValue: {
+    flex: 1,
+    fontSize: 13,
+    textAlign: 'right',
+  },
+  appearanceCard: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  segmentTrack: {
+    flexDirection: 'row',
+    borderRadius: 14,
+    padding: 4,
+  },
+  segment: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 40,
+    borderRadius: 10,
+  },
+  segmentActive: {
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  segmentText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  logoutButton: {
+    height: 54,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 28,
     borderWidth: 1,
   },
   logoutButtonText: {
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: '700',
   },
 });

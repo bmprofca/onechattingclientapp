@@ -72,7 +72,13 @@ def enableProguardInReleaseBuilds = false
  */
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
-def keystorePropertiesFile = rootProject.file("keystore.properties")
+// Production upload key lives in android/production-keystore/ (git-ignored).
+// keystore.properties there names the keystore file sitting next to it.
+// Falls back to the legacy android/keystore.properties location.
+def keystorePropertiesFile = rootProject.file("production-keystore/keystore.properties")
+if (!keystorePropertiesFile.exists()) {
+    keystorePropertiesFile = rootProject.file("keystore.properties")
+}
 def keystoreProperties = new Properties()
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
@@ -88,8 +94,8 @@ android {
         applicationId "com.onechatting.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 3
-        versionName "1.2"
+        versionCode 4
+        versionName "1.3"
     }
     signingConfigs {
         debug {
@@ -100,7 +106,7 @@ android {
         }
         release {
             if (keystorePropertiesFile.exists()) {
-                storeFile file(keystoreProperties['storeFile'])
+                storeFile new File(keystorePropertiesFile.parentFile, keystoreProperties['storeFile'])
                 storePassword keystoreProperties['storePassword']
                 keyAlias keystoreProperties['keyAlias']
                 keyPassword keystoreProperties['keyPassword']

@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { BackHandler, Dimensions, Modal, Pressable, ScrollView, StyleSheet, Text, View, Animated, Easing } from 'react-native';
-import { ArrowLeftRight, Home, MessageCircle, Megaphone, User, Wallet, MoreVertical, Briefcase, HelpCircle, Brain, Settings, ReceiptText, QrCode, FolderOpen, Users, FileText } from 'lucide-react-native';
+import { ArrowLeftRight, ChevronDown, Home, MessageCircle, Megaphone, User, Wallet, MoreVertical, Briefcase, HelpCircle, Brain, Settings, ReceiptText, QrCode, FolderOpen, Users, FileText } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { getAccountProfile } from '../api/auth';
 import { getProjectMeta, getUnreadCount } from '../api/workspace';
 import { Session, loadSession, saveSession } from '../services/session';
-import { useTheme } from '../theme/theme';
+import { useTheme, radii } from '../theme/theme';
 import { CampaignsScreen } from './CampaignsScreen';
 import { CampaignDetailsScreen } from './CampaignDetailsScreen';
 import { CreateCampaignScreen } from './CreateCampaignScreen';
@@ -37,10 +37,13 @@ import { TemplatesScreen } from './TemplatesScreen';
 import { TemplateEditorScreen } from './TemplateEditorScreen';
 import { socketManager } from '../services/socketManager';
 import { notificationService } from '../services/notificationService';
+import type { NotificationTarget } from '../services/notificationTarget';
+import Toast from '../ui/toast';
 import {
   ScalePressable,
   FadeInView,
-  ScreenTransition,
+  StackScreen,
+  STACK_ENTER_DURATION,
 } from '../components/animations';
 import { Project } from '../api/auth';
 import { BrandMark } from '../components/BrandMark';
@@ -159,7 +162,7 @@ export function WorkspaceScreen({
   const [totalUnreadCount, setTotalUnreadCount] = useState<number>(0);
 
   useEffect(() => {
-    if (session.projects) {
+    if (session.projects && session.projects.length > 0) {
       setProjects(session.projects);
     }
   }, [session.projects]);
@@ -232,8 +235,12 @@ export function WorkspaceScreen({
   );
 
   const currentProject = useMemo(() => {
-    return projects.find(p => p.id === projectId);
+    return projects.find(p => String(p.id) === String(projectId));
   }, [projects, projectId]);
+  // Name reported by the project-details API; used when the cached
+  // project list doesn't contain the selected project.
+  const [projectMetaName, setProjectMetaName] = useState('');
+  const projectName = currentProject?.name || projectMetaName;
 
   const handleBalanceUpdated = useCallback((bal: number) => {
     setWalletBalance(bal);
@@ -254,8 +261,8 @@ export function WorkspaceScreen({
         (res as any)?.unread_count ??
         0;
       setTotalUnreadCount(Number(count) || 0);
-    } catch {
-      // ignore — badge just won't update this cycle
+    } catch (error) {
+      console.warn('Failed to load unread count:', error);
     }
   }, [apiSession, hasProject, projectId]);
 
@@ -276,6 +283,7 @@ export function WorkspaceScreen({
   }, []);
 
   useEffect(() => {
+    setProjectMetaName('');
     if (!projectId) {
       setProjectProfileImage('');
       return;
@@ -312,6 +320,9 @@ export function WorkspaceScreen({
           '';
         const img = formatImageUrl(rawImg);
         setProjectProfileImage(img || initialImg || '');
+        const metaName =
+          proj.name || proj.project_name || proj.title || prof.name || prof.business_name || '';
+        if (metaName) setProjectMetaName(String(metaName));
       })
       .catch(() => {});
 
@@ -338,7 +349,10 @@ export function WorkspaceScreen({
       if (updated.projectCount !== undefined) {
         setProjectCount(updated.projectCount);
       }
-      if (updated.projects && Array.isArray(updated.projects)) {
+      // Only replace the list when the server actually returned projects —
+      // the profile endpoint sometimes sends just a count, which would wipe
+      // the list and blank the workspace name in the header.
+      if (Array.isArray(updated.projects) && updated.projects.length > 0) {
         setProjects(updated.projects);
       }
       const stored = await loadSession();
@@ -378,146 +392,94 @@ export function WorkspaceScreen({
     }
   }, [isMenuVisible, menuOpacity]);
 
+  // ---- Stack navigation ----------------------------------------------------
+  // Sub-screens are rendered as absolutely-filled StackScreen layers over the
+  // tab UI, so they slide in/out instead of popping. The order below is the
+  // z-order (bottom → top); hardware back closes the top-most open layer.
+  // Clearing a target only starts the exit animation — StackScreen keeps the
+  // last target cached until the screen has slid out.
+  const closeAfterCoverTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  useEffect(
+    () => () => closeAfterCoverTimers.current.forEach(clearTimeout),
+    [],
+  );
+  // "Replace" navigation: the new screen slides in on top, and the old one
+  // is dismissed once it's fully covered (so it doesn't slide out visibly
+  // underneath the incoming screen).
+  const closeAfterCover = useCallback((close: () => void) => {
+    const t = setTimeout(close, STACK_ENTER_DURATION + 40);
+    closeAfterCoverTimers.current.push(t);
+  }, []);
+
+  // Keys used to remount a parent screen when a child that may have changed
+  // its data is popped (previously the parent was remounted on return).
+  const [templatesKey, setTemplatesKey] = useState(0);
+  const [flowLibraryKey, setFlowLibraryKey] = useState(0);
+  const [groupListsKey, setGroupListsKey] = useState(0);
+
+  const stackOrder: { open: boolean; close: () => void }[] = [
+    { open: projectsTarget, close: () => setProjectsTarget(false) },
+    { open: profileTarget, close: () => setProfileTarget(false) },
+    {
+      open: walletTarget,
+      close: () => {
+        setWalletTarget(false);
+        refreshAccount();
+      },
+    },
+    { open: !!wabaTarget, close: () => setWabaTarget(null) },
+    { open: transactionsTarget, close: () => setTransactionsTarget(false) },
+    { open: aiBillsTarget, close: () => setAiBillsTarget(false) },
+    { open: supportTarget, close: () => setSupportTarget(false) },
+    { open: scannedUsersTarget, close: () => setScannedUsersTarget(false) },
+    { open: projectConfigTarget, close: () => setProjectConfigTarget(false) },
+    { open: contextConfigTarget, close: () => setContextConfigTarget(false) },
+    { open: agentConfigTarget, close: () => setAgentConfigTarget(false) },
+    { open: flowLibraryTarget, close: () => setFlowLibraryTarget(false) },
+    {
+      open: flowBuilderTarget,
+      close: () => {
+        setFlowBuilderTarget(false);
+        setFlowLibraryKey(k => k + 1);
+      },
+    },
+    { open: templatesTarget, close: () => setTemplatesTarget(false) },
+    { open: !!templateEditorTarget, close: () => setTemplateEditorTarget(null) },
+    { open: contactsTarget, close: () => setContactsTarget(false) },
+    { open: groupsTarget, close: () => setGroupsTarget(false) },
+    {
+      open: !!groupDetailsTarget,
+      close: () => {
+        setGroupDetailsTarget(null);
+        setGroupListsKey(k => k + 1);
+      },
+    },
+    { open: casesTarget, close: () => setCasesTarget(false) },
+    { open: !!caseDetailsTarget, close: () => setCaseDetailsTarget(null) },
+    { open: !!createCaseTarget, close: () => setCreateCaseTarget(null) },
+    { open: !!editCaseTarget, close: () => setEditCaseTarget(null) },
+    { open: !!campaignTarget, close: () => setCampaignTarget(null) },
+    { open: createCampaignTarget, close: () => setCreateCampaignTarget(false) },
+    { open: newChatTarget, close: () => setNewChatTarget(false) },
+    { open: !!chatTarget, close: () => setChatTarget(null) },
+  ];
+  const stackOrderRef = useRef(stackOrder);
+  stackOrderRef.current = stackOrder;
+
   const handleBackPress = useCallback(() => {
-    if (chatTarget) {
-      setChatTarget(null);
-      return true;
-    }
-    if (campaignTarget) {
-      setCampaignTarget(null);
-      return true;
-    }
-    if (createCampaignTarget) {
-      setCreateCampaignTarget(false);
-      return true;
-    }
-    if (newChatTarget) {
-      setNewChatTarget(false);
-      return true;
-    }
-    if (editCaseTarget) {
-      setEditCaseTarget(null);
-      return true;
-    }
-    if (createCaseTarget) {
-      setCreateCaseTarget(null);
-      return true;
-    }
-    if (caseDetailsTarget) {
-      setCaseDetailsTarget(null);
-      return true;
-    }
-    if (casesTarget) {
-      setCasesTarget(false);
-      return true;
-    }
-    if (walletTarget) {
-      setWalletTarget(false);
-      return true;
-    }
-    if (wabaTarget) {
-      setWabaTarget(null);
-      return true;
-    }
-    if (scannedUsersTarget) {
-      setScannedUsersTarget(false);
-      return true;
-    }
-    if (contactsTarget) {
-      setContactsTarget(false);
-      return true;
-    }
-    if (groupsTarget) {
-      setGroupsTarget(false);
-      return true;
-    }
-    if (groupDetailsTarget) {
-      setGroupDetailsTarget(null);
-      return true;
-    }
-    if (templateEditorTarget) {
-      setTemplateEditorTarget(null);
-      setTemplatesTarget(true);
-      return true;
-    }
-    if (templatesTarget) {
-      setTemplatesTarget(false);
-      return true;
-    }
-    if (supportTarget) {
-      setSupportTarget(false);
-      return true;
-    }
-    if (contextConfigTarget) {
-      setContextConfigTarget(false);
-      return true;
-    }
-    if (agentConfigTarget) {
-      setAgentConfigTarget(false);
-      return true;
-    }
-    if (flowBuilderTarget) {
-      setFlowBuilderTarget(false);
-      return true;
-    }
-    if (flowLibraryTarget) {
-      setFlowLibraryTarget(false);
-      return true;
-    }
-    if (projectConfigTarget) {
-      setProjectConfigTarget(false);
-      return true;
-    }
-    if (transactionsTarget) {
-      setTransactionsTarget(false);
-      return true;
-    }
-    if (aiBillsTarget) {
-      setAiBillsTarget(false);
-      return true;
-    }
-    if (projectsTarget) {
-      setProjectsTarget(false);
-      return true;
-    }
-    if (profileTarget) {
-      setProfileTarget(false);
-      return true;
+    const layers = stackOrderRef.current;
+    for (let i = layers.length - 1; i >= 0; i--) {
+      if (layers[i].open) {
+        layers[i].close();
+        return true;
+      }
     }
     if (page !== 'dashboard') {
       setPage('dashboard');
       return true;
     }
     return false;
-  }, [
-    chatTarget,
-    campaignTarget,
-    createCampaignTarget,
-    newChatTarget,
-    editCaseTarget,
-    createCaseTarget,
-    caseDetailsTarget,
-    casesTarget,
-    walletTarget,
-    wabaTarget,
-    scannedUsersTarget,
-    contactsTarget,
-    groupsTarget,
-    groupDetailsTarget,
-    templatesTarget,
-    templateEditorTarget,
-    supportTarget,
-    contextConfigTarget,
-    agentConfigTarget,
-    flowBuilderTarget,
-    flowLibraryTarget,
-    projectConfigTarget,
-    transactionsTarget,
-    aiBillsTarget,
-    projectsTarget,
-    profileTarget,
-    page,
-  ]);
+  }, [page]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener(
@@ -527,489 +489,521 @@ export function WorkspaceScreen({
     return () => subscription.remove();
   }, [handleBackPress]);
 
-  const inboxListMounted =
-    page === 'inbox' &&
-    !campaignTarget &&
-    !createCampaignTarget &&
-    !newChatTarget &&
-    !editCaseTarget &&
-    !caseDetailsTarget &&
-    !createCaseTarget &&
-    !casesTarget &&
-    !walletTarget &&
-    !wabaTarget &&
-    !scannedUsersTarget &&
-    !contactsTarget &&
-    !groupsTarget &&
-    !groupDetailsTarget &&
-    !templatesTarget &&
-    !templateEditorTarget &&
-    !supportTarget &&
-    !contextConfigTarget &&
-    !agentConfigTarget &&
-    !flowBuilderTarget &&
-    !flowLibraryTarget &&
-    !projectConfigTarget &&
-    !transactionsTarget &&
-    !aiBillsTarget &&
-    !projectsTarget &&
-    !profileTarget;
+  // The tab content now stays mounted under sub-screens. It used to be
+  // remounted (and so refreshed) when the last sub-screen closed; keep that
+  // by bumping its key when every non-chat layer has been dismissed.
+  const anySubScreenOpen = stackOrder.some(
+    (l, i) => l.open && i !== stackOrder.length - 1,
+  );
+  const [tabRefreshKey, setTabRefreshKey] = useState(0);
+  const prevSubScreenOpen = useRef(anySubScreenOpen);
+  useEffect(() => {
+    if (prevSubScreenOpen.current && !anySubScreenOpen) {
+      setTabRefreshKey(k => k + 1);
+    }
+    prevSubScreenOpen.current = anySubScreenOpen;
+  }, [anySubScreenOpen]);
 
-  if (chatTarget && !inboxListMounted) {
-    return (
-      <View
-        style={{
-          position: 'absolute',
-          top: -insets.top,
-          right: 0,
-          bottom: 0,
-          left: 0,
-          backgroundColor: theme.header,
-        }}
+  const layerStyle = (z: number) => ({ zIndex: 20 + z, elevation: 20 + z });
+  const cardStyle = { backgroundColor: theme.canvas };
+
+  const stackLayers = (
+    <>
+      <StackScreen
+        item={projectsTarget}
+        onRequestClose={stackOrder[0].close}
+        style={layerStyle(0)}
+        contentStyle={cardStyle}
       >
-        <ScreenTransition>
-          <ChatRoomScreen
+        {() => (
+          <ProjectsScreen
+            session={apiSession}
+            projects={projects}
+            currentProjectId={projectId}
+            onSelect={async id => {
+              await onSelectProject(id);
+              setProjectsTarget(false);
+            }}
+            onProjectCreated={async proj => {
+              await onProjectCreated(proj);
+              await onSelectProject(proj.id);
+              setProjectsTarget(false);
+            }}
+            onClose={() => setProjectsTarget(false)}
+            onRechargeWallet={() => {
+              setWalletTarget(true);
+              closeAfterCover(() => setProjectsTarget(false));
+            }}
+            onOpenWaba={targetId => {
+              setWabaTarget(targetId || projectId);
+              closeAfterCover(() => setProjectsTarget(false));
+            }}
+          />
+        )}
+      </StackScreen>
+
+      <StackScreen
+        item={profileTarget}
+        onRequestClose={stackOrder[1].close}
+        style={layerStyle(1)}
+        contentStyle={cardStyle}
+      >
+        {() => (
+          <ProfileScreen
+            session={session}
+            apiSession={apiSession}
+            onSignOut={onSignOut}
+            onBack={() => setProfileTarget(false)}
+          />
+        )}
+      </StackScreen>
+
+      <StackScreen
+        item={walletTarget}
+        onRequestClose={stackOrder[2].close}
+        style={layerStyle(2)}
+        contentStyle={cardStyle}
+      >
+        {() => (
+          <WalletScreen
+            session={apiSession}
+            balance={walletBalance ?? session.balance ?? 0}
+            onBack={() => {
+              setWalletTarget(false);
+              refreshAccount();
+            }}
+            onBalanceUpdated={bal => setWalletBalance(bal)}
+          />
+        )}
+      </StackScreen>
+
+      <StackScreen
+        item={wabaTarget}
+        onRequestClose={stackOrder[3].close}
+        style={layerStyle(3)}
+        contentStyle={cardStyle}
+      >
+        {target => {
+          const targetProjectId =
+            typeof target === 'string' ? target : projectId;
+          const targetProjectName = projects.find(
+            p => p.id === targetProjectId,
+          )?.name;
+          return (
+            <WabaOnboardingScreen
+              session={apiSession}
+              projectId={targetProjectId}
+              projectName={targetProjectName}
+              onBack={() => setWabaTarget(null)}
+            />
+          );
+        }}
+      </StackScreen>
+
+      <StackScreen
+        item={transactionsTarget}
+        onRequestClose={stackOrder[4].close}
+        style={layerStyle(4)}
+        contentStyle={cardStyle}
+      >
+        {() => (
+          <TransactionsScreen
+            session={apiSession}
+            onBack={() => setTransactionsTarget(false)}
+          />
+        )}
+      </StackScreen>
+
+      <StackScreen
+        item={aiBillsTarget}
+        onRequestClose={stackOrder[5].close}
+        style={layerStyle(5)}
+        contentStyle={cardStyle}
+      >
+        {() => (
+          <AiBillsScreen
             projectId={projectId}
             session={apiSession}
-            contactNumber={chatTarget.number}
-            contactName={chatTarget.name}
+            onBack={() => setAiBillsTarget(false)}
+          />
+        )}
+      </StackScreen>
+
+      <StackScreen
+        item={supportTarget}
+        onRequestClose={stackOrder[6].close}
+        style={layerStyle(6)}
+        contentStyle={cardStyle}
+      >
+        {() => (
+          <SupportScreen
+            session={apiSession}
+            onBack={() => setSupportTarget(false)}
+          />
+        )}
+      </StackScreen>
+
+      <StackScreen
+        item={scannedUsersTarget}
+        onRequestClose={stackOrder[7].close}
+        style={layerStyle(7)}
+        contentStyle={cardStyle}
+      >
+        {() => (
+          <ScannedUsersScreen
+            projectId={projectId}
+            session={apiSession}
+            onBack={() => setScannedUsersTarget(false)}
+          />
+        )}
+      </StackScreen>
+
+      <StackScreen
+        item={projectConfigTarget}
+        onRequestClose={stackOrder[8].close}
+        style={layerStyle(8)}
+        contentStyle={cardStyle}
+      >
+        {() => (
+          <ProjectConfigScreen
+            projectId={projectId}
+            session={apiSession}
+            onBack={() => setProjectConfigTarget(false)}
+            onOpenAgent={() => setAgentConfigTarget(true)}
+            onOpenContext={() => setContextConfigTarget(true)}
+            onOpenFlow={() => setFlowLibraryTarget(true)}
+          />
+        )}
+      </StackScreen>
+
+      <StackScreen
+        item={contextConfigTarget}
+        onRequestClose={stackOrder[9].close}
+        style={layerStyle(9)}
+        contentStyle={cardStyle}
+      >
+        {() => (
+          <ContextConfigScreen
+            projectId={projectId}
+            session={apiSession}
+            onBack={() => setContextConfigTarget(false)}
+          />
+        )}
+      </StackScreen>
+
+      <StackScreen
+        item={agentConfigTarget}
+        onRequestClose={stackOrder[10].close}
+        style={layerStyle(10)}
+        contentStyle={cardStyle}
+      >
+        {() => (
+          <AgentConfigScreen
+            projectId={projectId}
+            session={apiSession}
+            onBack={() => setAgentConfigTarget(false)}
+          />
+        )}
+      </StackScreen>
+
+      <StackScreen
+        item={flowLibraryTarget}
+        onRequestClose={stackOrder[11].close}
+        style={layerStyle(11)}
+        contentStyle={cardStyle}
+      >
+        {() => (
+          <FlowLibraryScreen
+            key={flowLibraryKey}
+            projectId={projectId}
+            session={apiSession}
+            onBack={() => setFlowLibraryTarget(false)}
+            onOpenFlow={id => {
+              setFlowToOpen(id);
+              setFlowBuilderTarget(true);
+            }}
+          />
+        )}
+      </StackScreen>
+
+      <StackScreen
+        item={flowBuilderTarget}
+        onRequestClose={stackOrder[12].close}
+        style={layerStyle(12)}
+        contentStyle={cardStyle}
+      >
+        {() => (
+          <FlowBuilderScreen
+            projectId={projectId}
+            session={apiSession}
+            initialFlowId={flowToOpen}
+            onBack={stackOrder[12].close}
+          />
+        )}
+      </StackScreen>
+
+      <StackScreen
+        item={templatesTarget}
+        onRequestClose={stackOrder[13].close}
+        style={layerStyle(13)}
+        contentStyle={cardStyle}
+      >
+        {() => (
+          <TemplatesScreen
+            key={templatesKey}
+            projectId={projectId}
+            session={apiSession}
+            onBack={() => setTemplatesTarget(false)}
+            onCreate={() => setTemplateEditorTarget({})}
+            onEdit={template => setTemplateEditorTarget(template)}
+          />
+        )}
+      </StackScreen>
+
+      <StackScreen
+        item={templateEditorTarget}
+        onRequestClose={stackOrder[14].close}
+        style={layerStyle(14)}
+        contentStyle={cardStyle}
+      >
+        {target => (
+          <TemplateEditorScreen
+            projectId={projectId}
+            session={apiSession}
+            template={target.template_id || target.id ? target : undefined}
+            onBack={() => setTemplateEditorTarget(null)}
+            onSaved={() => {
+              setTemplateEditorTarget(null);
+              setTemplatesKey(k => k + 1);
+              // The editor is only reached from Templates, but make sure the
+              // list is there to return to.
+              setTemplatesTarget(true);
+            }}
+          />
+        )}
+      </StackScreen>
+
+      <StackScreen
+        item={contactsTarget}
+        onRequestClose={stackOrder[15].close}
+        style={layerStyle(15)}
+        contentStyle={cardStyle}
+      >
+        {() => (
+          <ContactsScreen
+            key={groupListsKey}
+            projectId={projectId}
+            session={apiSession}
+            onBack={() => setContactsTarget(false)}
+            onOpenChat={(contactNumber, contactName) => {
+              setChatTarget({ number: contactNumber, name: contactName });
+              closeAfterCover(() => setContactsTarget(false));
+            }}
+            onOpenGroupDetails={group => {
+              setGroupDetailsPrevious('contacts');
+              setGroupDetailsTarget(group);
+            }}
+          />
+        )}
+      </StackScreen>
+
+      <StackScreen
+        item={groupsTarget}
+        onRequestClose={stackOrder[16].close}
+        style={layerStyle(16)}
+        contentStyle={cardStyle}
+      >
+        {() => (
+          <GroupsScreen
+            key={groupListsKey}
+            projectId={projectId}
+            session={apiSession}
+            onBack={() => setGroupsTarget(false)}
+            onOpen={group => {
+              setGroupDetailsPrevious('groups');
+              setGroupDetailsTarget(group);
+            }}
+          />
+        )}
+      </StackScreen>
+
+      <StackScreen
+        item={groupDetailsTarget}
+        onRequestClose={stackOrder[17].close}
+        style={layerStyle(17)}
+        contentStyle={cardStyle}
+      >
+        {group => (
+          <GroupDetailsScreen
+            projectId={projectId}
+            session={apiSession}
+            group={group}
+            onBack={() => {
+              stackOrder[17].close();
+              // Return to whichever list opened the details.
+              if (groupDetailsPrevious === 'contacts') {
+                setContactsTarget(true);
+              } else {
+                setGroupsTarget(true);
+              }
+            }}
+            onOpenChat={(contactNumber, contactName) => {
+              setChatTarget({ number: contactNumber, name: contactName });
+              closeAfterCover(() => setGroupDetailsTarget(null));
+            }}
+          />
+        )}
+      </StackScreen>
+
+      <StackScreen
+        item={casesTarget}
+        onRequestClose={stackOrder[18].close}
+        style={layerStyle(18)}
+        contentStyle={cardStyle}
+      >
+        {() => (
+          <OpenCasesScreen
+            projectId={projectId}
+            session={apiSession}
+            onOpenDetails={contact => setCaseDetailsTarget(contact)}
+            onCreateCase={contact => setCreateCaseTarget(contact || true)}
+          />
+        )}
+      </StackScreen>
+
+      <StackScreen
+        item={caseDetailsTarget}
+        onRequestClose={stackOrder[19].close}
+        style={layerStyle(19)}
+        contentStyle={cardStyle}
+      >
+        {target => (
+          <CaseDetailsScreen
+            projectId={projectId}
+            session={apiSession}
+            contactNumber={target.number}
+            contactName={target.name}
+            onBack={() => setCaseDetailsTarget(null)}
+            onOpenChat={(contactNumber, contactName) => {
+              setChatTarget({ number: contactNumber, name: contactName });
+              closeAfterCover(() => setCaseDetailsTarget(null));
+            }}
+            onEditCase={caseItem => {
+              setEditCaseTarget({ caseItem, returnToDetails: true });
+            }}
+          />
+        )}
+      </StackScreen>
+
+      <StackScreen
+        item={createCaseTarget}
+        onRequestClose={stackOrder[20].close}
+        style={layerStyle(20)}
+        contentStyle={cardStyle}
+      >
+        {target => (
+          <CreateCaseScreen
+            projectId={projectId}
+            session={apiSession}
+            initialContact={typeof target === 'object' ? target : null}
+            onBack={() => setCreateCaseTarget(null)}
+            onCreated={() => {
+              setCreateCaseTarget(null);
+              setPage('cases');
+            }}
+          />
+        )}
+      </StackScreen>
+
+      <StackScreen
+        item={editCaseTarget}
+        onRequestClose={stackOrder[21].close}
+        style={layerStyle(21)}
+        contentStyle={cardStyle}
+      >
+        {target => (
+          <EditCaseScreen
+            projectId={projectId}
+            session={apiSession}
+            caseItem={target.caseItem}
+            onBack={() => setEditCaseTarget(null)}
+            onSaved={() => setEditCaseTarget(null)}
+          />
+        )}
+      </StackScreen>
+
+      <StackScreen
+        item={campaignTarget}
+        onRequestClose={stackOrder[22].close}
+        style={layerStyle(22)}
+        contentStyle={cardStyle}
+      >
+        {target => (
+          <CampaignDetailsScreen
+            projectId={projectId}
+            session={apiSession}
+            campaignId={target.id}
+            campaignName={target.name}
+            onBack={() => setCampaignTarget(null)}
+          />
+        )}
+      </StackScreen>
+
+      <StackScreen
+        item={createCampaignTarget}
+        onRequestClose={stackOrder[23].close}
+        style={layerStyle(23)}
+        contentStyle={cardStyle}
+      >
+        {() => (
+          <CreateCampaignScreen
+            projectId={projectId}
+            session={apiSession}
+            onBack={() => setCreateCampaignTarget(false)}
+            onCreated={() => {
+              setCreateCampaignTarget(false);
+              setPage('campaigns');
+            }}
+          />
+        )}
+      </StackScreen>
+
+      <StackScreen
+        item={newChatTarget}
+        onRequestClose={stackOrder[24].close}
+        style={layerStyle(24)}
+        contentStyle={cardStyle}
+      >
+        {() => (
+          <NewChatScreen
+            onBack={() => setNewChatTarget(false)}
+            onStartChat={(number, name) => {
+              setChatTarget({ number, name });
+              closeAfterCover(() => setNewChatTarget(false));
+            }}
+          />
+        )}
+      </StackScreen>
+
+      <StackScreen
+        item={chatTarget}
+        onRequestClose={stackOrder[25].close}
+        style={[layerStyle(25), { top: -insets.top }]}
+        contentStyle={{ backgroundColor: theme.header }}
+      >
+        {target => (
+          <ChatRoomScreen
+            key={`${projectId}:${chatTarget.number}`}
+            projectId={projectId}
+            session={apiSession}
+            contactNumber={target.number}
+            contactName={target.name}
             onBack={() => setChatTarget(null)}
           />
-        </ScreenTransition>
-      </View>
-    );
-  }
-
-  if (campaignTarget) {
-    return (
-      <ScreenTransition>
-        <CampaignDetailsScreen
-          projectId={projectId}
-          session={apiSession}
-          campaignId={campaignTarget.id}
-          campaignName={campaignTarget.name}
-          onBack={() => setCampaignTarget(null)}
-        />
-      </ScreenTransition>
-    );
-  }
-
-  if (createCampaignTarget) {
-    return (
-      <ScreenTransition>
-        <CreateCampaignScreen
-          projectId={projectId}
-          session={apiSession}
-          onBack={() => setCreateCampaignTarget(false)}
-          onCreated={() => {
-            setCreateCampaignTarget(false);
-            setPage('campaigns');
-          }}
-        />
-      </ScreenTransition>
-    );
-  }
-
-  if (newChatTarget) {
-    return (
-      <ScreenTransition>
-        <NewChatScreen
-          onBack={() => setNewChatTarget(false)}
-          onStartChat={(number, name) => {
-            setNewChatTarget(false);
-            setChatTarget({ number, name });
-          }}
-        />
-      </ScreenTransition>
-    );
-  }
-
-  if (editCaseTarget) {
-    return (
-      <ScreenTransition>
-        <EditCaseScreen
-          projectId={projectId}
-          session={apiSession}
-          caseItem={editCaseTarget.caseItem}
-          onBack={() => setEditCaseTarget(null)}
-          onSaved={() => {
-            setEditCaseTarget(null);
-          }}
-        />
-      </ScreenTransition>
-    );
-  }
-
-  if (caseDetailsTarget) {
-    return (
-      <ScreenTransition>
-        <CaseDetailsScreen
-          projectId={projectId}
-          session={apiSession}
-          contactNumber={caseDetailsTarget.number}
-          contactName={caseDetailsTarget.name}
-          onBack={() => setCaseDetailsTarget(null)}
-          onOpenChat={(contactNumber, contactName) => {
-            setCaseDetailsTarget(null);
-            setChatTarget({ number: contactNumber, name: contactName });
-          }}
-          onEditCase={(caseItem) => {
-            setEditCaseTarget({ caseItem, returnToDetails: true });
-          }}
-        />
-      </ScreenTransition>
-    );
-  }
-
-  if (createCaseTarget) {
-    const initialContact = typeof createCaseTarget === 'object' ? createCaseTarget : null;
-    return (
-      <ScreenTransition>
-        <CreateCaseScreen
-          projectId={projectId}
-          session={apiSession}
-          initialContact={initialContact}
-          onBack={() => setCreateCaseTarget(null)}
-          onCreated={() => {
-            setCreateCaseTarget(null);
-            setPage('cases');
-          }}
-        />
-      </ScreenTransition>
-    );
-  }
-
-  if (casesTarget) {
-    return (
-      <ScreenTransition>
-        <OpenCasesScreen
-          projectId={projectId}
-          session={apiSession}
-          onOpenDetails={(contact) => {
-            setCaseDetailsTarget(contact);
-          }}
-          onCreateCase={(contact) => setCreateCaseTarget(contact || true)}
-        />
-      </ScreenTransition>
-    );
-  }
-
-  if (walletTarget) {
-    return (
-      <ScreenTransition>
-        <WalletScreen
-          session={apiSession}
-          balance={walletBalance ?? session.balance ?? 0}
-          onBack={() => {
-            setWalletTarget(false);
-            refreshAccount();
-          }}
-          onBalanceUpdated={bal => setWalletBalance(bal)}
-        />
-      </ScreenTransition>
-    );
-  }
-
-  if (wabaTarget) {
-    const targetProjectId = typeof wabaTarget === 'string' ? wabaTarget : projectId;
-    const targetProjectName = projects.find(p => p.id === targetProjectId)?.name;
-    return (
-      <ScreenTransition>
-        <WabaOnboardingScreen
-          session={apiSession}
-          projectId={targetProjectId}
-          projectName={targetProjectName}
-          onBack={() => setWabaTarget(null)}
-        />
-      </ScreenTransition>
-    );
-  }
-
-  if (scannedUsersTarget) {
-    return (
-      <ScreenTransition>
-        <ScannedUsersScreen
-          projectId={projectId}
-          session={apiSession}
-          onBack={() => setScannedUsersTarget(false)}
-        />
-      </ScreenTransition>
-    );
-  }
-
-  if (contactsTarget) {
-    return (
-      <ScreenTransition>
-        <ContactsScreen
-          projectId={projectId}
-          session={apiSession}
-          onBack={() => setContactsTarget(false)}
-          onOpenChat={(contactNumber, contactName) => {
-            setContactsTarget(false);
-            setChatTarget({ number: contactNumber, name: contactName });
-          }}
-          onOpenGroupDetails={(group) => {
-            setContactsTarget(false);
-            setGroupDetailsPrevious('contacts');
-            setGroupDetailsTarget(group);
-          }}
-        />
-      </ScreenTransition>
-    );
-  }
-
-  if (groupsTarget) {
-    return (
-      <ScreenTransition>
-        <GroupsScreen
-          projectId={projectId}
-          session={apiSession}
-          onBack={() => setGroupsTarget(false)}
-          onOpen={group => {
-            setGroupsTarget(false);
-            setGroupDetailsPrevious('groups');
-            setGroupDetailsTarget(group);
-          }}
-        />
-      </ScreenTransition>
-    );
-  }
-
-  if (groupDetailsTarget) {
-    return (
-      <ScreenTransition>
-        <GroupDetailsScreen
-          projectId={projectId}
-          session={apiSession}
-          group={groupDetailsTarget}
-          onBack={() => {
-            setGroupDetailsTarget(null);
-            if (groupDetailsPrevious === 'contacts') {
-              setContactsTarget(true);
-            } else {
-              setGroupsTarget(true);
-            }
-          }}
-          onOpenChat={(contactNumber, contactName) => {
-            setGroupDetailsTarget(null);
-            setChatTarget({ number: contactNumber, name: contactName });
-          }}
-        />
-      </ScreenTransition>
-    );
-  }
-
-  if (templatesTarget) {
-    return (
-      <ScreenTransition>
-        <TemplatesScreen
-          projectId={projectId}
-          session={apiSession}
-          onBack={() => setTemplatesTarget(false)}
-          onCreate={() => {
-            setTemplatesTarget(false);
-            setTemplateEditorTarget({});
-          }}
-          onEdit={template => {
-            setTemplatesTarget(false);
-            setTemplateEditorTarget(template);
-          }}
-        />
-      </ScreenTransition>
-    );
-  }
-
-  if (templateEditorTarget) {
-    return (
-      <ScreenTransition>
-        <TemplateEditorScreen
-          projectId={projectId}
-          session={apiSession}
-          template={
-            templateEditorTarget.template_id || templateEditorTarget.id
-              ? templateEditorTarget
-              : undefined
-          }
-          onBack={() => {
-            setTemplateEditorTarget(null);
-            setTemplatesTarget(true);
-          }}
-          onSaved={() => {
-            setTemplateEditorTarget(null);
-            setTemplatesTarget(true);
-          }}
-        />
-      </ScreenTransition>
-    );
-  }
-
-  if (supportTarget) {
-    return (
-      <ScreenTransition>
-        <SupportScreen
-          session={apiSession}
-          onBack={() => setSupportTarget(false)}
-        />
-      </ScreenTransition>
-    );
-  }
-
-  if (contextConfigTarget) {
-    return (
-      <ScreenTransition>
-        <ContextConfigScreen
-          projectId={projectId}
-          session={apiSession}
-          onBack={() => {
-            setContextConfigTarget(false);
-            setProjectConfigTarget(true);
-          }}
-        />
-      </ScreenTransition>
-    );
-  }
-
-  if (agentConfigTarget) {
-    return (
-      <ScreenTransition>
-        <AgentConfigScreen
-          projectId={projectId}
-          session={apiSession}
-          onBack={() => {
-            setAgentConfigTarget(false);
-            setProjectConfigTarget(true);
-          }}
-        />
-      </ScreenTransition>
-    );
-  }
-
-  if (flowBuilderTarget) {
-    return (
-      <ScreenTransition>
-        <FlowBuilderScreen
-          projectId={projectId}
-          session={apiSession}
-          initialFlowId={flowToOpen}
-          onBack={() => {
-            setFlowBuilderTarget(false);
-            setFlowLibraryTarget(true);
-          }}
-        />
-      </ScreenTransition>
-    );
-  }
-
-  if (flowLibraryTarget) {
-    return (
-      <ScreenTransition>
-        <FlowLibraryScreen
-          projectId={projectId}
-          session={apiSession}
-          onBack={() => {
-            setFlowLibraryTarget(false);
-            setProjectConfigTarget(true);
-          }}
-          onOpenFlow={id => {
-            setFlowToOpen(id);
-            setFlowLibraryTarget(false);
-            setFlowBuilderTarget(true);
-          }}
-        />
-      </ScreenTransition>
-    );
-  }
-
-  if (projectConfigTarget) {
-    return (
-      <ScreenTransition>
-        <ProjectConfigScreen
-          projectId={projectId}
-          session={apiSession}
-          onBack={() => setProjectConfigTarget(false)}
-          onOpenAgent={() => {
-            setProjectConfigTarget(false);
-            setAgentConfigTarget(true);
-          }}
-          onOpenContext={() => {
-            setProjectConfigTarget(false);
-            setContextConfigTarget(true);
-          }}
-          onOpenFlow={() => {
-            setProjectConfigTarget(false);
-            setFlowLibraryTarget(true);
-          }}
-        />
-      </ScreenTransition>
-    );
-  }
-
-  if (transactionsTarget) {
-    return (
-      <ScreenTransition>
-        <TransactionsScreen
-          session={apiSession}
-          onBack={() => setTransactionsTarget(false)}
-        />
-      </ScreenTransition>
-    );
-  }
-
-  if (aiBillsTarget) {
-    return (
-      <ScreenTransition>
-        <AiBillsScreen
-          projectId={projectId}
-          session={apiSession}
-          onBack={() => setAiBillsTarget(false)}
-        />
-      </ScreenTransition>
-    );
-  }
-
-  // Full-mode "Projects" hub (create/manage/switch), reached from the menu.
-  if (projectsTarget) {
-    return (
-      <ScreenTransition>
-        <ProjectsScreen
-          session={apiSession}
-          projects={projects}
-          currentProjectId={projectId}
-          onSelect={async id => {
-            await onSelectProject(id);
-            setProjectsTarget(false);
-          }}
-          onProjectCreated={async proj => {
-            await onProjectCreated(proj);
-            await onSelectProject(proj.id);
-            setProjectsTarget(false);
-          }}
-          onClose={() => setProjectsTarget(false)}
-          onRechargeWallet={() => {
-            setProjectsTarget(false);
-            setWalletTarget(true);
-          }}
-          onOpenWaba={(targetId) => {
-            setProjectsTarget(false);
-            setWabaTarget(targetId || projectId);
-          }}
-        />
-      </ScreenTransition>
-    );
-  }
-
-  if (profileTarget) {
-    return (
-      <ScreenTransition>
-        <ProfileScreen
-          session={session}
-          apiSession={apiSession}
-          onSignOut={onSignOut}
-          onBack={() => setProfileTarget(false)}
-        />
-      </ScreenTransition>
-    );
-  }
+        )}
+      </StackScreen>
+    </>
+  );
 
   const tabs = hasProject ? FULL_TABS : LIMITED_TABS;
 
@@ -1031,17 +1025,63 @@ export function WorkspaceScreen({
             { backgroundColor: theme.header, borderBottomColor: theme.border },
           ]}
         >
-          <View style={styles.headerTitleGroup}>
-            <BrandMark
-              size={36}
-              subtitle={hasProject ? currentProject?.name || '' : undefined}
-            />
-            {!hasProject && (
-              <Text style={[styles.greeting, { color: theme.muted }]}>
-                Set up your first workspace
-              </Text>
-            )}
-          </View>
+          {hasProject ? (
+            <ScalePressable
+              accessibilityRole="button"
+              accessibilityLabel="Choose another project"
+              onPress={() => setProjectsTarget(true)}
+              style={styles.headerTitleGroup}
+              activeScale={0.98}
+            >
+              {projectProfileImage ? (
+                <ProjectAvatar
+                  name={projectName || 'P'}
+                  image={projectProfileImage}
+                  size={40}
+                  borderRadius={12}
+                />
+              ) : (
+                <View
+                  style={[
+                    styles.workspaceAvatar,
+                    { backgroundColor: theme.isDark ? theme.surface : theme.primary, borderColor: theme.border },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.workspaceAvatarText,
+                      { color: theme.isDark ? theme.accent : '#FFFFFF' },
+                    ]}
+                  >
+                    {getInitials(projectName || 'P')}
+                  </Text>
+                </View>
+              )}
+              <View style={styles.workspaceText}>
+                <Text style={[styles.workspaceCaption, { color: theme.muted }]}>
+                  Workspace
+                </Text>
+                <View style={styles.workspaceNameRow}>
+                  <Text
+                    style={[styles.workspaceName, { color: theme.ink }]}
+                    numberOfLines={1}
+                  >
+                    {projectName || 'Select project'}
+                  </Text>
+                  <ChevronDown size={16} color={theme.muted} strokeWidth={2.4} />
+                </View>
+              </View>
+            </ScalePressable>
+          ) : (
+            <View style={styles.headerTitleGroup}>
+              <View style={styles.workspaceText}>
+                <BrandMark size={36} />
+                <Text style={[styles.greeting, { color: theme.muted }]}>
+                  Set up your first workspace
+                </Text>
+              </View>
+            </View>
+          )}
 
           <View style={styles.headerActions}>
             {hasProject && (
@@ -1050,39 +1090,13 @@ export function WorkspaceScreen({
                   accessibilityRole="button"
                   accessibilityLabel="Open Wallet"
                   onPress={() => setWalletTarget(true)}
-                  style={styles.actionBtn}
-                  hitSlop={8}
+                  style={[
+                    styles.actionBtn,
+                    { backgroundColor: theme.surface, borderColor: theme.border },
+                  ]}
+                  hitSlop={4}
                 >
-                  <Wallet size={20} color={theme.ink} strokeWidth={2.5} />
-                </ScalePressable>
-                <ScalePressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Choose another project"
-                  onPress={() => setProjectsTarget(true)}
-                  style={styles.projectSwitchBtn}
-                  hitSlop={8}
-                >
-                  <View
-                    style={[
-                      styles.projectAvatarContainer,
-                      { borderColor: theme.emerald },
-                    ]}
-                  >
-                    <ProjectAvatar
-                      name={currentProject?.name || 'P'}
-                      image={projectProfileImage}
-                      size={34}
-                      borderRadius={17}
-                    />
-                    <View
-                      style={[
-                        styles.projectSwitchBadge,
-                        { backgroundColor: theme.emerald },
-                      ]}
-                    >
-                      <ArrowLeftRight size={8} color="#FFF" strokeWidth={3} />
-                    </View>
-                  </View>
+                  <Wallet size={19} color={theme.ink} strokeWidth={2.2} />
                 </ScalePressable>
                 <View ref={menuButtonRef} collapsable={false}>
                   <ScalePressable
@@ -1098,12 +1112,26 @@ export function WorkspaceScreen({
                         setIsMenuVisible(true);
                       });
                     }}
-                    style={styles.actionBtn}
-                    hitSlop={8}
+                    style={[
+                      styles.actionBtn,
+                      { backgroundColor: theme.surface, borderColor: theme.border },
+                    ]}
+                    hitSlop={4}
                   >
-                    <MoreVertical size={20} color={theme.ink} strokeWidth={2.5} />
+                    <MoreVertical size={19} color={theme.ink} strokeWidth={2.2} />
                   </ScalePressable>
                 </View>
+                <ScalePressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Open profile"
+                  onPress={() => setProfileTarget(true)}
+                  style={[styles.profileAvatar, { backgroundColor: theme.mint }]}
+                  hitSlop={4}
+                >
+                  <Text style={[styles.profileAvatarText, { color: theme.mintText }]}>
+                    {getInitials(session.profile?.name || session.username || 'U').charAt(0)}
+                  </Text>
+                </ScalePressable>
               </>
             )}
           </View>
@@ -1112,8 +1140,8 @@ export function WorkspaceScreen({
 
       <View style={styles.body}>
         <FadeInView
-          key={hasProject ? page : `limited-${page}`}
-          duration={220}
+          key={`${hasProject ? page : `limited-${page}`}-${tabRefreshKey}`}
+          duration={180}
           distance={6}
           style={{ flex: 1 }}
         >
@@ -1147,7 +1175,10 @@ export function WorkspaceScreen({
                 showsVerticalScrollIndicator={false}
               >
                 <View
-                  style={[styles.emptyIcon, { backgroundColor: theme.mint }]}
+                  style={[
+                    styles.emptyIcon,
+                    { backgroundColor: theme.mint, borderColor: theme.border },
+                  ]}
                 >
                   <Briefcase size={30} color={theme.emerald} strokeWidth={2} />
                 </View>
@@ -1163,18 +1194,24 @@ export function WorkspaceScreen({
                   onPress={() => setPage('projects')}
                   style={[
                     styles.primaryButton,
-                    { backgroundColor: theme.emerald },
+                    { backgroundColor: theme.primary },
                   ]}
                 >
-                  <Text style={styles.primaryButtonText}>Create a project</Text>
+                  <Text style={[styles.primaryButtonText, { color: theme.onPrimary }]}>
+                    Create a project
+                  </Text>
                 </ScalePressable>
                 <ScalePressable
                   onPress={() => setPage('wallet')}
-                  style={styles.secondaryLink}
+                  style={[
+                    styles.secondaryLink,
+                    { backgroundColor: theme.surface, borderColor: theme.border },
+                  ]}
                   hitSlop={8}
                 >
+                  <Wallet size={18} color={theme.emerald} strokeWidth={2.2} />
                   <Text
-                    style={[styles.secondaryLinkText, { color: theme.emerald }]}
+                    style={[styles.secondaryLinkText, { color: theme.ink }]}
                   >
                     Add funds to wallet
                   </Text>
@@ -1185,16 +1222,12 @@ export function WorkspaceScreen({
                   style={[
                     styles.logoutButton,
                     {
-                      backgroundColor: theme.isDark
-                        ? theme.danger
-                        : theme.dangerBg,
-                      borderColor: theme.isDark
-                        ? theme.danger
-                        : theme.dangerBorder,
+                      backgroundColor: theme.dangerBg,
+                      borderColor: theme.dangerBorder,
                     },
                   ]}
                 >
-                  <Text style={[styles.logoutButtonText, { color: '#FFFFFF' }]}>
+                  <Text style={[styles.logoutButtonText, { color: theme.danger }]}>
                     Log Out
                   </Text>
                 </ScalePressable>
@@ -1263,7 +1296,10 @@ export function WorkspaceScreen({
       {!isKeyboardScreenVisible && <View
         style={[
           styles.tabBar,
-          { backgroundColor: theme.header, borderTopColor: theme.border },
+          {
+            backgroundColor: theme.surface,
+            borderTopColor: theme.border,
+          },
         ]}
       >
         {tabs.map(tab => {
@@ -1287,29 +1323,26 @@ export function WorkspaceScreen({
               style={styles.tabItem}
             >
               <View
-                style={[
-                  styles.tabPill,
-                  active && {
-                    backgroundColor: theme.isDark
-                      ? 'rgba(255,255,255,0.08)'
-                      : 'rgba(11, 205, 21, 0.09)',
-                    borderRadius: 12,
-                  },
-                ]}
+                style={styles.tabInner}
               >
-                <View style={styles.tabIconWrap}>
+                <View
+                  style={[
+                    styles.tabPill,
+                    active && { backgroundColor: theme.mint },
+                  ]}
+                >
                   <Icon
-                    size={22}
-                    color={active ? theme.emerald : theme.ink}
-                    strokeWidth={active ? 2.5 : 2}
+                    size={21}
+                    color={active ? theme.emerald : theme.muted}
+                    strokeWidth={active ? 2.4 : 2}
                   />
                   {showBadge && (
                     <View
                       style={[
                         styles.tabBadge,
                         {
-                          backgroundColor: theme.emerald,
-                          borderColor: theme.header,
+                          backgroundColor: theme.badge,
+                          borderColor: theme.surface,
                         },
                       ]}
                     >
@@ -1322,7 +1355,7 @@ export function WorkspaceScreen({
                 <Text
                   style={[
                     styles.tabLabel,
-                    { color: active ? theme.emerald : theme.ink },
+                    { color: active ? theme.ink : theme.muted },
                     active && styles.tabLabelActive,
                   ]}
                 >
@@ -1516,36 +1549,18 @@ export function WorkspaceScreen({
           onClose={() => setProjectQrModalOpen(false)}
           session={apiSession}
           projectId={projectId}
-          projectName={currentProject?.name || 'Current Project'}
+          projectName={projectName || 'Current Project'}
           projectImage={projectProfileImage}
         />
       )}
 
-      {chatTarget ? (
-        <View
-          style={[
-            styles.chatOverlay,
-            { backgroundColor: theme.header, top: -insets.top },
-          ]}
-        >
-          <ScreenTransition>
-            <ChatRoomScreen
-              projectId={projectId}
-              session={apiSession}
-              contactNumber={chatTarget.number}
-              contactName={chatTarget.name}
-              onBack={() => setChatTarget(null)}
-            />
-          </ScreenTransition>
-        </View>
-      ) : null}
+      {stackLayers}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  chatOverlay: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 30, elevation: 30 },
   logo: {
     width: 42,
     height: 42,
@@ -1555,21 +1570,55 @@ const styles = StyleSheet.create({
   },
   logoText: { fontSize: 25, fontWeight: '900' },
   header: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
   },
-  headerTitleGroup: { flex: 1, minWidth: 0, marginRight: 8, justifyContent: 'center' },
-  greeting: { fontSize: 11, fontWeight: '600', letterSpacing: 0.5 },
-  headerName: { fontSize: 24, fontWeight: '900', letterSpacing: -0.3 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  actionBtn: {
+  headerTitleGroup: {
+    flex: 1,
+    minWidth: 0,
+    marginRight: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  workspaceAvatar: {
     width: 40,
     height: 40,
     borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  workspaceAvatarText: { fontSize: 15, fontWeight: '800', letterSpacing: 0.2 },
+  workspaceText: { flex: 1, minWidth: 0, justifyContent: 'center' },
+  workspaceCaption: { fontSize: 12, fontWeight: '500' },
+  workspaceNameRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  workspaceName: {
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+    flexShrink: 1,
+  },
+  profileAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 2,
+  },
+  profileAvatarText: { fontSize: 15, fontWeight: '800' },
+  greeting: { fontSize: 11, fontWeight: '600', letterSpacing: 0.5 },
+  headerName: { fontSize: 24, fontWeight: '900', letterSpacing: -0.3 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  actionBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: radii.md,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1629,84 +1678,99 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 8,
-    paddingBottom: 10,
+    paddingTop: 9,
+    paddingBottom: 9,
+    minHeight: 64,
     // Android does not deliver presses to fully transparent empty space.
     backgroundColor: 'rgba(0,0,0,0.01)',
   },
-  tabPill: {
+  tabInner: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 16,
-    minWidth: 64,
   },
-  tabIconWrap: {
+  tabPill: {
+    width: 56,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
     position: 'relative',
   },
   tabBadge: {
     position: 'absolute',
-    top: -5,
-    right: -9,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    paddingHorizontal: 3,
+    top: -4,
+    right: 6,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
   },
   tabBadgeText: {
     color: '#FFF',
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '800',
   },
-  tabLabel: { fontSize: 11, fontWeight: '600', marginTop: 2 },
-  tabLabelActive: { fontWeight: '800' },
+  tabLabel: { fontSize: 11, fontWeight: '600', marginTop: 4 },
+  tabLabelActive: { fontWeight: '700' },
 
   noProjectPage: {
     flexGrow: 1,
-    alignItems: 'center',
+    alignItems: 'stretch',
     justifyContent: 'center',
-    padding: 28,
+    paddingHorizontal: 24,
+    paddingVertical: 32,
   },
   emptyIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 22,
+    width: 72,
+    height: 72,
+    borderRadius: radii.xl,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'center',
   },
   emptyTitle: {
-    fontSize: 22,
+    fontSize: 28,
     fontWeight: '800',
-    marginTop: 20,
+    letterSpacing: -0.7,
+    marginTop: 22,
     textAlign: 'center',
   },
   emptyCopy: {
-    fontSize: 14,
-    lineHeight: 21,
+    fontSize: 15,
+    lineHeight: 22,
     textAlign: 'center',
     marginTop: 8,
+    paddingHorizontal: 8,
   },
   primaryButton: {
-    height: 48,
-    minWidth: 200,
-    marginTop: 24,
-    borderRadius: 14,
+    height: 54,
+    marginTop: 28,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  primaryButtonText: { color: '#FFF', fontWeight: '800', fontSize: 15 },
-  secondaryLink: { marginTop: 16, paddingVertical: 6, paddingHorizontal: 12 },
-  secondaryLinkText: { fontSize: 14, fontWeight: '700' },
+  primaryButtonText: { color: '#FFF', fontWeight: '700', fontSize: 16 },
+  secondaryLink: {
+    marginTop: 12,
+    height: 52,
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  secondaryLinkText: { fontSize: 15, fontWeight: '700' },
 
   menuOverlay: { flex: 1, backgroundColor: 'transparent' },
   menuContent: {
     position: 'absolute',
-    width: 180,
-    borderRadius: 12,
+    width: 200,
+    borderRadius: radii.md,
     borderWidth: 1,
     paddingVertical: 8,
     shadowColor: '#000',
@@ -1728,12 +1792,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 100,
+    marginTop: 40,
     borderWidth: 1,
-    paddingHorizontal: 80,
   },
   logoutButtonText: {
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: '700',
   },
 });

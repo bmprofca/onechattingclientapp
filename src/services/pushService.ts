@@ -12,6 +12,10 @@ import {
   setBackgroundMessageHandler,
   type RemoteMessage,
 } from '@react-native-firebase/messaging';
+import {
+  getNotificationTarget,
+  type NotificationTarget,
+} from './notificationTarget';
 import { post, type ApiSession } from '../api/client';
 let currentSession: ApiSession | null = null;
 let refreshListenerReady = false;
@@ -84,6 +88,7 @@ export function listenForNotificationOpens(
   onOpen: (contactNumber: string, contactName: string, projectId?: string) => void,
 ) {
   const openFrom = (message: RemoteMessage | null) => {
+    if (!message) return;
     const data = message?.data || {};
     const contactNumber = String(data.contactNumber || '');
     if (!contactNumber) return;

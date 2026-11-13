@@ -9,6 +9,10 @@ import { AppState, Platform, PermissionsAndroid } from 'react-native';
 import type { ApiSession } from '../api/client';
 import { markAsRead, sendMessage } from '../api/workspace';
 import { loadSession } from './session';
+import {
+  getNotificationTarget,
+  type NotificationTarget,
+} from './notificationTarget';
 
 const MESSAGE_CHANNEL_ID = 'onechat_messages';
 const MESSAGE_CHANNEL_NAME = 'Chat Messages';
@@ -16,8 +20,8 @@ const APP_NAME = 'OneChatting';
 
 /**
  * Callback type for when user taps a notification.
- * The handler receives the contact number and name so the app can
- * navigate to the correct chat room.
+ * The handler receives a validated target so the app can open the correct
+ * project-scoped screen.
  */
 export type NotificationTapHandler = (
   contactNumber: string,
@@ -30,6 +34,7 @@ type NotificationTapData = {
   contactName?: string;
   projectId?: string;
   messageWamid?: string;
+  [key: string]: unknown;
 };
 
 class NotificationService {
