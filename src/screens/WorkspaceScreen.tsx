@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { BackHandler, Dimensions, Modal, Pressable, ScrollView, StyleSheet, Text, View, Animated, Easing } from 'react-native';
+import { BackHandler, Modal, Pressable, ScrollView, StyleSheet, Text, View, Animated, Easing } from 'react-native';
 import { ArrowLeftRight, ChevronDown, Home, MessageCircle, Megaphone, User, Wallet, MoreVertical, Briefcase, HelpCircle, Brain, Settings, ReceiptText, QrCode, FolderOpen, Users, FileText } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { getAccountProfile } from '../api/auth';
@@ -167,7 +167,7 @@ export function WorkspaceScreen({
   const [templateEditorTarget, setTemplateEditorTarget] = useState<any>(null);
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const menuButtonRef = useRef<View>(null);
-  const [menuAnchor, setMenuAnchor] = useState({ top: 0, right: 12 });
+  const [menuAnchor, setMenuAnchor] = useState({ top: 0 });
   const [projectQrModalOpen, setProjectQrModalOpen] = useState(false);
   const [projectProfileImage, setProjectProfileImage] = useState<string>('');
   const [totalUnreadCount, setTotalUnreadCount] = useState<number>(0);
@@ -1127,16 +1127,25 @@ export function WorkspaceScreen({
                 >
                   <Wallet size={19} color={theme.ink} strokeWidth={2.2} />
                 </ScalePressable>
+                <ScalePressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Open profile"
+                  onPress={() => setProfileTarget(true)}
+                  style={[styles.profileAvatar, { backgroundColor: theme.mint }]}
+                  hitSlop={4}
+                >
+                  <Text style={[styles.profileAvatarText, { color: theme.mintText }]}>
+                    {getInitials(session.profile?.name || session.username || 'U').charAt(0)}
+                  </Text>
+                </ScalePressable>
                 <View ref={menuButtonRef} collapsable={false}>
                   <ScalePressable
                     accessibilityRole="button"
                     accessibilityLabel="More options"
                     onPress={() => {
-                      menuButtonRef.current?.measureInWindow((x, y, width, height) => {
-                        const screenWidth = Dimensions.get('window').width;
+                      menuButtonRef.current?.measureInWindow((_x, y, _width, height) => {
                         setMenuAnchor({
                           top: y + height,
-                          right: Math.max(0, screenWidth - (x + width)),
                         });
                         setIsMenuVisible(true);
                       });
@@ -1150,17 +1159,6 @@ export function WorkspaceScreen({
                     <MoreVertical size={19} color={theme.ink} strokeWidth={2.2} />
                   </ScalePressable>
                 </View>
-                <ScalePressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Open profile"
-                  onPress={() => setProfileTarget(true)}
-                  style={[styles.profileAvatar, { backgroundColor: theme.mint }]}
-                  hitSlop={4}
-                >
-                  <Text style={[styles.profileAvatarText, { color: theme.mintText }]}>
-                    {getInitials(session.profile?.name || session.username || 'U').charAt(0)}
-                  </Text>
-                </ScalePressable>
               </>
             )}
           </View>
@@ -1413,7 +1411,7 @@ export function WorkspaceScreen({
                 styles.menuContent,
                 {
                   top: menuAnchor.top,
-                  right: menuAnchor.right,
+                  right: 5,
                   backgroundColor: theme.surface,
                   borderColor: theme.border,
                   opacity: menuOpacity,
