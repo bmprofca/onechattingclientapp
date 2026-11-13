@@ -1,5 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Toast from '../ui/toast';
+import ReactNativeBlobUtil from 'react-native-blob-util';
+import {
+  MAX_VOICE_NOTE_SIZE_BYTES,
+  createVoiceNoteSound,
+  getVoiceNoteAudioSet,
+  getVoiceNoteFormat,
+  validateVoiceNoteSize,
+  type VoiceNoteSound,
+} from '../services/voiceNotes';
 import { MessageInfoHandle, MessageInfoModal } from '../components/MessageInfoModal';
 import { ContactTimelineModal } from '../components/ContactTimelineModal';
 import {

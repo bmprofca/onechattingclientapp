@@ -27,6 +27,7 @@ type Props = {
   session: ApiSession;
   contactNumber: string;
   contactName?: string;
+  initialCaseName?: string;
   onBack: () => void;
   onOpenChat: (contactNumber: string, contactName: string) => void;
   onEditCase: (caseItem: any) => void;
@@ -54,6 +55,7 @@ export function CaseDetailsScreen({
   session,
   contactNumber,
   contactName,
+  initialCaseName,
   onBack,
   onOpenChat,
   onEditCase,
@@ -63,7 +65,7 @@ export function CaseDetailsScreen({
   const [caseList, setCaseList] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialCaseName || '');
   const [statusFilter, setStatusFilter] = useState<'' | 'open' | 'closed'>('');
 
   const fetchCases = useCallback(

@@ -24,9 +24,7 @@ const APP_NAME = 'OneChatting';
  * project-scoped screen.
  */
 export type NotificationTapHandler = (
-  contactNumber: string,
-  contactName: string,
-  projectId?: string,
+  target: NotificationTarget,
 ) => void;
 
 type NotificationTapData = {
@@ -42,11 +40,7 @@ class NotificationService {
   private activeChatNumber: string | null = null;
   private activeChatProjectId: string | null = null;
   private tapHandler: NotificationTapHandler | null = null;
-  private pendingTap: {
-    contactNumber: string;
-    contactName: string;
-    projectId?: string;
-  } | null = null;
+  private pendingTap: NotificationTarget | null = null;
   private initialNotificationChecked = false;
   private recentKeys = new Map<string, number>();
 
@@ -101,9 +95,9 @@ class NotificationService {
   onNotificationTap(handler: NotificationTapHandler) {
     this.tapHandler = handler;
     if (this.pendingTap) {
-      const { contactNumber, contactName, projectId } = this.pendingTap;
+      const target = this.pendingTap;
       this.pendingTap = null;
-      handler(contactNumber, contactName, projectId);
+      handler(target);
     }
 
     if (this.initialNotificationChecked) return;
@@ -203,15 +197,13 @@ class NotificationService {
   }
 
   private dispatchTap(data: NotificationTapData) {
-    const contactNumber = String(data.contactNumber || '');
-    if (!contactNumber) return;
-    const contactName = String(data.contactName || contactNumber);
-    const projectId = String(data.projectId || '') || undefined;
+    const target = getNotificationTarget(data);
+    if (!target) return;
 
     if (this.tapHandler) {
-      this.tapHandler(contactNumber, contactName, projectId);
+      this.tapHandler(target);
     } else {
-      this.pendingTap = { contactNumber, contactName, projectId };
+      this.pendingTap = target;
     }
   }
 

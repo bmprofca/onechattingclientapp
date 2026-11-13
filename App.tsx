@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, BackHandler, StatusBar, ToastAndroid, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { AppState, BackHandler, StatusBar, ToastAndroid } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { AppToastProvider } from './src/ui/toast';
 
@@ -32,19 +32,14 @@ function AppContent() {
 
   // Ref for notification tap → navigate to its project-scoped target
   const notificationNavRef = useRef<
-    ((contactNumber: string, contactName: string, projectId?: string) => void) | null
+    ((target: NotificationTarget) => void) | null
   >(null);
 
   // Initialize notification service once
   useEffect(() => {
     const openTimers = new Set<ReturnType<typeof setInterval>>();
-    const openNotificationChat = (
-      contactNumber: string,
-      contactName: string,
-      projectId?: string,
-    ) => {
-      const open = () =>
-        notificationNavRef.current?.(contactNumber, contactName, projectId);
+    const openNotificationTarget = (target: NotificationTarget) => {
+      const open = () => notificationNavRef.current?.(target);
       if (notificationNavRef.current) {
         open();
         return;

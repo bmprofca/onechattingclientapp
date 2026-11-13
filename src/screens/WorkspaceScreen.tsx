@@ -52,7 +52,14 @@ import { ProjectQRModal } from '../components/Modals/ProjectQRModal';
 import { formatImageUrl } from '../utils/imageUrl';
 import { useKeyboardContext } from '../contexts/KeyboardContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Toast from '../ui/toast';
+
+function getInitials(name: string) {
+  const parts = (name || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return 'P';
+  const first = parts[0].charAt(0);
+  const second = parts.length > 1 ? parts[1].charAt(0) : parts[0].charAt(1);
+  return `${first}${second || ''}`.toUpperCase();
+}
 
 type Page =
   | 'dashboard'
@@ -93,7 +100,7 @@ export function WorkspaceScreen({
     name: string;
   }) => void | Promise<void>;
   notificationNavRef?: React.MutableRefObject<
-    ((contactNumber: string, contactName: string, projectId?: string) => void) | null
+    ((target: NotificationTarget) => void) | null
   >;
   onSignOut: () => void;
 }) {
@@ -131,7 +138,11 @@ export function WorkspaceScreen({
   const [createCampaignTarget, setCreateCampaignTarget] = useState(false);
   const [newChatTarget, setNewChatTarget] = useState(false);
   const [createCaseTarget, setCreateCaseTarget] = useState<{ name?: string; number: string } | boolean | null>(null);
-  const [caseDetailsTarget, setCaseDetailsTarget] = useState<{ number: string; name?: string } | null>(null);
+  const [caseDetailsTarget, setCaseDetailsTarget] = useState<{
+    number: string;
+    name?: string;
+    caseName?: string;
+  } | null>(null);
   const [editCaseTarget, setEditCaseTarget] = useState<{ caseItem: any; returnToDetails?: boolean } | null>(null);
   const [casesTarget, setCasesTarget] = useState(false);
   const [walletTarget, setWalletTarget] = useState(false); // full-screen wallet, used from full mode
@@ -170,14 +181,10 @@ export function WorkspaceScreen({
   // Wire notification tap → navigate to chat
   useEffect(() => {
     if (notificationNavRef) {
-      notificationNavRef.current = (
-        contactNumber: string,
-        contactName: string,
-        notificationProjectId?: string,
-      ) => {
-        const openChat = async () => {
-          if (notificationProjectId && notificationProjectId !== projectId) {
-            if (!projects.some(item => String(item.id) === notificationProjectId)) {
+      notificationNavRef.current = (target: NotificationTarget) => {
+        const openTarget = async () => {
+          if (target.projectId !== projectId) {
+            if (!projects.some(item => String(item.id) === target.projectId)) {
               Toast.show({
                 type: 'error',
                 text1: 'Project unavailable',
@@ -187,7 +194,7 @@ export function WorkspaceScreen({
             }
 
             try {
-              await onSelectProject(notificationProjectId);
+              await onSelectProject(target.projectId);
             } catch (error) {
               Toast.show({
                 type: 'error',
@@ -198,11 +205,33 @@ export function WorkspaceScreen({
             }
           }
 
-          setPage('inbox');
-          setChatTarget({ number: contactNumber, name: contactName });
+          switch (target.type) {
+            case 'conversation':
+              setPage('inbox');
+              setChatTarget({
+                number: target.contactNumber,
+                name: target.contactName,
+              });
+              break;
+            case 'case':
+              setPage('cases');
+              setCaseDetailsTarget({
+                number: target.contactNumber,
+                name: target.contactName,
+                caseName: target.caseName,
+              });
+              break;
+            case 'campaign':
+              setPage('campaigns');
+              setCampaignTarget({
+                id: target.campaignId,
+                name: target.campaignName,
+              });
+              break;
+          }
         };
 
-        openChat().catch(error => {
+        openTarget().catch(error => {
           Toast.show({
             type: 'error',
             text1: 'Could not open chat',
@@ -879,10 +908,12 @@ export function WorkspaceScreen({
       >
         {target => (
           <CaseDetailsScreen
+            key={`${projectId}:${target.number}:${target.caseName || ''}`}
             projectId={projectId}
             session={apiSession}
             contactNumber={target.number}
             contactName={target.name}
+            initialCaseName={target.caseName}
             onBack={() => setCaseDetailsTarget(null)}
             onOpenChat={(contactNumber, contactName) => {
               setChatTarget({ number: contactNumber, name: contactName });
@@ -993,7 +1024,7 @@ export function WorkspaceScreen({
       >
         {target => (
           <ChatRoomScreen
-            key={`${projectId}:${chatTarget.number}`}
+            key={`${projectId}:${target.number}`}
             projectId={projectId}
             session={apiSession}
             contactNumber={target.number}
