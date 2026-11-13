@@ -5,8 +5,27 @@ import { AlertCircle, CheckCircle2, Info } from 'lucide-react-native';
 
 type ToastPayload = { type?: string; text1?: string; text2?: string; visibilityTime?: number };
 
+/** If a message is raw JSON (API/SDK error dumps), pull out the readable part. */
+function humanize(text?: string): string | undefined {
+  if (!text) return text;
+  const t = String(text).trim();
+  if (!(t.startsWith('{') || t.startsWith('['))) return text;
+  try {
+    const o = JSON.parse(t);
+    const e = o?.error ?? o;
+    const msg =
+      (typeof e === 'string' ? e : undefined) ||
+      e?.description || e?.message || e?.msg || o?.message || o?.msg;
+    if (msg && typeof msg === 'string') return msg;
+  } catch {
+    // not valid JSON — fall through
+  }
+  return 'Something went wrong. Please try again.';
+}
+
 const Toast = {
   show(options: ToastPayload) {
+    options = { ...options, text1: humanize(options.text1), text2: humanize(options.text2) };
     const raw = options.type || 'info';
     const type = raw === 'error' ? 'danger' : raw === 'success' ? 'success' : raw === 'warning' ? 'warning' : 'normal';
     Host.show(options.text2 || '\u00a0', {

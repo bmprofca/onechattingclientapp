@@ -203,7 +203,7 @@ export function ProjectQRModal({
             </View>
           ) : qrList.length === 0 ? (
             <View style={styles.emptyContainer}>
-              <View style={styles.emptyIconBadge}>
+              <View style={[styles.emptyIconBadge, { backgroundColor: theme.violetBg }]}>
                 <Info size={32} color="#6366F1" strokeWidth={2.2} />
               </View>
               <Text style={[styles.emptyTitle, { color: theme.ink }]}>
@@ -247,14 +247,14 @@ export function ProjectQRModal({
                         >
                           <QrIcon
                             size={13}
-                            color={isSelected ? '#FFF' : theme.muted}
+                            color={isSelected ? theme.onPrimary : theme.muted}
                             style={{ marginRight: 5 }}
                           />
                           <Text
                             numberOfLines={1}
                             style={[
                               styles.tabText,
-                              { color: isSelected ? '#FFF' : theme.ink },
+                              { color: isSelected ? theme.onPrimary : theme.ink },
                             ]}
                           >
                             {tabTitle}
@@ -329,7 +329,7 @@ export function ProjectQRModal({
                     pressed && { opacity: 0.85 },
                   ]}
                 >
-                  <Share2 size={16} color="#FFF" />
+                  <Share2 size={16} color={theme.onPrimary} />
                   {/* <Text style={styles.actionBtnText}>Share</Text> */}
                 </Pressable>
 

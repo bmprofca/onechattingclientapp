@@ -16,12 +16,12 @@ import {
 import Contacts from 'react-native-contacts';
 import Toast from '../ui/toast';
 import { SearchClearButton } from '../components/SearchClearButton';
-import { Search, MessageSquarePlus, X, Smartphone, User, Phone, Check, BookUser, Users, Image as ImageIcon, Video, FileText, Music, Mic, MapPin } from 'lucide-react-native';
+import { Search, MessageSquarePlus, X, Smartphone, User, Phone, Check, BookUser, Users, Image as ImageIcon, Video, FileText, Music, Mic, MapPin, Briefcase } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
-import { getInbox, getUnreadCount, ListItem, unwrapList } from '../api/workspace';
+import { getCaseList, getInbox, getUnreadCount, ListItem, unwrapList } from '../api/workspace';
 import { LoadState } from '../components/LoadState';
 import { ScreenSkeleton } from '../components/Skeleton';
-import { useTheme } from '../theme/theme';
+import { ThemeColors, useTheme, radii, space } from '../theme/theme';
 import { socketManager } from '../services/socketManager';
 import { ScalePressable, FadeInView } from '../components/animations';
 import { useKeyboardContext } from '../contexts/KeyboardContext';
@@ -74,6 +74,39 @@ function chatKey(item: ListItem) {
   return String(item.id || item._id || contact.number || item.phone || item.number || '');
 }
 
+function chatNumber(item: ListItem) {
+  const contact = (item.contact as Record<string, any>) || {};
+  return String(contact.number || item.phone || item.number || '');
+}
+
+/** "Sourav Agarwal" -> "Sourav A." for the compact assignee chip. */
+function shortPersonName(value: unknown) {
+  const words = String(value || '').trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return '';
+  if (words.length === 1) return words[0];
+  return `${words[0]} ${words[words.length - 1].charAt(0).toUpperCase()}.`;
+}
+
+/** Assignee name if a (future) chat-list row carries it; the current server does not. */
+function rowAssigneeName(item: ListItem) {
+  const raw: any = (item as any).assigned_user || (item as any).assigned_to || (item as any).assignee;
+  if (raw && typeof raw === 'object') return String(raw.name || raw.username || '');
+  return typeof raw === 'string' ? raw : String((item as any).assigned_name || '');
+}
+
+// Rows that already faded in once; later updates/re-mounts never re-animate them.
+const seenRows = new Set<string>();
+
+type RowMeta = {
+  /** Numbers assigned to the current user (from chat-list filter=assigned). */
+  mine: Record<string, true>;
+  /** Number -> latest open case name (from case-list status=open). */
+  caseNames: Record<string, string>;
+};
+
+const EMPTY_META: RowMeta = { mine: {}, caseNames: {} };
+let rowMetaMemory: { projectId: string; meta: RowMeta } | null = null;
+
 function mergeChats(current: ListItem[], incoming: ListItem[]) {
   const seen = new Set(current.map(chatKey));
   const extra = incoming.filter(item => !seen.has(chatKey(item)));
@@ -94,7 +127,7 @@ export function LiveChatScreen({
   initialFilter?: ChatFilterType;
 }) {
   const theme = useTheme();
-  const { isKeyboardVisible, keyboardHeightAnim } = useKeyboardContext();
+  const { keyboardHeightAnim } = useKeyboardContext();
   const [activeFilter, setActiveFilter] = useState<ChatFilterType>(() =>
     initialFilter ?? (chatMemory?.projectId === projectId ? chatMemory.filter : 'all'),
   );
@@ -233,7 +266,8 @@ export function LiveChatScreen({
           ...prev,
           [filter]: {
             ...prev[filter],
-            items: pageToLoad === 1 ? [] : prev[filter].items,
+            // Keep whatever is on screen; LoadState only shows the error when the list is empty.
+            items: prev[filter].items,
             loading: false,
             loadingMore: false,
             error: requestError instanceof Error ? requestError.message : 'Could not load chats.',
@@ -270,7 +304,15 @@ export function LiveChatScreen({
   useEffect(() => {
     const sameSearch = chatMemory?.projectId === projectId && chatMemory.search === debouncedSearchQuery;
     if (!sameSearch) {
-      setTabs(blankTabs(true));
+      // Keep the current rows on screen while the new search loads (no skeleton flash);
+      // page 0 blocks paging until the fresh page 1 replaces them.
+      setTabs(prev => {
+        const next = { ...prev };
+        FILTERS.forEach(tab => {
+          next[tab.key] = { ...prev[tab.key], page: 0, hasMore: true, error: '', loading: prev[tab.key].items.length === 0 };
+        });
+        return next;
+      });
     }
     FILTERS.forEach(tab => {
       const cached = sameSearch ? chatMemory?.tabs[tab.key] : undefined;
@@ -290,6 +332,73 @@ export function LiveChatScreen({
     };
   }, [tabs, projectId, debouncedSearchQuery, activeFilter]);
 
+  // ── Row meta (assignee + open case chips) ─────────────────────────────
+  // chat-list rows carry case_open_count but no assignee/case name, so two batched
+  // calls fill the gaps: chat-list?filter=assigned (chats assigned to me) and
+  // case-list?status=open (latest open case name per number). Never per-row.
+  const [rowMeta, setRowMeta] = useState<RowMeta>(() =>
+    rowMetaMemory?.projectId === projectId ? rowMetaMemory.meta : EMPTY_META,
+  );
+  const loadRowMeta = useCallback(async () => {
+    if (!projectId || !session?.token) return;
+    const [assignedRes, casesRes] = await Promise.allSettled([
+      getInbox(session, projectId, '', 'assigned', 1, 200),
+      getCaseList(session, projectId, { status: 'open', limit: 100 }),
+    ]);
+    setRowMeta(prev => {
+      const mine: Record<string, true> = {};
+      if (assignedRes.status === 'fulfilled') {
+        unwrapList(assignedRes.value).forEach(item => {
+          const number = chatNumber(item);
+          if (number) mine[number] = true;
+        });
+      }
+      const caseNames: Record<string, string> = {};
+      if (casesRes.status === 'fulfilled') {
+        unwrapList(casesRes.value).forEach((row: any) => {
+          const number = String(row?.number || '');
+          const name = String(row?.name || '').trim();
+          // case-list is ordered newest first: keep the latest open case per number.
+          if (number && name && !caseNames[number]) caseNames[number] = name;
+        });
+      }
+      const next: RowMeta = {
+        mine: assignedRes.status === 'fulfilled' ? mine : prev.mine,
+        caseNames: casesRes.status === 'fulfilled' ? caseNames : prev.caseNames,
+      };
+      const same =
+        JSON.stringify(next.mine) === JSON.stringify(prev.mine) &&
+        JSON.stringify(next.caseNames) === JSON.stringify(prev.caseNames);
+      if (same) return prev;
+      rowMetaMemory = { projectId, meta: next };
+      return next;
+    });
+  }, [projectId, session]);
+  const loadRowMetaRef = useRef(loadRowMeta);
+  loadRowMetaRef.current = loadRowMeta;
+  const metaTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleRowMeta = useCallback(() => {
+    if (metaTimer.current) clearTimeout(metaTimer.current);
+    metaTimer.current = setTimeout(() => {
+      metaTimer.current = null;
+      void loadRowMetaRef.current();
+    }, 400);
+  }, []);
+  useEffect(() => {
+    if (rowMetaMemory?.projectId !== projectId) setRowMeta(EMPTY_META);
+    void loadRowMeta();
+    return () => {
+      if (metaTimer.current) clearTimeout(metaTimer.current);
+    };
+  }, [loadRowMeta, projectId]);
+
+  // Stable callbacks for the memoized pages/rows.
+  const onOpenChatRef = useRef(onOpenChat);
+  onOpenChatRef.current = onOpenChat;
+  const openChat = useCallback((contactNumber: string, contactName: string) => {
+    onOpenChatRef.current(contactNumber, contactName);
+  }, []);
+
   const requestNext = useCallback((filter: ChatFilterType) => {
     const tab = tabsRef.current[filter];
     if (!tab || tab.loading || tab.loadingMore || !tab.hasMore || tab.page < 1) return;
@@ -299,12 +408,15 @@ export function LiveChatScreen({
   const load = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.all(FILTERS.map(tab => fetchPage(tab.key, 1, debouncedSearchQuery)));
+      await Promise.all([
+        ...FILTERS.map(tab => fetchPage(tab.key, 1, debouncedSearchQuery)),
+        loadRowMeta(),
+      ]);
       await loadUnreadCount();
     } finally {
       setRefreshing(false);
     }
-  }, [fetchPage, debouncedSearchQuery, loadUnreadCount]);
+  }, [fetchPage, debouncedSearchQuery, loadUnreadCount, loadRowMeta]);
 
   useEffect(() => {
     const unsubUnread = socketManager.onTotalUnreadCount((data) => {
@@ -342,26 +454,54 @@ export function LiveChatScreen({
     });
 
     const unsubAssigned = socketManager.onChatAssigned(() => {
+      // Payload has no contact number, so re-read the (batched) assignment set.
       void fetchPage('assigned', 1, debouncedSearchQuery);
+      scheduleRowMeta();
+    });
+
+    const unsubCase = socketManager.onCaseStatus((data) => {
+      const number = data?.number != null ? String(data.number) : '';
+      const count = Number(data?.case_open_count);
+      if (number && Number.isFinite(count)) {
+        setTabs(prev => {
+          let changed = false;
+          const next = { ...prev };
+          FILTERS.forEach(tab => {
+            const items = prev[tab.key].items;
+            const idx = items.findIndex(c => chatNumber(c) === number);
+            if (idx < 0 || Number(items[idx].case_open_count || 0) === count) return;
+            const list = [...items];
+            list[idx] = { ...items[idx], case_open_count: count };
+            next[tab.key] = { ...prev[tab.key], items: list };
+            changed = true;
+          });
+          return changed ? next : prev;
+        });
+      }
+      scheduleRowMeta();
     });
 
     const unsubStatus = socketManager.onMessageStatus((data) => {
       if (!data?.wamid) return;
       setTabs(prev => {
+        let changed = false;
         const next = { ...prev };
         FILTERS.forEach(tab => {
-          next[tab.key] = {
-            ...prev[tab.key],
-            items: prev[tab.key].items.map(c => {
-              const lastMsg = (c.last_message as Record<string, any>) || {};
-              if (lastMsg.wamid === data.wamid || lastMsg._id === data.message_id) {
-                return { ...c, last_message: { ...lastMsg, status: data.status } };
-              }
-              return c;
-            }),
-          };
+          let tabChanged = false;
+          const items = prev[tab.key].items.map(c => {
+            const lastMsg = (c.last_message as Record<string, any>) || {};
+            if ((lastMsg.wamid === data.wamid || lastMsg._id === data.message_id) && lastMsg.status !== data.status) {
+              tabChanged = true;
+              return { ...c, last_message: { ...lastMsg, status: data.status } };
+            }
+            return c;
+          });
+          if (tabChanged) {
+            changed = true;
+            next[tab.key] = { ...prev[tab.key], items };
+          }
         });
-        return next;
+        return changed ? next : prev;
       });
     });
 
@@ -369,9 +509,10 @@ export function LiveChatScreen({
       unsubUnread();
       unsubChat();
       unsubAssigned();
+      unsubCase();
       unsubStatus();
     };
-  }, [debouncedSearchQuery, fetchPage, loadUnreadCount]);
+  }, [debouncedSearchQuery, fetchPage, loadUnreadCount, scheduleRowMeta]);
 
   return (
     <Animated.View
@@ -383,13 +524,29 @@ export function LiveChatScreen({
       ]}
     >
       <FadeInView direction="down" distance={10} duration={300} style={styles.heading}>
+        {/* Title */}
+        <View style={styles.titleRow}>
+          <Text style={[styles.screenTitle, { color: theme.ink }]}>Chats</Text>
+          {onNewChat ? (
+            <ScalePressable
+              accessibilityRole="button"
+              accessibilityLabel="New chat"
+              onPress={() => onNewChat?.()}
+              style={[styles.iconBtn, { backgroundColor: theme.primary }]}
+              hitSlop={4}
+            >
+              <MessageSquarePlus size={20} color={theme.onPrimary} strokeWidth={2.2} />
+            </ScalePressable>
+          ) : null}
+        </View>
+
         {/* Search */}
-        <View style={[styles.searchContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+        <View style={[styles.searchContainer, { backgroundColor: theme.fieldBg }]}>
           <Search size={18} color={theme.muted} />
           <TextInput
             style={[styles.searchInput, { color: theme.ink }]}
             placeholder="Search chats by name or number..."
-            placeholderTextColor={theme.muted}
+            placeholderTextColor={theme.placeholder}
             value={searchQuery}
             onChangeText={setSearchQuery}
             returnKeyType="search"
@@ -397,63 +554,66 @@ export function LiveChatScreen({
           <SearchClearButton value={searchQuery} onClear={() => setSearchQuery('')} color={theme.muted} />
         </View>
 
-        {/* Filtration Tabs */}
+        {/* Filter chips */}
         <View
-          style={[styles.tabsContainer, { borderBottomColor: theme.border }]}
           onLayout={event => {
             const width = event.nativeEvent.layout.width;
             if (width > 0 && Math.abs(width - tabTrackWidth) > 1) setTabTrackWidth(width);
           }}
         >
-          {FILTERS.map((tab) => {
-            const isActive = activeFilter === tab.key;
-            return (
-              <Pressable
-                key={tab.key}
-                accessibilityRole="button"
-                accessibilityLabel={tab.label}
-                onPress={() => selectTab(FILTERS.findIndex(item => item.key === tab.key))}
-                style={styles.tabButton}
-                hitSlop={4}
-              >
-                <View style={styles.tabInner}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.chipsRow}
+          >
+            {FILTERS.map((tab) => {
+              const isActive = activeFilter === tab.key;
+              const showCount = tab.key === 'unread' && totalUnreadCount > 0;
+              return (
+                <Pressable
+                  key={tab.key}
+                  accessibilityRole="button"
+                  accessibilityLabel={tab.label}
+                  accessibilityState={{ selected: isActive }}
+                  onPress={() => selectTab(FILTERS.findIndex(item => item.key === tab.key))}
+                  style={[
+                    styles.chip,
+                    isActive
+                      ? { backgroundColor: theme.primary, borderColor: theme.primary }
+                      : { backgroundColor: theme.surface, borderColor: theme.border },
+                  ]}
+                  hitSlop={4}
+                >
                   <Text
                     style={[
-                      styles.tabLabel,
-                      { color: isActive ? '#2563EB' : theme.muted },
-                      isActive && styles.tabLabelActive,
+                      styles.chipLabel,
+                      { color: isActive ? theme.onPrimary : theme.inkSoft },
                     ]}
                   >
                     {tab.label}
                   </Text>
-                  {tab.key === 'all' && totalUnreadCount > 0 && (
-                    <View style={[styles.tabBadge, { backgroundColor: '#10B981' }]}>
-                      <Text style={styles.tabBadgeText}>{totalUnreadCount}</Text>
+                  {showCount && (
+                    <View
+                      style={[
+                        styles.chipCount,
+                        { backgroundColor: isActive ? theme.onPrimary : theme.emerald },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.chipCountText,
+                          { color: isActive ? theme.primary : theme.isDark ? theme.onAccent : '#FFFFFF' },
+                        ]}
+                      >
+                        {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
+                      </Text>
                     </View>
                   )}
-                </View>
-              </Pressable>
-            );
-          })}
-          {tabTrackWidth > 0 && pagerSize.width > 0 ? (
-            <Animated.View
-              pointerEvents="none"
-              style={[
-                styles.slidingIndicator,
-                {
-                  width: tabTrackWidth / FILTERS.length,
-                  backgroundColor: '#2563EB',
-                  transform: [{
-                    translateX: scrollX.interpolate({
-                      inputRange: [0, pagerSize.width * (FILTERS.length - 1)],
-                      outputRange: [0, (tabTrackWidth / FILTERS.length) * (FILTERS.length - 1)],
-                      extrapolate: 'clamp',
-                    }),
-                  }],
-                },
-              ]}
-            />
-          ) : null}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
         </View>
       </FadeInView>
 
@@ -509,8 +669,10 @@ export function LiveChatScreen({
                   loading={page.loading}
                   error={page.error}
                   refreshing={refreshing}
+                  rowMeta={rowMeta}
+                  myUsername={session.username}
                   initialOffset={initialOffsets.current[tab.key] || 0}
-                  onOpenChat={onOpenChat}
+                  onOpenChat={openChat}
                   onRefresh={load}
                   onRetry={() => {
                     void fetchPage(tab.key, 1, debouncedSearchQuery);
@@ -533,22 +695,11 @@ export function LiveChatScreen({
               );
             })}
           </Animated.ScrollView>
-        ) : null}
+        ) : (
+          <ScreenSkeleton variant="chat" />
+        )}
       </View>
 
-      {/* FAB */}
-      {!isKeyboardVisible && (
-        <ScalePressable
-          accessibilityRole="button"
-          onPress={() => onNewChat?.()}
-          style={[
-            styles.fab,
-            { backgroundColor: theme.emerald },
-          ]}
-        >
-          <MessageSquarePlus size={24} color="#FFF" />
-        </ScalePressable>
-      )}
     </Animated.View>
   );
 }
@@ -562,6 +713,8 @@ function ChatTabPage({
   loading,
   error,
   refreshing,
+  rowMeta,
+  myUsername,
   initialOffset,
   onOpenChat,
   onRefresh,
@@ -577,6 +730,8 @@ function ChatTabPage({
   loading: boolean;
   error: string;
   refreshing: boolean;
+  rowMeta: RowMeta;
+  myUsername: string;
   initialOffset: number;
   onOpenChat: (contactNumber: string, contactName: string) => void;
   onRefresh: () => void;
@@ -589,8 +744,22 @@ function ChatTabPage({
   const theme = useTheme();
   const startOffset = useRef(initialOffset).current;
   const renderItem = useCallback(
-    ({ item }: { item: ListItem }) => <ChatCard item={item} onPress={onOpenChat} />,
-    [onOpenChat],
+    ({ item }: { item: ListItem }) => {
+      const number = chatNumber(item);
+      const rowAssignee = rowAssigneeName(item);
+      const assignedToMe =
+        Boolean(number && rowMeta.mine[number]) ||
+        Boolean(myUsername && (item as any).assigned_user?.username === myUsername);
+      return (
+        <ChatCard
+          item={item}
+          onPress={onOpenChat}
+          assigneeLabel={assignedToMe ? 'Assigned to you' : shortPersonName(rowAssignee)}
+          caseName={number ? rowMeta.caseNames[number] || '' : ''}
+        />
+      );
+    },
+    [onOpenChat, rowMeta, myUsername],
   );
 
   return (
@@ -603,10 +772,11 @@ function ChatTabPage({
         contentContainerStyle={items.length ? styles.list : styles.emptyList}
         nestedScrollEnabled
         keyboardShouldPersistTaps="handled"
-        removeClippedSubviews={false}
+        removeClippedSubviews={Platform.OS === 'android'}
         initialNumToRender={12}
-        maxToRenderPerBatch={8}
-        windowSize={8}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={40}
+        windowSize={10}
         onEndReached={onLoadMore}
         onEndReachedThreshold={1.5}
         onViewableItemsChanged={onViewableItemsChanged}
@@ -634,6 +804,9 @@ const MemoChatTabPage = memo(ChatTabPage, (prev, next) =>
   prev.loading === next.loading &&
   prev.error === next.error &&
   prev.refreshing === next.refreshing &&
+  prev.rowMeta === next.rowMeta &&
+  prev.myUsername === next.myUsername &&
+  prev.onOpenChat === next.onOpenChat &&
   prev.width === next.width &&
   prev.height === next.height,
 );
@@ -697,8 +870,49 @@ function formatListTime(value: unknown) {
   return `${day}/${month}/${date.getFullYear()}`;
 }
 
-const ChatCard = memo(function ChatCard({ item, onPress }: { item: ListItem; onPress: (contactNumber: string, contactName: string) => void }) {
+function avatarTone(name: string, theme: ThemeColors) {
+  const tones = [
+    { bg: theme.infoBg, fg: theme.info },
+    { bg: theme.mint, fg: theme.mintText },
+    { bg: theme.violetBg, fg: theme.violet },
+    { bg: theme.warnBg, fg: theme.warning },
+    { bg: theme.dangerBg, fg: theme.danger },
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) hash = (hash * 31 + name.charCodeAt(i)) | 0;
+  return tones[Math.abs(hash) % tones.length];
+}
+
+function initialsOf(name: string) {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return '?';
+  const first = words[0].charAt(0);
+  const second = words.length > 1 ? words[words.length - 1].charAt(0) : '';
+  return (first + second).toUpperCase();
+}
+
+const ChatCard = memo(function ChatCard({
+  item,
+  onPress,
+  assigneeLabel,
+  caseName,
+}: {
+  item: ListItem;
+  onPress: (contactNumber: string, contactName: string) => void;
+  assigneeLabel: string;
+  caseName: string;
+}) {
   const theme = useTheme();
+  const rowKey = chatKey(item);
+  const opacity = useRef(new Animated.Value(seenRows.has(rowKey) ? 1 : 0)).current;
+  useEffect(() => {
+    if (seenRows.has(rowKey)) {
+      opacity.setValue(1);
+      return;
+    }
+    seenRows.add(rowKey);
+    Animated.timing(opacity, { toValue: 1, duration: 220, useNativeDriver: true }).start();
+  }, [opacity, rowKey]);
   const contact = (item.contact as Record<string, any>) || {};
   const lastMessage = (item.last_message as Record<string, any>) || {};
 
@@ -709,147 +923,213 @@ const ChatCard = memo(function ChatCard({ item, onPress }: { item: ListItem; onP
   const preview = lastMessagePreview(lastMessage, item);
   const time = formatListTime(lastMessage.create_date || lastMessage.createdAt || item.date || item.created_at || '');
   const unreadCount = Number(item.unread_count ?? 0);
+  const isUnread = unreadCount > 0;
+  const tone = avatarTone(name, theme);
+  const showNumber = Boolean(contactNumber) && contactNumber !== name;
+  const openCases = Number((item as any).case_open_count ?? 0) || 0;
+  const caseLabel =
+    openCases > 0
+      ? caseName
+        ? openCases > 1
+          ? `${caseName} +${openCases - 1}`
+          : caseName
+        : openCases > 1
+          ? `${openCases} cases open`
+          : 'Case open'
+      : '';
 
   return (
+    <Animated.View style={{ opacity }}>
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={isUnread ? `${name}, ${unreadCount} unread` : name}
       onPress={() => onPress(contactNumber, name)}
-      style={({ pressed }) => [styles.card, pressed && { opacity: 0.72 }]}
+      style={({ pressed }) => [styles.card, pressed && { backgroundColor: theme.cardHover }]}
     >
-      <View style={[styles.avatar, { backgroundColor: theme.mint }]}>
-        <Text style={[styles.avatarText, { color: theme.mintText }]}>
-          {name.trim().charAt(0).toUpperCase()}
-        </Text>
+      <View style={[styles.avatar, { backgroundColor: tone.bg }]}>
+        <Text style={[styles.avatarText, { color: tone.fg }]}>{initialsOf(name)}</Text>
       </View>
 
-      <View style={styles.cardBody}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <Text numberOfLines={1} style={[styles.cardTitle, { color: theme.ink, flex: 1 }]}>
+      <View style={[styles.cardBody, { borderBottomColor: theme.divider }]}>
+        <View style={styles.cardTopRow}>
+          <Text numberOfLines={1} style={[styles.cardTitle, { color: theme.ink }]}>
             {name}
           </Text>
           {time ? (
-            <Text numberOfLines={1} style={[styles.timeText, { color: theme.muted }]}>
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.timeText,
+                isUnread ? { color: theme.emerald, fontWeight: '700' } : { color: theme.muted },
+              ]}
+            >
               {time}
             </Text>
           ) : null}
         </View>
 
-        {preview.label ? (
-          <View style={styles.previewRow}>
-            {(() => {
-              const PreviewIcon = preview.Icon;
-              return PreviewIcon ? <PreviewIcon size={14} color={theme.muted} /> : null;
-            })()}
-            <Text numberOfLines={1} style={[styles.cardDetail, { color: theme.muted, flex: 1 }]}>
-              {preview.label}
-            </Text>
-          </View>
-        ) : null}
-
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={[styles.cardMeta, { color: theme.muted }]}>
-            {contactNumber}
+        <View style={styles.previewRow}>
+          {(() => {
+            const PreviewIcon = preview.Icon;
+            return PreviewIcon ? (
+              <PreviewIcon size={14} color={isUnread ? theme.inkSoft : theme.muted} />
+            ) : null;
+          })()}
+          <Text
+            numberOfLines={1}
+            style={[
+              styles.cardDetail,
+              { color: isUnread ? theme.inkSoft : theme.muted },
+              isUnread && { fontWeight: '600' },
+            ]}
+          >
+            {preview.label || ' '}
           </Text>
-          {unreadCount > 0 && (
+          {isUnread && (
             <View style={[styles.unreadBadge, { backgroundColor: theme.emerald }]}>
-              <Text style={styles.unreadText}>{unreadCount}</Text>
+              <Text style={[styles.unreadText, { color: theme.isDark ? theme.onAccent : '#FFFFFF' }]}>
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </Text>
             </View>
           )}
         </View>
-      </View>
 
-      <Text style={[styles.arrow, { color: theme.muted }]}>›</Text>
+        {showNumber ? (
+          <Text numberOfLines={1} style={[styles.cardMeta, { color: theme.muted }]}>
+            {contactNumber}
+          </Text>
+        ) : null}
+
+        {assigneeLabel || caseLabel ? (
+          <View style={styles.tagRow}>
+            {assigneeLabel ? (
+              <View style={[styles.tag, { backgroundColor: theme.infoBg }]}>
+                <User size={11} color={theme.info} strokeWidth={2.4} />
+                <Text numberOfLines={1} style={[styles.tagText, { color: theme.info }]}>
+                  {assigneeLabel}
+                </Text>
+              </View>
+            ) : null}
+            {caseLabel ? (
+              <View style={[styles.tag, styles.tagShrink, { backgroundColor: theme.warnBg }]}>
+                <Briefcase size={11} color={theme.warning} strokeWidth={2.4} />
+                <Text numberOfLines={1} style={[styles.tagText, { color: theme.warning }]}>
+                  {caseLabel}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+      </View>
     </Pressable>
+    </Animated.View>
   );
 });
 
 const styles = StyleSheet.create({
   heading: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 4,
-    gap: 12,
+    paddingHorizontal: space.md,
+    paddingTop: space.sm,
+    paddingBottom: space.xs,
+    gap: space.sm,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 44,
+  },
+  screenTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: -0.7,
+  },
+  iconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: radii.md,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 12,
+    height: 46,
+    borderRadius: radii.md,
+    paddingHorizontal: 14,
     gap: 8,
   },
   searchInput: {
     flex: 1,
     height: '100%',
-    fontSize: 14,
+    fontSize: 15,
   },
-  tabsContainer: {
+  chipsRow: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
-  },
-  tabButton: {
-    flex: 1,
     alignItems: 'center',
-    paddingVertical: 10,
-    position: 'relative',
+    gap: 8,
+    paddingVertical: 2,
   },
-  tabInner: {
+  chip: {
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  tabLabel: {
+  chipLabel: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '600',
   },
-  tabLabelActive: {
-    fontWeight: '800',
-  },
-  tabBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 1,
+  chipCount: {
+    minWidth: 20,
+    height: 20,
     borderRadius: 10,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  tabBadgeText: {
-    color: '#FFF',
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  slidingIndicator: {
-    position: 'absolute',
-    left: 0,
-    bottom: -1,
-    height: 2,
-    borderRadius: 2,
+  chipCountText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   pager: { flex: 1, overflow: 'hidden' },
   list: {
-    paddingHorizontal: 16,
-    paddingBottom: 90,
-    paddingTop: 8,
-    gap: 10,
+    paddingBottom: 24,
+    paddingTop: 4,
   },
   emptyList: {
     flexGrow: 1,
     paddingHorizontal: 16,
   },
   card: {
-    borderRadius: 17,
-    padding: 2,
     flexDirection: 'row',
     alignItems: 'center',
+    paddingLeft: space.md,
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { fontSize: 17, fontWeight: '800' },
-  cardBody: { flex: 1, marginLeft: 12 },
-  cardTitle: { fontSize: 15, fontWeight: '800' },
+  avatarText: { fontSize: 17, fontWeight: '700', letterSpacing: 0.2 },
+  cardBody: {
+    flex: 1,
+    marginLeft: 12,
+    paddingVertical: 12,
+    paddingRight: space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  cardTitle: { flex: 1, fontSize: 15, fontWeight: '700' },
   previewRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -857,47 +1137,47 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   cardDetail: {
-    fontSize: 13,
-    lineHeight: 18,
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 19,
   },
   cardMeta: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+    fontSize: 12,
+    marginTop: 2,
   },
   timeText: {
     fontSize: 12,
     marginLeft: 8,
   },
-  unreadBadge: {
-    borderRadius: 10,
-    minWidth: 20,
+  tagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 5,
+  },
+  tag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    maxWidth: '60%',
+  },
+  tagShrink: { flexShrink: 1 },
+  tagText: { fontSize: 11, fontWeight: '700' },
+  unreadBadge: {
+    borderRadius: 11,
+    minWidth: 22,
+    height: 22,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 6,
-    marginTop: 6,
+    marginLeft: 8,
   },
   unreadText: {
-    color: '#FFF',
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  arrow: { fontSize: 24, lineHeight: 26, marginLeft: 4 },
-  fab: {
-    position: 'absolute',
-    bottom: 24,
-    right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
+    fontSize: 11,
+    fontWeight: '700',
   },
   // Full-screen "New Chat" view
   fullScreen: {

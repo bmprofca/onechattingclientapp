@@ -39,13 +39,13 @@ export function FadeInView({
         toValue: 1,
         duration,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
+        useNativeDriver: true,
       }),
       Animated.timing(translateAnim, {
         toValue: 0,
         duration,
         easing: Easing.out(Easing.cubic),
-        useNativeDriver: false,
+        useNativeDriver: true,
       }),
     ];
 
@@ -55,7 +55,7 @@ export function FadeInView({
           toValue: 1,
           friction: 8,
           tension: 45,
-          useNativeDriver: false,
+          useNativeDriver: true,
         }),
       );
     }

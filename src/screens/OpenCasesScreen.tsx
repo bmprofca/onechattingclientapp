@@ -18,7 +18,9 @@ import {
   Plus,
   Check,
   CheckSquare,
+  ChevronRight,
   Filter,
+  X,
 } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import {
@@ -27,7 +29,7 @@ import {
   bulkCloseCases,
 } from '../api/workspace';
 import { LoadState } from '../components/LoadState';
-import { useTheme } from '../theme/theme';
+import { useTheme, radii, space, type, cardShadow } from '../theme/theme';
 import { socketManager } from '../services/socketManager';
 import { ScalePressable, FadeInView } from '../components/animations';
 import { useKeyboardContext } from '../contexts/KeyboardContext';
@@ -49,6 +51,23 @@ const formatShortDateTime = (value: any): string => {
     hour: '2-digit',
     minute: '2-digit',
   });
+};
+
+/** Presentation-only: how long ago a case was opened, bucketed for tinting. */
+const getAgeInfo = (
+  value: any,
+): { label: string; tone: 'fresh' | 'ageing' | 'old' } | null => {
+  const d = parseServerDate(value);
+  if (!d) return null;
+  const mins = Math.max(0, (Date.now() - d.getTime()) / 60000);
+  const label =
+    mins < 60
+      ? `${Math.max(1, Math.round(mins))}m`
+      : mins < 1440
+      ? `${Math.round(mins / 60)}h`
+      : `${Math.round(mins / 1440)}d`;
+  const tone = mins < 1440 ? 'fresh' : mins < 4320 ? 'ageing' : 'old';
+  return { label, tone };
 };
 
 type Props = {
@@ -228,6 +247,19 @@ export function OpenCasesScreen({
     setSelectionMode(false);
   };
 
+  const allSelected =
+    casesByNumber.length > 0 && selectedNumbers.length === casesByNumber.length;
+  const filterOptions = [
+    { label: 'All', value: '' },
+    ...(Array.isArray(defaultCaseNames) ? defaultCaseNames : []).map(
+      (name: string) => ({ label: name, value: name }),
+    ),
+    { label: 'Others', value: 'others' },
+  ];
+  const barBg = theme.isDark ? theme.fieldBg : theme.primary;
+  const barText = theme.isDark ? theme.ink : theme.onPrimary;
+  const barSub = theme.isDark ? theme.muted : theme.primarySoft;
+
   return (
     <Animated.View
       style={[
@@ -235,68 +267,143 @@ export function OpenCasesScreen({
         { backgroundColor: theme.canvas, paddingBottom: keyboardHeightAnim },
       ]}
     >
-      {/* Search and Category Filter */}
-      <View style={styles.searchSection}>
-        <View
-          style={[
-            styles.searchContainer,
-            { backgroundColor: theme.surface, borderColor: theme.border },
-          ]}
-        >
+      {/* Header: title, actions, search and filters */}
+      <View
+        style={[
+          styles.header,
+          { backgroundColor: theme.surface, borderBottomColor: theme.border },
+        ]}
+      >
+        {!isKeyboardVisible && (
+          <View style={styles.titleRow}>
+            <View style={styles.titleBlock}>
+              <Text style={[styles.title, { color: theme.ink }]}>Cases</Text>
+              <Text style={[styles.subtitle, { color: theme.muted }]}>
+                {total} contact{total === 1 ? '' : 's'} with open cases
+              </Text>
+            </View>
+            {selectionMode ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={cancelSelection}
+                style={[styles.ghostBtn, { borderColor: theme.border }]}
+                hitSlop={6}
+              >
+                <Text style={[styles.ghostBtnText, { color: theme.inkSoft }]}>
+                  Cancel
+                </Text>
+              </Pressable>
+            ) : (
+              <View style={styles.headerActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Select cases"
+                  onPress={() => setSelectionMode(true)}
+                  style={[styles.iconBtn, { backgroundColor: theme.fieldBg }]}
+                  hitSlop={6}
+                >
+                  <CheckSquare size={18} color={theme.inkSoft} />
+                </Pressable>
+                {onCreateCase && (
+                  <ScalePressable
+                    accessibilityRole="button"
+                    accessibilityLabel="New case"
+                    onPress={() => onCreateCase?.()}
+                    style={[styles.newBtn, { backgroundColor: theme.primary }]}
+                  >
+                    <Plus size={16} color={theme.onPrimary} strokeWidth={2.6} />
+                    <Text style={[styles.newBtnText, { color: theme.onPrimary }]}>
+                      New case
+                    </Text>
+                  </ScalePressable>
+                )}
+              </View>
+            )}
+          </View>
+        )}
+
+        <View style={styles.searchRow}>
+          <View style={[styles.searchField, { backgroundColor: theme.fieldBg }]}>
+            <Search size={18} color={theme.muted} />
+            <TextInput
+              style={[styles.searchInput, { color: theme.ink }]}
+              placeholder="Search by name or phone number"
+              placeholderTextColor={theme.placeholder}
+              value={search}
+              onChangeText={setSearch}
+              returnKeyType="search"
+              autoCapitalize="none"
+            />
+            {search.length > 0 && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Clear search"
+                hitSlop={8}
+                onPress={() => setSearch('')}
+              >
+                <X size={16} color={theme.muted} />
+              </Pressable>
+            )}
+          </View>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Filter cases by name"
             onPress={() => setCaseNameFilterOpen(true)}
             style={[
-              styles.caseFilterButton,
-              caseNameFilter && { backgroundColor: theme.mint },
+              styles.filterBtn,
+              { backgroundColor: caseNameFilter ? theme.mint : theme.fieldBg },
             ]}
-            hitSlop={6}
+            hitSlop={4}
           >
             <Filter
-              size={17}
-              color={caseNameFilter ? theme.emerald : theme.muted}
+              size={18}
+              color={caseNameFilter ? theme.emerald : theme.inkSoft}
             />
           </Pressable>
-          <Search size={18} color={theme.muted} />
-          <TextInput
-            style={[styles.searchInput, { color: theme.ink }]}
-            placeholder="Search by name or phone number..."
-            placeholderTextColor={theme.muted}
-            value={search}
-            onChangeText={setSearch}
-            returnKeyType="search"
-            autoCapitalize="none"
-          />
-          {search.length > 0 && (
-            <Pressable hitSlop={8} onPress={() => setSearch('')}>
-              <Text style={{ color: theme.muted, fontSize: 16 }}>✕</Text>
-            </Pressable>
-          )}
         </View>
 
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.chipsRow}
+        >
+          {filterOptions.map((option) => {
+            const active = caseNameFilter === option.value;
+            return (
+              <Pressable
+                key={option.value || 'all'}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                onPress={() => setCaseNameFilter(option.value)}
+                style={[
+                  styles.chip,
+                  active
+                    ? { backgroundColor: theme.primary, borderColor: theme.primary }
+                    : { backgroundColor: theme.surface, borderColor: theme.border },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.chipText,
+                    { color: active ? theme.onPrimary : theme.inkSoft },
+                  ]}
+                >
+                  {option.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
         {selectionMode && (
-          <View style={styles.selectionActions}>
-            <Text style={[styles.count, { color: theme.ink }]}>
-              {selectedNumbers.length} selected
+          <View style={styles.selectionRow}>
+            <Text style={[styles.selectionHint, { color: theme.muted }]}>
+              Tap cases to select them
             </Text>
-            <Pressable
-              onPress={toggleAllCases}
-              style={[styles.selectAllButton, { borderColor: theme.border }]}
-            >
-              <Text style={[styles.selectAllText, { color: theme.emerald }]}>
-                {selectedNumbers.length === casesByNumber.length &&
-                casesByNumber.length
-                  ? 'Clear'
-                  : 'Select all'}
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={cancelSelection}
-              style={[styles.cancelButton, { borderColor: theme.border }]}
-            >
-              <Text style={[styles.selectAllText, { color: theme.muted }]}>
-                Cancel
+            <Pressable onPress={toggleAllCases} hitSlop={8}>
+              <Text style={[styles.linkText, { color: theme.emerald }]}>
+                {allSelected ? 'Clear' : 'Select all'}
               </Text>
             </Pressable>
           </View>
@@ -325,10 +432,14 @@ export function OpenCasesScreen({
               <Text style={[styles.caseFilterTitle, { color: theme.ink }]}>
                 Filter by case name
               </Text>
-              <Pressable onPress={() => setCaseNameFilterOpen(false)} hitSlop={8}>
-                <Text style={[styles.caseFilterClose, { color: theme.muted }]}>
-                  ×
-                </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close filter"
+                onPress={() => setCaseNameFilterOpen(false)}
+                hitSlop={8}
+                style={[styles.modalClose, { backgroundColor: theme.fieldBg }]}
+              >
+                <X size={16} color={theme.inkSoft} />
               </Pressable>
             </View>
             <ScrollView
@@ -350,16 +461,24 @@ export function OpenCasesScreen({
                   }}
                   style={[
                     styles.caseFilterOption,
-                    { borderBottomColor: theme.border },
+                    { borderBottomColor: theme.divider },
                   ]}
                 >
                   <Text
-                    style={[styles.caseFilterOptionText, { color: theme.ink }]}
+                    style={[
+                      styles.caseFilterOptionText,
+                      {
+                        color:
+                          caseNameFilter === option.value
+                            ? theme.emerald
+                            : theme.ink,
+                      },
+                    ]}
                   >
                     {option.label}
                   </Text>
                   {caseNameFilter === option.value ? (
-                    <Check size={17} color={theme.emerald} />
+                    <Check size={17} color={theme.emerald} strokeWidth={2.6} />
                   ) : null}
                 </Pressable>
               ))}
@@ -418,11 +537,37 @@ export function OpenCasesScreen({
             latestCase?.create_date ||
             latestCase?.created_at ||
             latestCase?.createdAt;
+          const isSelected = selectedNumbers.includes(contactNum);
+          const age = getAgeInfo(latestDate);
+          const ageColors = age
+            ? age.tone === 'fresh'
+              ? { bg: theme.mint, fg: theme.mintText }
+              : age.tone === 'ageing'
+              ? { bg: theme.warnBg, fg: theme.warning }
+              : { bg: theme.dangerBg, fg: theme.danger }
+            : null;
+          const assigneeName = String(
+            latestCase?.assigned_user?.name ||
+              item.assigned_user?.name ||
+              '',
+          ).trim();
+          const assigneeInitials = assigneeName
+            .split(/\s+/)
+            .map((part: string) => part.charAt(0))
+            .join('')
+            .slice(0, 2)
+            .toUpperCase();
+          const metaParts = [
+            contactNum && contactNum !== contactName ? contactNum : '',
+            latestDate ? formatShortDateTime(latestDate) : '',
+          ].filter(Boolean);
 
           return (
             <FadeInView delay={Math.min(index * 35, 250)} distance={12}>
               <ScalePressable
                 accessibilityRole="button"
+                accessibilityState={selectionMode ? { selected: isSelected } : undefined}
+                activeScale={0.98}
                 onLongPress={() => {
                   setSelectionMode(true);
                   setSelectedNumbers([contactNum]);
@@ -442,10 +587,20 @@ export function OpenCasesScreen({
                     });
                   }
                 }}
-                style={styles.card}
+                style={[
+                  styles.card,
+                  cardShadow,
+                  {
+                    backgroundColor: theme.surface,
+                    borderColor: isSelected ? theme.emerald : theme.border,
+                    shadowColor: theme.shadow,
+                  },
+                ]}
               >
                 {selectionMode && (
                   <Pressable
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: isSelected }}
                     onPress={() => {
                       const number = String(item.number || item.phone || '');
                       setSelectedNumbers((prev) =>
@@ -454,111 +609,109 @@ export function OpenCasesScreen({
                           : [...prev, number],
                       );
                     }}
+                    hitSlop={8}
                     style={[
-                      styles.selectCircle,
-                      {
-                        borderColor: theme.border,
-                        backgroundColor: selectedNumbers.includes(contactNum)
-                          ? theme.emerald
-                          : theme.canvas,
-                      },
+                      styles.checkbox,
+                      isSelected
+                        ? { backgroundColor: theme.emerald, borderColor: theme.emerald }
+                        : { backgroundColor: theme.surface, borderColor: theme.fieldBorder },
                     ]}
                   >
-                    {selectedNumbers.includes(contactNum) && (
-                      <Check size={13} color="#FFF" />
+                    {isSelected && (
+                      <Check size={14} color={theme.onPrimary} strokeWidth={3} />
                     )}
                   </Pressable>
                 )}
-                <View style={[styles.avatar, { backgroundColor: theme.mint }]}>
-                  <Text
-                    style={[styles.avatarText, { color: theme.mintText }]}
-                  >
-                    {contactName.trim().charAt(0).toUpperCase() || 'C'}
-                  </Text>
-                </View>
 
                 <View style={styles.cardBody}>
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      justifyContent: 'space-between',
-                      alignItems: 'flex-start',
-                    }}
-                  >
+                  <View style={styles.cardTop}>
                     <Text
                       numberOfLines={1}
-                      style={[styles.cardTitle, { color: theme.ink, flex: 1 }]}
+                      style={[styles.cardTitle, { color: theme.ink }]}
                     >
                       {contactName}
                     </Text>
-                    {latestDate && (
-                      <Text style={[styles.timeText, { color: theme.muted }]}>
-                        {formatShortDateTime(latestDate)}
-                      </Text>
-                    )}
+                    {age && ageColors ? (
+                      <View style={[styles.ageChip, { backgroundColor: ageColors.bg }]}>
+                        <Text style={[styles.ageText, { color: ageColors.fg }]}>
+                          {age.label}
+                        </Text>
+                      </View>
+                    ) : null}
                   </View>
 
-                  {latestCase && (
-                    <View style={styles.latestCasePreview}>
-                      <View style={styles.latestCaseTitleRow}>
-                        <Text
-                          style={[styles.latestCaseLabel, { color: theme.muted }]}
-                        >
-                          Latest:
-                        </Text>
-                        <Text
-                          style={[
-                            styles.latestCaseName,
-                            { color: theme.ink },
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {latestCase.name || 'Untitled Case'}
-                        </Text>
-                      </View>
-                      {latestCase.remark ? (
-                        <Text
-                          style={[
-                            styles.latestCaseRemark,
-                            { color: theme.muted },
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {latestCase.remark}
-                        </Text>
-                      ) : null}
-                    </View>
+                  {latestCase ? (
+                    <Text
+                      numberOfLines={1}
+                      style={[styles.caseName, { color: theme.inkSoft }]}
+                    >
+                      {latestCase.name || 'Untitled Case'}
+                    </Text>
+                  ) : null}
+                  {latestCase?.remark ? (
+                    <Text
+                      numberOfLines={1}
+                      style={[styles.caseRemark, { color: theme.muted }]}
+                    >
+                      {latestCase.remark}
+                    </Text>
+                  ) : null}
+                  {metaParts.length > 0 && (
+                    <Text
+                      numberOfLines={1}
+                      style={[styles.cardMeta, { color: theme.muted }]}
+                    >
+                      {metaParts.join(' · ')}
+                    </Text>
                   )}
 
-                  {openCount > 0 && (
+                  {(rawCases.length > 0 || openCount > 0 || !!assigneeName) && (
                     <View
-                      style={{
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                      }}
+                      style={[styles.cardFooter, { borderTopColor: theme.divider }]}
                     >
-                      <Text
-                        style={[styles.cardMeta, { color: theme.muted }]}
-                      >
-                        {rawCases.length} case
-                        {rawCases.length === 1 ? '' : 's'}
-                      </Text>
-                      <View
-                        style={[
-                          styles.unreadBadge,
-                          { backgroundColor: theme.emerald },
-                        ]}
-                      >
-                        <Text style={styles.unreadText}>
-                          {openCount} open
+                      {assigneeName ? (
+                        <View style={styles.assignee}>
+                          <View
+                            style={[
+                              styles.assigneeAvatar,
+                              { backgroundColor: theme.infoBg },
+                            ]}
+                          >
+                            <Text
+                              style={[styles.assigneeInitials, { color: theme.info }]}
+                            >
+                              {assigneeInitials}
+                            </Text>
+                          </View>
+                          <Text
+                            numberOfLines={1}
+                            style={[styles.assigneeName, { color: theme.inkSoft }]}
+                          >
+                            {assigneeName}
+                          </Text>
+                        </View>
+                      ) : (
+                        <Text style={[styles.caseCount, { color: theme.muted }]}>
+                          {rawCases.length} case{rawCases.length === 1 ? '' : 's'}
                         </Text>
-                      </View>
+                      )}
+                      {openCount > 0 && (
+                        <View style={[styles.openPill, { backgroundColor: theme.mint }]}>
+                          <View
+                            style={[styles.openDot, { backgroundColor: theme.emerald }]}
+                          />
+                          <Text style={[styles.openPillText, { color: theme.mintText }]}>
+                            {openCount} open
+                          </Text>
+                        </View>
+                      )}
                     </View>
                   )}
                 </View>
 
-                <Text style={[styles.arrow, { color: theme.muted }]}>›</Text>
+                {!selectionMode && (
+                  <ChevronRight size={18} color={theme.muted} style={styles.chevron} />
+                )}
               </ScalePressable>
             </FadeInView>
           );
@@ -566,41 +719,40 @@ export function OpenCasesScreen({
       />
 
       {selectionMode && (
-        <ScalePressable
-          accessibilityRole="button"
-          accessibilityLabel="Close selected cases"
-          onPress={closeSelectedCases}
-          disabled={!selectedNumbers.length || bulkCloseLoading}
-          style={[
-            styles.bulkFab,
-            {
-              backgroundColor: selectedNumbers.length
-                ? '#E11D48'
-                : theme.muted,
-            },
-          ]}
-        >
-          {bulkCloseLoading ? (
-            <ActivityIndicator color="#FFF" size="small" />
-          ) : (
-            <>
-              <CheckSquare size={21} color="#FFF" />
-              <Text style={styles.bulkFabText}>
-                Close {selectedNumbers.length}
-              </Text>
-            </>
-          )}
-        </ScalePressable>
-      )}
-
-      {!selectionMode && !isKeyboardVisible && (
-        <ScalePressable
-          accessibilityRole="button"
-          onPress={() => onCreateCase?.()}
-          style={[styles.fab, { backgroundColor: theme.emerald }]}
-        >
-          <Plus size={24} color="#FFF" strokeWidth={2.5} />
-        </ScalePressable>
+        <View style={[styles.bulkBar, { backgroundColor: barBg, shadowColor: theme.shadow }]}>
+          <View style={styles.bulkInfo}>
+            <Text style={[styles.bulkCount, { color: barText }]}>
+              {selectedNumbers.length} selected
+            </Text>
+            <Text numberOfLines={1} style={[styles.bulkSub, { color: barSub }]}>
+              Closes every open case for these contacts
+            </Text>
+          </View>
+          <ScalePressable
+            accessibilityRole="button"
+            accessibilityLabel="Close selected cases"
+            onPress={closeSelectedCases}
+            disabled={!selectedNumbers.length || bulkCloseLoading}
+            style={[
+              styles.bulkBtn,
+              {
+                backgroundColor: theme.accent,
+                opacity: selectedNumbers.length ? 1 : 0.5,
+              },
+            ]}
+          >
+            {bulkCloseLoading ? (
+              <ActivityIndicator color={theme.onAccent} size="small" />
+            ) : (
+              <>
+                <CheckSquare size={16} color={theme.onAccent} strokeWidth={2.4} />
+                <Text style={[styles.bulkBtnText, { color: theme.onAccent }]}>
+                  Close cases
+                </Text>
+              </>
+            )}
+          </ScalePressable>
+        </View>
       )}
     </Animated.View>
   );
@@ -608,187 +760,220 @@ export function OpenCasesScreen({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  searchSection: {
-    paddingHorizontal: 10,
-    paddingTop: 10,
-    paddingBottom: 4,
-    gap: 8,
+  header: {
+    paddingHorizontal: space.md,
+    paddingTop: space.md,
+    paddingBottom: space.sm,
+    borderBottomWidth: 1,
+    gap: space.sm,
   },
-  searchContainer: {
+  titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 44,
+    gap: space.sm,
+  },
+  titleBlock: { flex: 1 },
+  title: { ...type.display },
+  subtitle: { fontSize: 13, marginTop: 2 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+  iconBtn: {
+    width: 40,
+    height: 40,
     borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    gap: 8,
-  },
-  searchInput: {
-    flex: 1,
-    height: '100%',
-    fontSize: 14,
-  },
-  caseFilterButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  newBtn: {
+    height: 40,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  newBtnText: { fontSize: 14, fontWeight: '700' },
+  ghostBtn: {
+    height: 40,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ghostBtnText: { fontSize: 14, fontWeight: '700' },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+  searchField: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 46,
+    borderRadius: radii.md,
+    paddingHorizontal: 14,
+    gap: 10,
+  },
+  searchInput: { flex: 1, height: '100%', fontSize: 15, paddingVertical: 0 },
+  filterBtn: {
+    width: 46,
+    height: 46,
+    borderRadius: radii.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipsRow: { gap: space.xs, paddingRight: space.md },
+  chip: {
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipText: { fontSize: 13, fontWeight: '600' },
+  selectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  selectionHint: { fontSize: 13 },
+  linkText: { fontSize: 13, fontWeight: '700' },
+
   caseFilterOverlay: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
-    backgroundColor: 'rgba(0,0,0,0.42)',
+    backgroundColor: 'rgba(11,19,36,0.45)',
   },
   caseFilterModal: {
     width: '100%',
     maxHeight: '72%',
-    borderRadius: 18,
+    borderRadius: radii.xl,
     borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingHorizontal: 18,
+    paddingTop: 18,
     paddingBottom: 8,
   },
   caseFilterHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBottom: 10,
+    paddingBottom: 8,
   },
-  caseFilterTitle: { fontSize: 17, fontWeight: '800' },
-  caseFilterClose: { fontSize: 26, lineHeight: 26 },
+  caseFilterTitle: { ...type.heading },
+  modalClose: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   caseFilterList: { flexGrow: 0 },
   caseFilterOption: {
-    minHeight: 44,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
   },
-  caseFilterOptionText: { fontSize: 14, fontWeight: '600' },
+  caseFilterOptionText: { fontSize: 15, fontWeight: '600' },
 
-  selectionActions: {
+  listContent: {
+    paddingHorizontal: space.md,
+    paddingTop: space.md,
+    paddingBottom: 110,
+    gap: 10,
+  },
+  emptyListContent: { flexGrow: 1, paddingHorizontal: space.md },
+
+  card: {
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    padding: 14,
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 6,
+    alignItems: 'flex-start',
   },
-  count: { flex: 1, fontSize: 12, fontWeight: '800' },
-  selectAllButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderRadius: 9,
-    marginLeft: 8,
-  },
-  selectAllText: { fontSize: 11, fontWeight: '800' },
-  cancelButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderWidth: 1,
-    borderRadius: 9,
-  },
-  selectCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 7,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 8,
+    marginRight: 12,
+    marginTop: 1,
   },
-
-  listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 90,
-    paddingTop: 6,
-    gap: 10,
-  },
-  emptyListContent: { flexGrow: 1, paddingHorizontal: 16 },
-
-  card: {
-    borderRadius: 17,
-    padding: 2,
-    marginTop: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: { fontSize: 17, fontWeight: '800' },
-  cardBody: { flex: 1, marginLeft: 12 },
-  cardTitle: { fontSize: 15, fontWeight: '800' },
-  cardMeta: {
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  timeText: {
-    fontSize: 10,
-    marginLeft: 8,
-  },
-  unreadBadge: {
-    borderRadius: 10,
-    minHeight: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
+  cardBody: { flex: 1 },
+  cardTop: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+  cardTitle: { flex: 1, fontSize: 15, fontWeight: '700' },
+  ageChip: {
+    borderRadius: radii.xs,
+    paddingHorizontal: 7,
     paddingVertical: 2,
-    marginTop: 0,
   },
-  unreadText: {
-    color: '#FFF',
-    fontSize: 9,
-    fontWeight: '800',
-  },
-  latestCasePreview: {
-    marginTop: 4,
-  },
-  latestCaseTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  latestCaseLabel: { fontSize: 10, fontWeight: '700' },
-  latestCaseName: { flex: 1, fontSize: 11, fontWeight: '700' },
-  latestCaseRemark: { fontSize: 10, marginTop: 1 },
-  arrow: { fontSize: 24, lineHeight: 26, marginLeft: 4 },
-
-  fab: {
-    position: 'absolute',
-    bottom: 24,
-    right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  bulkFab: {
-    position: 'absolute',
-    right: 22,
-    bottom: 24,
-    minWidth: 126,
-    height: 56,
-    borderRadius: 28,
-    paddingHorizontal: 17,
+  ageText: { ...type.micro },
+  caseName: { fontSize: 14, fontWeight: '600', marginTop: 4 },
+  caseRemark: { fontSize: 13, marginTop: 2 },
+  cardMeta: { fontSize: 13, marginTop: 4 },
+  cardFooter: {
     flexDirection: 'row',
-    gap: 7,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+  },
+  caseCount: { fontSize: 12, fontWeight: '600' },
+  assignee: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 },
+  assigneeAvatar: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
   },
-  bulkFabText: { color: '#FFF', fontSize: 14, fontWeight: '900' },
+  assigneeInitials: { fontSize: 9, fontWeight: '800' },
+  assigneeName: { fontSize: 12, fontWeight: '600', flexShrink: 1 },
+  openPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: radii.pill,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+  },
+  openDot: { width: 6, height: 6, borderRadius: 3 },
+  openPillText: { fontSize: 11, fontWeight: '700' },
+  chevron: { marginLeft: 6, marginTop: 2 },
+
+  bulkBar: {
+    position: 'absolute',
+    left: space.md,
+    right: space.md,
+    bottom: space.md,
+    borderRadius: radii.lg,
+    paddingVertical: 10,
+    paddingLeft: 16,
+    paddingRight: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    elevation: 8,
+    shadowOpacity: 0.22,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  bulkInfo: { flex: 1 },
+  bulkCount: { fontSize: 15, fontWeight: '700' },
+  bulkSub: { fontSize: 12, marginTop: 1 },
+  bulkBtn: {
+    height: 40,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    minWidth: 120,
+  },
+  bulkBtnText: { fontSize: 14, fontWeight: '700' },
 });

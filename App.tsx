@@ -24,8 +24,9 @@ import { ScreenTransition } from './src/components/animations';
 import { ConnectionBanner } from './src/components/ConnectionBanner';
 
 import { KeyboardProvider } from './src/contexts/KeyboardContext';
+import { ThemeProvider } from './src/contexts/ThemeContext';
 
-export default function App() {
+function AppContent() {
   const theme = useTheme();
   const [session, setSession] = useState<Session | null | undefined>(undefined);
 
@@ -263,5 +264,13 @@ export default function App() {
       </AppToastProvider>
       </SafeAreaProvider>
     </KeyboardProvider>
+  );
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
   );
 }

@@ -17,7 +17,7 @@ import {
   unwrapList,
 } from '../api/workspace';
 import { LoadState } from '../components/LoadState';
-import { useTheme } from '../theme/theme';
+import { useTheme, radii, type, cardShadow } from '../theme/theme';
 
 type Recipients = {
   total: number;
@@ -127,7 +127,7 @@ export function CampaignDetailsScreen({
         ListHeaderComponent={
           <View>
             {/* Header Campaign Meta Card */}
-            <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <View style={[styles.card, cardShadow, { backgroundColor: theme.surface, borderColor: theme.border, shadowColor: theme.shadow }]}>
               <View style={styles.rowBetween}>
                 <View style={[styles.badge, { backgroundColor: theme.mint }]}>
                   <Text style={[styles.badgeText, { color: theme.mintText }]}>
@@ -148,18 +148,18 @@ export function CampaignDetailsScreen({
             <SectionLabel label={`Recipients — ${total} Total`} theme={theme} />
             {total > 0 ? (
               <View style={[styles.sectionCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                <View style={[styles.funnel, { backgroundColor: theme.isDark ? '#1E293B' : '#E2E8F0' }]}>
-                  <View style={{ flex: r.sent || 0.0001, backgroundColor: ACCENTS.delivered }} />
-                  <View style={{ flex: r.read || 0.0001, backgroundColor: ACCENTS.read }} />
-                  <View style={{ flex: r.pending || 0.0001, backgroundColor: ACCENTS.pending }} />
-                  <View style={{ flex: r.failed || 0.0001, backgroundColor: ACCENTS.failed }} />
+                <View style={[styles.funnel, { backgroundColor: theme.fieldBg }]}>
+                  <View style={{ flex: r.sent || 0.0001, backgroundColor: theme.accent }} />
+                  <View style={{ flex: r.read || 0.0001, backgroundColor: theme.emerald }} />
+                  <View style={{ flex: r.pending || 0.0001, backgroundColor: theme.warning }} />
+                  <View style={{ flex: r.failed || 0.0001, backgroundColor: theme.danger }} />
                 </View>
-                
+
                 <View style={styles.legendGrid}>
-                  <LegendChip color={ACCENTS.delivered} label="Sent" value={r.sent} theme={theme} />
-                  <LegendChip color={ACCENTS.read} label="Read" value={r.read} theme={theme} />
-                  <LegendChip color={ACCENTS.pending} label="Pending" value={r.pending} theme={theme} />
-                  <LegendChip color={ACCENTS.failed} label="Failed" value={r.failed} theme={theme} />
+                  <LegendChip color={theme.accent} label="Sent" value={r.sent} theme={theme} />
+                  <LegendChip color={theme.emerald} label="Read" value={r.read} theme={theme} />
+                  <LegendChip color={theme.warning} label="Pending" value={r.pending} theme={theme} />
+                  <LegendChip color={theme.danger} label="Failed" value={r.failed} theme={theme} />
                 </View>
               </View>
             ) : (
@@ -205,7 +205,7 @@ function ScreenHeader({
         style={styles.backBtn}
         hitSlop={8}
       >
-        <ChevronLeft size={24} color={theme.emerald} strokeWidth={2.5} />
+        <ChevronLeft size={24} color={theme.ink} strokeWidth={2.4} />
       </Pressable>
       <Text numberOfLines={1} style={[styles.headerTitle, { color: theme.ink }]}>
         {title}
@@ -231,7 +231,7 @@ function LegendChip({
   theme: ReturnType<typeof useTheme>;
 }) {
   return (
-    <View style={[styles.legendChip, { backgroundColor: theme.isDark ? '#1E293B' : '#F8FAFC', borderColor: theme.border }]}>
+    <View style={[styles.legendChip, { backgroundColor: theme.fieldBg, borderColor: theme.fieldBg }]}>
       <View style={[styles.legendDot, { backgroundColor: color }]} />
       <Text style={[styles.legendValue, { color: theme.ink }]}>{value ?? 0}</Text>
       <Text style={[styles.legendLabel, { color: theme.muted }]}>{label}</Text>
@@ -257,15 +257,21 @@ function CostCell({
 }
 
 function StatusChip({ status, theme }: { status: string; theme: ReturnType<typeof useTheme> }) {
-  const isComplete = status === 'complete' || status === 'completed';
-  const color =
-    isComplete ? ACCENTS.delivered
-    : status === 'running' ? theme.emerald
-    : status === 'scheduled' ? ACCENTS.pending
-    : theme.muted;
+  const lower = String(status || '').toLowerCase();
+  const tone =
+    lower === 'running' || lower === 'active'
+      ? { bg: theme.mint, fg: theme.mintText, dot: theme.emerald }
+      : lower === 'scheduled' || lower === 'pending'
+      ? { bg: theme.infoBg, fg: theme.info, dot: theme.info }
+      : lower === 'draft'
+      ? { bg: theme.warnBg, fg: theme.warning, dot: theme.warning }
+      : lower === 'failed' || lower === 'cancelled'
+      ? { bg: theme.dangerBg, fg: theme.danger, dot: theme.danger }
+      : { bg: theme.fieldBg, fg: theme.inkSoft, dot: theme.muted };
   return (
-    <View style={[styles.statusChip, { backgroundColor: color + '20' }]}>
-      <Text style={[styles.statusChipText, { color }]}>{status}</Text>
+    <View style={[styles.statusChip, { backgroundColor: tone.bg }]}>
+      <View style={[styles.statusDot, { backgroundColor: tone.dot }]} />
+      <Text style={[styles.statusChipText, { color: tone.fg }]}>{status}</Text>
     </View>
   );
 }
@@ -309,17 +315,18 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   backBtn: { width: 36, height: 36, alignItems: 'flex-start', justifyContent: 'center' },
-  headerTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '800' },
+  headerTitle: { flex: 1, textAlign: 'center', ...type.heading },
   list: { paddingHorizontal: 16, paddingBottom: 24 },
-  card: { borderRadius: 18, borderWidth: 1, padding: 16, marginTop: 14 },
+  card: { borderRadius: radii.lg, borderWidth: 1, padding: 16, marginTop: 16 },
   sectionCard: { borderRadius: 18, borderWidth: 1, padding: 16, marginTop: 4 },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: radii.xs },
   badgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },
-  templateName: { fontSize: 18, fontWeight: '800', marginTop: 10 },
-  metaText: { fontSize: 12, marginTop: 4 },
-  statusChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  statusChipText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },
+  templateName: { fontSize: 18, fontWeight: '700', letterSpacing: -0.2, marginTop: 12 },
+  metaText: { fontSize: 13, marginTop: 4 },
+  statusChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 12 },
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
+  statusChipText: { fontSize: 12, fontWeight: '700', textTransform: 'capitalize' },
   sectionLabel: {
     fontSize: 11,
     fontWeight: '800',
@@ -329,7 +336,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginLeft: 4,
   },
-  funnel: { height: 12, borderRadius: 6, flexDirection: 'row', overflow: 'hidden' },
+  funnel: { height: 8, borderRadius: 4, flexDirection: 'row', overflow: 'hidden' },
   legendGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 14, gap: 8 },
   legendChip: {
     flexDirection: 'row',
@@ -346,14 +353,14 @@ const styles = StyleSheet.create({
   costRow: { flexDirection: 'row', gap: 10 },
   costCell: {
     flex: 1,
-    borderRadius: 16,
+    borderRadius: radii.md,
     borderWidth: 1,
     paddingVertical: 14,
     paddingHorizontal: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  costValue: { fontSize: 17, fontWeight: '800' },
+  costValue: { fontSize: 17, fontWeight: '700', letterSpacing: -0.2 },
   costLabel: { fontSize: 10, marginTop: 4, textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: '700' },
   emptyLog: { textAlign: 'center', paddingVertical: 20, fontSize: 13 },
   logRow: {
@@ -368,4 +375,4 @@ const styles = StyleSheet.create({
   logPhone: { fontSize: 13, fontWeight: '600' },
   logRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   logStatusText: { fontSize: 11, textTransform: 'capitalize' },
-});
+});

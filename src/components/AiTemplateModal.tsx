@@ -301,13 +301,13 @@ export function AiTemplateModal({
             
             {/* --- Caution Banner for Low Balance --- */}
             {isBlocked && (
-              <View style={[styles.cautionBanner, { backgroundColor: '#FEF3C7', borderColor: '#F59E0B' }]}>
-                <AlertTriangle size={18} color="#D97706" style={{ marginTop: 1, flexShrink: 0 }} />
+              <View style={[styles.cautionBanner, { backgroundColor: theme.warnBg, borderColor: theme.warning }]}>
+                <AlertTriangle size={18} color={theme.warning} style={{ marginTop: 1, flexShrink: 0 }} />
                 <View style={{ flex: 1, marginLeft: 10 }}>
-                  <Text style={styles.cautionTitle}>
+                  <Text style={[styles.cautionTitle, { color: theme.warning }]}>
                     Low Wallet Balance (₹{Number(aiStatus.balance).toFixed(2)})
                   </Text>
-                  <Text style={styles.cautionBody}>
+                  <Text style={[styles.cautionBody, { color: theme.inkSoft }]}>
                     AI generation with OneChat's platform key requires a minimum wallet balance of ₹100. Recharge or configure your own personal AI API key.
                   </Text>
                   <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
@@ -324,7 +324,7 @@ export function AiTemplateModal({
                     </Pressable>
                     <Pressable
                       onPress={() => { onClose(); }}
-                      style={[styles.cautionBtn, { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#D97706' }]}
+                      style={[styles.cautionBtn, { backgroundColor: theme.surface, borderWidth: 1, borderColor: '#D97706' }]}
                     >
                       <Key size={12} color="#D97706" />
                       <Text style={[styles.cautionBtnText, { color: '#D97706' }]}>Add Personal Key</Text>
@@ -369,7 +369,7 @@ export function AiTemplateModal({
                   onPress={() => setCategory(cat)}
                   style={[styles.selectChip, { backgroundColor: category === cat ? theme.emerald : theme.surface, borderColor: theme.border }]}
                 >
-                  <Text style={{ color: category === cat ? '#FFF' : theme.ink, fontSize: 10, fontWeight: '800' }}>{cat}</Text>
+                  <Text style={{ color: category === cat ? theme.onPrimary : theme.ink, fontSize: 10, fontWeight: '800' }}>{cat}</Text>
                 </Pressable>
               ))}
             </View>
@@ -383,7 +383,7 @@ export function AiTemplateModal({
                   onPress={() => setLanguage(lang)}
                   style={[styles.selectChip, { backgroundColor: language === lang ? theme.emerald : theme.surface, borderColor: theme.border }]}
                 >
-                  <Text style={{ color: language === lang ? '#FFF' : theme.ink, fontSize: 10, fontWeight: '800' }}>{lang.toUpperCase()}</Text>
+                  <Text style={{ color: language === lang ? theme.onPrimary : theme.ink, fontSize: 10, fontWeight: '800' }}>{lang.toUpperCase()}</Text>
                 </Pressable>
               ))}
             </View>
@@ -397,7 +397,7 @@ export function AiTemplateModal({
                   onPress={() => setTone(t.value)}
                   style={[styles.selectChip, { backgroundColor: tone === t.value ? theme.emerald : theme.surface, borderColor: theme.border }]}
                 >
-                  <Text style={{ color: tone === t.value ? '#FFF' : theme.ink, fontSize: 10, fontWeight: '800' }}>{t.label}</Text>
+                  <Text style={{ color: tone === t.value ? theme.onPrimary : theme.ink, fontSize: 10, fontWeight: '800' }}>{t.label}</Text>
                 </Pressable>
               ))}
             </View>
@@ -421,7 +421,7 @@ export function AiTemplateModal({
                       onPress={() => { setHeaderType(h); if (h !== 'IMAGE') setReferenceImageUrl(''); }}
                       style={[styles.selectChip, { backgroundColor: headerType === h ? theme.emerald : theme.canvas, borderColor: theme.border }]}
                     >
-                      <Text style={{ color: headerType === h ? '#FFF' : theme.ink, fontSize: 10, fontWeight: '800' }}>{h}</Text>
+                      <Text style={{ color: headerType === h ? theme.onPrimary : theme.ink, fontSize: 10, fontWeight: '800' }}>{h}</Text>
                     </Pressable>
                   ))}
                 </View>
@@ -483,7 +483,7 @@ export function AiTemplateModal({
                       onPress={() => setButtonType(b)}
                       style={[styles.selectChip, { backgroundColor: buttonType === b ? theme.emerald : theme.canvas, borderColor: theme.border }]}
                     >
-                      <Text style={{ color: buttonType === b ? '#FFF' : theme.ink, fontSize: 10, fontWeight: '800' }}>{b}</Text>
+                      <Text style={{ color: buttonType === b ? theme.onPrimary : theme.ink, fontSize: 10, fontWeight: '800' }}>{b}</Text>
                     </Pressable>
                   ))}
                 </View>
@@ -506,7 +506,7 @@ export function AiTemplateModal({
               style={[styles.generateBtn, { backgroundColor: isBlocked ? '#9CA3AF' : theme.emerald, opacity: loading ? 0.7 : 1 }]}
             >
               {loading ? (
-                <ActivityIndicator color="#FFF" size="small" />
+                <ActivityIndicator color={theme.onPrimary} size="small" />
               ) : isBlocked ? (
                 <>
                   <AlertTriangle size={18} color="#FFF" />
@@ -514,8 +514,8 @@ export function AiTemplateModal({
                 </>
               ) : (
                 <>
-                  <Sparkles size={18} color="#FFF" />
-                  <Text style={styles.generateBtnText}>Generate with AI</Text>
+                  <Sparkles size={18} color={theme.onPrimary} />
+                  <Text style={[styles.generateBtnText, { color: theme.onPrimary }]}>Generate with AI</Text>
                 </>
               )}
             </Pressable>
@@ -581,7 +581,7 @@ export function AiTemplateModal({
                     <Text style={[styles.applyBtnText, { color: theme.emerald }]}>Apply to Editor</Text>
                   </Pressable>
                   <Pressable onPress={handleSaveDirectly} disabled={savingDirectly} style={[styles.saveDirectBtn, { backgroundColor: theme.emerald }]}>
-                    {savingDirectly ? <ActivityIndicator color="#FFF" size="small" /> : <><CheckCircle size={16} color="#FFF" /><Text style={styles.saveDirectBtnText}>Save Directly</Text></>}
+                    {savingDirectly ? <ActivityIndicator color={theme.onPrimary} size="small" /> : <><CheckCircle size={16} color={theme.onPrimary} /><Text style={[styles.saveDirectBtnText, { color: theme.onPrimary }]}>Save Directly</Text></>}
                   </Pressable>
                 </View>
               </View>

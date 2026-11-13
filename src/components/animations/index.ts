@@ -4,3 +4,4 @@ export * from './SlideUpModal';
 export * from './FadeScaleModal';
 export * from './ScreenTransition';
 export * from './PulseView';
+export * from './StackScreen';

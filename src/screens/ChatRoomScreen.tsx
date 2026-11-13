@@ -43,6 +43,8 @@ import {
   Pause,
   Play,
   Square,
+  ChevronLeft,
+  SendHorizontal,
 } from 'lucide-react-native';
 import {
   launchImageLibrary,
@@ -78,7 +80,7 @@ import { TemplateModal } from '../components/TemplateModal';
 import { ProductCatalogsModal } from '../components/ProductCatalogsModal';
 import { MediaViewerModal } from '../components/MediaViewerModal';
 import { resolveTemplateBodyText, getTemplateHeaderMedia } from '../utils/templateUtils';
-import { useTheme } from '../theme/theme';
+import { ThemeColors, useTheme, radii } from '../theme/theme';
 import { socketManager } from '../services/socketManager';
 import { Image as ImageIcon, Video, FileText, Music, LayoutTemplate } from 'lucide-react-native';
 import ReactNativeBlobUtil from 'react-native-blob-util';
@@ -220,6 +222,43 @@ function formatVoiceDuration(durationMs: number) {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
+/**
+ * chat-history carries the chat's current assignment as `assigning`. Depending on the
+ * response envelope it lands at the top level, under meta or under data.
+ */
+function extractAssigning(response: any): any | null {
+  const candidates = [response?.assigning, response?.meta?.assigning, response?.data?.assigning];
+  for (const value of candidates) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+  }
+  return null;
+}
+
+/**
+ * Shows an image at its natural aspect ratio (clamped so very tall images
+ * don't take over the bubble). Template banners were being cropped by the
+ * fixed 1.2:1 frame.
+ */
+function AutoAspectImage({ uri, style }: { uri: string; style: any }) {
+  const [ratio, setRatio] = React.useState<number | null>(null);
+  React.useEffect(() => {
+    let alive = true;
+    Image.getSize(
+      uri,
+      (w, h) => { if (alive && w > 0 && h > 0) setRatio(Math.min(Math.max(w / h, 0.6), 2.5)); },
+      () => {},
+    );
+    return () => { alive = false; };
+  }, [uri]);
+  return (
+    <Image
+      source={{ uri }}
+      style={[style, ratio ? { aspectRatio: ratio } : null]}
+      resizeMode={ratio ? 'contain' : 'cover'}
+    />
+  );
+}
+
 export function ChatRoomScreen({
   projectId,
   session,
@@ -336,6 +375,7 @@ export function ChatRoomScreen({
 
   const [caseStatus, setCaseStatus] = useState<number | null>(null);
   const [caseStatusLoading, setCaseStatusLoading] = useState(false);
+  const [openCaseName, setOpenCaseName] = useState('');
   const [caseListModalOpen, setCaseListModalOpen] = useState(false);
   const [caseList, setCaseList] = useState<any[]>([]);
   const [caseListLoading, setCaseListLoading] = useState(false);
@@ -349,11 +389,21 @@ export function ChatRoomScreen({
   const [caseFormSubmitting, setCaseFormSubmitting] = useState(false);
 
   const isAssigned = assignmentInfo?.assigned === true;
-  const assignedUserName =
+  const assignedUserBaseName =
     assignmentInfo?.assigned_user?.name ||
     assignmentInfo?.assigned_user?.username ||
     assignmentInfo?.assigned_user?.mobile ||
-    'Unassigned';
+    '';
+  const assignedToMe =
+    assignmentInfo?.assigned_to_me === true ||
+    (!!session?.username && assignmentInfo?.assigned_user?.username === session.username);
+  const assignedUserName = assignedUserBaseName
+    ? assignedToMe
+      ? `${assignedUserBaseName} (you)`
+      : assignedUserBaseName
+    : assignedToMe
+      ? 'Assigned to you'
+      : 'Assigned';
   const assignedUsername = assignmentInfo?.assigned_user?.username;
   const assignmentUsers: any[] = assignmentInfo?.users || [];
 
@@ -419,9 +469,8 @@ export function ChatRoomScreen({
           setMessages(prev => mergeMessages(uniqueFetched, prev));
 
           // Chat history responses carry current assignment info, same as the web app.
-          if ((response as any)?.assigning) {
-            setAssignmentInfo((response as any).assigning);
-          }
+          const assigning = extractAssigning(response);
+          if (assigning) setAssignmentInfo(assigning);
         }
 
         if (response.last_id) {
@@ -454,19 +503,35 @@ export function ChatRoomScreen({
     });
   }, []);
 
-  // Fetch open-case count whenever the chat changes, same as the web header badge.
+  // Fetch open-case count + latest open case name on mount (not only when the case
+  // modal opens) so the header chip shows the real case.
+  const caseStatusLoaded = useRef(false);
   const fetchCaseStatus = useCallback(async () => {
     if (!contactNumber) return;
-    setCaseStatusLoading(true);
+    // Only show the "Case…" placeholder on the very first load; refreshes update in place.
+    if (!caseStatusLoaded.current) setCaseStatusLoading(true);
     try {
-      const res = await getOpenCaseCount(session, projectId, contactNumber);
-      setCaseStatus(
-        !res?.error && typeof res?.case_open_count === 'number'
-          ? Math.max(0, res.case_open_count)
-          : null,
-      );
-    } catch {
-      setCaseStatus(null);
+      const [countRes, listRes] = await Promise.allSettled([
+        getOpenCaseCount(session, projectId, contactNumber),
+        getCaseList(session, projectId, { number: contactNumber, status: 'open', limit: 5 }),
+      ]);
+      const openRows: any[] =
+        listRes.status === 'fulfilled' && Array.isArray((listRes.value as any)?.data)
+          ? (listRes.value as any).data
+          : [];
+      if (countRes.status === 'fulfilled' && !countRes.value?.error) {
+        const raw = Number((countRes.value as any)?.case_open_count);
+        setCaseStatus(Number.isFinite(raw) ? Math.max(0, raw) : null);
+      } else if (listRes.status === 'fulfilled') {
+        const total = Number((listRes.value as any)?.meta?.total ?? (listRes.value as any)?.total_records);
+        setCaseStatus(Number.isFinite(total) ? total : openRows.length);
+      } else {
+        setCaseStatus(null);
+      }
+      if (listRes.status === 'fulfilled') {
+        setOpenCaseName(String(openRows[0]?.name || '').trim());
+      }
+      caseStatusLoaded.current = true;
     } finally {
       setCaseStatusLoading(false);
     }
@@ -475,6 +540,42 @@ export function ChatRoomScreen({
   useEffect(() => {
     fetchCaseStatus();
   }, [fetchCaseStatus]);
+
+  // Re-read assignment from the server (chat-history is the only endpoint that returns it).
+  const refreshAssignment = useCallback(async () => {
+    if (!contactNumber) return;
+    try {
+      const res = await getChatHistory(session, projectId, contactNumber, undefined);
+      const assigning = extractAssigning(res);
+      if (assigning) setAssignmentInfo(assigning);
+    } catch {
+      // keep current state
+    }
+  }, [session, projectId, contactNumber]);
+
+  // Live updates: case_status carries the number; chat_assigned does not (and its
+  // assigned_to_me is relative to whoever made the change), so re-fetch for this chat.
+  useEffect(() => {
+    let assignTimer: ReturnType<typeof setTimeout> | null = null;
+    const unsubAssigned = socketManager.onChatAssigned(() => {
+      if (assignTimer) clearTimeout(assignTimer);
+      assignTimer = setTimeout(() => {
+        assignTimer = null;
+        void refreshAssignment();
+      }, 300);
+    });
+    const unsubCase = socketManager.onCaseStatus((data) => {
+      if (String(data?.number ?? '') !== String(contactNumber)) return;
+      const count = Number(data?.case_open_count);
+      if (Number.isFinite(count)) setCaseStatus(Math.max(0, count));
+      void fetchCaseStatus();
+    });
+    return () => {
+      if (assignTimer) clearTimeout(assignTimer);
+      unsubAssigned();
+      unsubCase();
+    };
+  }, [contactNumber, fetchCaseStatus, refreshAssignment]);
 
   useEffect(() => {
     const unsubChat = socketManager.onChat((data) => {
@@ -572,14 +673,7 @@ export function ChatRoomScreen({
         }
 
         // Re-sync assignment info from server to ensure accurate state
-        try {
-          const freshHistory = await getChatHistory(session, projectId, contactNumber, undefined);
-          if ((freshHistory as any)?.assigning) {
-            setAssignmentInfo((freshHistory as any).assigning);
-          }
-        } catch {
-          // Non-critical: optimistic state already applied above
-        }
+        await refreshAssignment();
 
         // Close the assign modal on success
         setAssignModalOpen(false);
@@ -598,7 +692,7 @@ export function ChatRoomScreen({
         setAssignActionLoading(false);
       }
     },
-    [session, projectId, contactNumber],
+    [session, projectId, contactNumber, refreshAssignment],
   );
 
   const openAssignModal = useCallback(() => {
@@ -1319,31 +1413,45 @@ export function ChatRoomScreen({
               ((messageType === 'image' || messageType === 'video') && Boolean((item as any).media_url)) ||
               (templateMedia?.type === 'image' && Boolean(templateMedia?.url))
             );
+            const isTemplateMsg = messageType === 'template' || Boolean(item.template);
+            const templateButtons: any[] = isTemplateMsg
+              ? (((item.template?.components || []) as any[]).find((c: any) => String(c?.type || '').toUpperCase() === 'BUTTONS')?.buttons || [])
+                  .filter((button: any) => button?.text)
+              : [];
             return (
               <View style={[
                 styles.messageBubble,
                 isOut
-                  ? { backgroundColor: theme.bubbleOut, borderTopRightRadius: 2 }
-                  : { backgroundColor: theme.bubbleIn, borderTopLeftRadius: 2 },
+                  ? { backgroundColor: theme.bubbleOut, borderTopRightRadius: 4 }
+                  : { backgroundColor: theme.bubbleIn, borderTopLeftRadius: 4 },
+                isTemplateMsg && { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border },
                 isMediaMsg && styles.messageBubbleMedia,
               ]}>
+                {isTemplateMsg ? (
+                  <View style={[styles.templateTagRow, isMediaMsg && styles.templateTagRowMedia]}>
+                    <View style={[styles.templateTag, { backgroundColor: theme.violetBg }]}>
+                      <LayoutTemplate size={11} color={theme.violet} strokeWidth={2.4} />
+                      <Text style={[styles.templateTagText, { color: theme.violet }]}>TEMPLATE</Text>
+                    </View>
+                  </View>
+                ) : null}
                 {renderReplyContext(item)}
                 {renderMessageBody(item, messageType, isOut)}
                 <View style={[styles.messageFooter, isMediaMsg && styles.messageFooterMedia]}>
                   <Text style={[
                     styles.messageTime,
-                    { color: isOut ? theme.bubbleOutText + 'A0' : theme.muted },
+                    { color: theme.muted },
                   ]}>
                     {formatMessageTime(item.create_date || item.timestamp)}
                   </Text>
                   {isOut && (
                     <View style={{ marginLeft: 4, flexDirection: 'row', alignItems: 'center' }}>
-                      {item.status === 'pending' && <Clock size={14} color={theme.muted} />}
-                      {item.status === 'sent' && <Check size={16} color={theme.muted} />}
-                      {item.status === 'delivered' && <CheckCheck size={16} color={theme.muted} />}
-                      {item.status === 'read' && <CheckCheck size={16} color="#34B7F1" />}
+                      {item.status === 'pending' && <Clock size={13} color={theme.muted} />}
+                      {item.status === 'sent' && <Check size={15} color={theme.muted} />}
+                      {item.status === 'delivered' && <CheckCheck size={15} color={theme.muted} />}
+                      {item.status === 'read' && <CheckCheck size={15} color={theme.readTick} />}
                       {item.status === 'failed' && (
-                        <AlertCircle size={14} color="#EF4444" style={{ marginLeft: 4 }} />
+                        <AlertCircle size={14} color={theme.danger} style={{ marginLeft: 4 }} />
                       )}
                     </View>
                   )}
@@ -1353,7 +1461,7 @@ export function ChatRoomScreen({
                       hitSlop={12}
                       style={{ marginLeft: 6, opacity: 0.8 }}
                     >
-                      <CornerUpLeft size={13} color={isOut ? theme.bubbleOutText + 'A0' : theme.muted} />
+                      <CornerUpLeft size={13} color={theme.muted} />
                     </ScalePressable>
                   )}
                   <Pressable
@@ -1363,9 +1471,23 @@ export function ChatRoomScreen({
                     hitSlop={10}
                     style={{ marginLeft: 6, opacity: 0.85 }}
                   >
-                    <Info size={13} color={isOut ? theme.bubbleOutText + 'A0' : theme.muted} />
+                    <Info size={13} color={theme.muted} />
                   </Pressable>
                 </View>
+                {templateButtons.length > 0 ? (
+                  <View style={[styles.templateButtons, !isMediaMsg && styles.templateButtonsInset]}>
+                    {templateButtons.map((button: any, index: number) => (
+                      <View
+                        key={`${button.text}-${index}`}
+                        style={[styles.templateButtonRow, { borderTopColor: theme.divider }]}
+                      >
+                        <Text numberOfLines={1} style={[styles.templateButtonText, { color: theme.emerald }]}>
+                          {button.text}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
               </View>
             );
           })()}
@@ -1387,7 +1509,7 @@ export function ChatRoomScreen({
       else if (replyType === 'template') replyPreview = resolveTemplateBodyText(replyMsg);
 
       return (
-        <View style={[styles.replyContext, { borderLeftColor: theme.emerald }]}>
+        <View style={[styles.replyContext, { borderLeftColor: theme.emerald, backgroundColor: theme.fieldBg }]}>
           <Text style={[styles.replyContextName, { color: theme.emerald }]}>
             {replyMsg.type === 'out' ? 'You' : (contactName || contactNumber)}
           </Text>
@@ -1443,16 +1565,16 @@ export function ChatRoomScreen({
               {renderWhatsAppText(interactive.body?.text || msg.message || 'Interactive message', [styles.messageText, { color: textColor }])}
             </View>
             {interactive.footer?.text ? (
-              <Text style={[styles.interactiveCleanFooter, { color: isOut ? (theme.isDark ? '#AEBAC1' : '#667781') : theme.muted }]}>
+              <Text style={[styles.interactiveCleanFooter, { color: theme.muted }]}>
                 {interactive.footer.text}
               </Text>
             ) : null}
 
             {/* Clean action button or chosen response (No harsh borders) */}
             {reply ? (
-              <View style={[styles.cleanReplyBox, theme.isDark && { backgroundColor: 'rgba(255,255,255,0.08)' }]}>
-                <Text style={[styles.cleanReplyTitle, { color: theme.isDark ? '#25D366' : '#00A884' }]}>{reply.title || reply.id}</Text>
-                {reply.description ? <Text style={[styles.cleanReplySub, { color: theme.isDark ? '#AEBAC1' : theme.muted }]}>{reply.description}</Text> : null}
+              <View style={[styles.cleanReplyBox, { backgroundColor: theme.fieldBg }]}>
+                <Text style={[styles.cleanReplyTitle, { color: theme.emerald }]}>{reply.title || reply.id}</Text>
+                {reply.description ? <Text style={[styles.cleanReplySub, { color: theme.muted }]}>{reply.description}</Text> : null}
               </View>
             ) : options.length ? (
               <ScalePressable
@@ -1464,11 +1586,11 @@ export function ChatRoomScreen({
                 }}
                 style={[
                   styles.cleanChooseBtn,
-                  theme.isDark && { backgroundColor: isOut ? 'rgba(255,255,255,0.12)' : 'rgba(37,211,102,0.15)' }
+                  { backgroundColor: theme.mint }
                 ]}
               >
-                <LayoutTemplate size={18} color={theme.isDark ? '#25D366' : '#00A884'} />
-                <Text style={[styles.cleanChooseBtnText, { color: theme.isDark ? '#25D366' : '#00A884' }]}>
+                <LayoutTemplate size={18} color={theme.emerald} />
+                <Text style={[styles.cleanChooseBtnText, { color: theme.emerald }]}>
                   {buttonLabel}
                 </Text>
               </ScalePressable>
@@ -1481,7 +1603,7 @@ export function ChatRoomScreen({
         return (
           <>
             <Pressable onPress={() => openMediaViewer(mediaUrl, 'image', mediaName)}>
-              <Image source={{ uri: mediaUrl }} style={styles.mediaImage} resizeMode="cover" />
+              <AutoAspectImage uri={mediaUrl} style={styles.mediaImage} />
             </Pressable>
             {textContent ? (
               <View style={styles.captionPad}>
@@ -1546,6 +1668,12 @@ export function ChatRoomScreen({
   };
 
   const initialLetter = (contactName || contactNumber || 'C').trim().charAt(0).toUpperCase();
+  const headerTone = avatarTone(contactName || contactNumber || 'C', theme);
+  const headerInitials = (() => {
+    const words = (contactName || '').trim().split(/\s+/).filter(word => /[A-Za-z]/.test(word.charAt(0)));
+    if (!words.length) return initialLetter;
+    return (words[0].charAt(0) + (words.length > 1 ? words[words.length - 1].charAt(0) : '')).toUpperCase();
+  })();
   const isUploading = uploadingKind !== null;
   // Chat is locked for sending when it's assigned to someone else (mirrors web app Conversation.js behaviour)
   const isLockedByAssignment = isAssigned && !assignmentInfo?.assigned_to_me;
@@ -1560,48 +1688,111 @@ export function ChatRoomScreen({
   return (
     <Animated.View style={[styles.safe, { backgroundColor: theme.header, paddingTop: insets.top, paddingBottom: keyboardHeightAnim }]}>
       {/* Sleek Top Header */}
-      <FadeInView direction="down" distance={8} duration={250} style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
-        <ScalePressable onPress={onBack} style={styles.backButton} hitSlop={8}>
-          <Text style={[styles.backButtonText, { color: theme.ink }]}>‹</Text>
-        </ScalePressable>
-
-        <View style={[styles.avatar, { backgroundColor: theme.mint }]}>
-          <Text style={[styles.avatarText, { color: theme.mintText }]}>{initialLetter}</Text>
-        </View>
-
-        <View style={styles.headerTitleContainer}>
-          <Text numberOfLines={1} style={[styles.headerTitle, { color: theme.ink }]}>{contactName}</Text>
-          <Text numberOfLines={1} style={[styles.headerSubtitle, { color: theme.muted }]}>{contactNumber}</Text>
-        </View>
-
-        <View style={styles.headerRightActions}>
+      <FadeInView direction="down" distance={8} duration={250} style={{ backgroundColor: theme.header }}>
+        <View style={styles.header}>
           <ScalePressable
-            style={styles.headerIconBtn}
+            onPress={onBack}
+            style={styles.backButton}
             hitSlop={8}
-            onPress={() => setContactTimelineVisible(true)}
             accessibilityRole="button"
-            accessibilityLabel="Open contact timeline"
+            accessibilityLabel="Back"
           >
-            <Activity size={20} color={theme.ink} />
+            <ChevronLeft size={26} color={theme.ink} strokeWidth={2.2} />
           </ScalePressable>
-          <View ref={headerMenuButtonRef} collapsable={false}>
-            <ScalePressable
-              style={styles.headerIconBtn}
-              hitSlop={8}
-              onPress={() => {
-                headerMenuButtonRef.current?.measureInWindow((x, y, width, height) => {
-                  const screenWidth = Dimensions.get('window').width;
-                  setHeaderMenuAnchor({
-                    top: y + height,
-                    right: Math.max(0, screenWidth - (x + width)),
-                  });
-                  setHeaderMenuOpen(true);
-                });
-              }}
-            >
-              <MoreVertical size={20} color={theme.ink} />
-            </ScalePressable>
+
+          <View style={[styles.avatar, { backgroundColor: headerTone.bg }]}>
+            <Text style={[styles.avatarText, { color: headerTone.fg }]}>{headerInitials}</Text>
           </View>
+
+          <View style={styles.headerTitleContainer}>
+            <Text numberOfLines={1} style={[styles.headerTitle, { color: theme.ink }]}>{contactName || contactNumber}</Text>
+            <Text numberOfLines={1} style={[styles.headerSubtitle, { color: theme.muted }]}>{contactNumber}</Text>
+          </View>
+
+          <View style={styles.headerRightActions}>
+            <ScalePressable
+              style={[styles.headerIconBtn, { borderColor: theme.border }]}
+              hitSlop={4}
+              onPress={() => setContactTimelineVisible(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Open contact timeline"
+            >
+              <Activity size={19} color={theme.ink} />
+            </ScalePressable>
+            <ScalePressable
+              style={[styles.headerIconBtn, { borderColor: theme.border }]}
+              hitSlop={4}
+              accessibilityRole="button"
+              accessibilityLabel="Chat assign"
+              onPress={openAssignModal}
+            >
+              {isAssigned ? (
+                <UserCheck size={19} color={theme.ink} />
+              ) : (
+                <UserPlus size={19} color={theme.ink} />
+              )}
+            </ScalePressable>
+            <View ref={headerMenuButtonRef} collapsable={false}>
+              <ScalePressable
+                style={[styles.headerIconBtn, { borderColor: theme.border }]}
+                hitSlop={4}
+                accessibilityRole="button"
+                accessibilityLabel="More options"
+                onPress={() => {
+                  headerMenuButtonRef.current?.measureInWindow((x, y, width, height) => {
+                    const screenWidth = Dimensions.get('window').width;
+                    setHeaderMenuAnchor({
+                      top: y + height,
+                      right: Math.max(0, screenWidth - (x + width)),
+                    });
+                    setHeaderMenuOpen(true);
+                  });
+                }}
+              >
+                <MoreVertical size={19} color={theme.ink} />
+              </ScalePressable>
+            </View>
+          </View>
+        </View>
+
+        {/* Context chips: assignee + case status */}
+        <View style={[styles.contextRow, { borderBottomColor: theme.border }]}>
+          <ScalePressable
+            accessibilityRole="button"
+            accessibilityLabel="Chat assignment"
+            onPress={openAssignModal}
+            style={[styles.contextChip, { backgroundColor: isAssigned ? theme.infoBg : theme.fieldBg }]}
+          >
+            {isAssigned ? (
+              <UserCheck size={13} color={theme.info} strokeWidth={2.4} />
+            ) : (
+              <UserPlus size={13} color={theme.muted} strokeWidth={2.4} />
+            )}
+            <Text numberOfLines={1} style={[styles.contextChipText, { color: isAssigned ? theme.info : theme.muted }]}>
+              {isAssigned ? assignedUserName : assignmentInfo ? 'Unassigned' : 'Assignee…'}
+            </Text>
+          </ScalePressable>
+          <ScalePressable
+            accessibilityRole="button"
+            accessibilityLabel="Cases"
+            onPress={openCaseListModal}
+            style={[styles.contextChip, { backgroundColor: (caseStatus ?? 0) > 0 ? theme.warnBg : theme.fieldBg }]}
+          >
+            <Briefcase size={13} color={(caseStatus ?? 0) > 0 ? theme.warning : theme.muted} strokeWidth={2.4} />
+            <Text numberOfLines={1} style={[styles.contextChipText, { color: (caseStatus ?? 0) > 0 ? theme.warning : theme.muted }]}>
+              {caseStatusLoading && caseStatus === null
+                ? 'Case…'
+                : (caseStatus ?? 0) > 0
+                  ? openCaseName
+                    ? (caseStatus ?? 0) > 1
+                      ? `${openCaseName} +${(caseStatus ?? 0) - 1}`
+                      : openCaseName
+                    : `Case open (${caseStatus})`
+                  : caseStatus === 0
+                    ? 'No open case'
+                    : 'Case'}
+            </Text>
+          </ScalePressable>
         </View>
       </FadeInView>
 
@@ -1655,7 +1846,7 @@ export function ChatRoomScreen({
             <ScalePressable style={styles.headerDropdownItem} onPress={openCaseListModal}>
               <View style={[styles.headerDropdownIconWrap, { backgroundColor: theme.inputBg }]}>
                 {(caseStatus ?? 0) > 0 ? (
-                  <AlertCircle size={18} color="#D97706" />
+                  <AlertCircle size={18} color={theme.warning} />
                 ) : (
                   <CheckCircle2 size={18} color={theme.emerald} />
                 )}
@@ -1907,10 +2098,9 @@ export function ChatRoomScreen({
 
       {/* Message List area */}
       <View style={[styles.chatBackground, { backgroundColor: theme.chatBg }]}>
-        <ChatWallpaper isDark={theme.isDark} />
         {datePillVisible && datePill ? (
           <View pointerEvents="none" style={styles.datePillWrap}>
-            <View style={[styles.datePill, { backgroundColor: theme.isDark ? '#1F2C34' : '#FFFFFF' }]}>
+            <View style={[styles.datePill, { backgroundColor: theme.surface }]}>
               <Text style={[styles.datePillText, { color: theme.muted }]}>{datePill}</Text>
             </View>
           </View>
@@ -1921,7 +2111,7 @@ export function ChatRoomScreen({
           renderItem={({ item }) =>
             item.kind === 'date' ? (
               <View style={styles.dateChipWrap}>
-                <View style={[styles.datePill, { backgroundColor: theme.isDark ? '#1F2C34' : '#FFFFFF' }]}>
+                <View style={[styles.datePill, { backgroundColor: theme.surface }]}>
                   <Text style={[styles.datePillText, { color: theme.muted }]}>{item.label}</Text>
                 </View>
               </View>
@@ -2081,11 +2271,11 @@ export function ChatRoomScreen({
       {replyingTo && (
         <FadeInView direction="up" distance={10} duration={200}>
           <View style={[styles.replyBanner, { backgroundColor: theme.surface, borderTopColor: theme.border }]}>
-            <View style={[styles.replyBannerContent, { borderLeftColor: '#3B82F6' }]}>
+            <View style={[styles.replyBannerContent, { borderLeftColor: theme.info, backgroundColor: theme.infoBg }]}>
               <View style={styles.replyBannerTextWrap}>
                 <View style={styles.replyBannerHeader}>
-                  <CornerUpLeft size={14} color="#3B82F6" />
-                  <Text style={[styles.replyBannerLabel, { color: '#3B82F6' }]}>
+                  <CornerUpLeft size={14} color={theme.info} />
+                  <Text style={[styles.replyBannerLabel, { color: theme.info }]}>
                     Replying to {replyingTo.type === 'out' ? 'yourself' : (contactName || contactNumber)}
                   </Text>
                 </View>
@@ -2116,8 +2306,8 @@ export function ChatRoomScreen({
           style={[styles.assignedLockBanner, { backgroundColor: theme.surface, borderTopColor: theme.border }]}
           activeOpacity={0.85}
         >
-          <View style={styles.assignedLockIcon}>
-            <UserCheck size={18} color="#D97706" />
+          <View style={[styles.assignedLockIcon, { backgroundColor: theme.warnBg }]}>
+            <UserCheck size={18} color={theme.warning} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[styles.assignedLockTitle, { color: theme.ink }]}>
@@ -2175,21 +2365,23 @@ export function ChatRoomScreen({
         </View>
       ) : (
         /* Input Bar */
-        <View style={[styles.inputContainer, { backgroundColor: theme.inputContainerBg, borderTopWidth: 1, borderTopColor: theme.border }]}>
+        <View style={[styles.inputContainer, { backgroundColor: theme.surface, borderTopWidth: 1, borderTopColor: theme.border }]}>
           <ScalePressable
-            style={styles.attachButton}
+            style={[styles.attachButton, { backgroundColor: theme.fieldBg }]}
+            accessibilityRole="button"
+            accessibilityLabel={attachMenuOpen ? 'Close attachments' : 'Attach'}
             hitSlop={8}
             disabled={isUploading || voiceActionBusy}
             onPress={() => setAttachMenuOpen(open => !open)}
           >
             {attachMenuOpen ? (
-              <X size={22} color={theme.emerald} />
+              <X size={22} color={theme.inkSoft} />
             ) : (
-              <Plus size={22} color={theme.emerald} />
+              <Plus size={22} color={theme.inkSoft} />
             )}
           </ScalePressable>
 
-          <View style={[styles.inputPill, { backgroundColor: theme.inputBg }]}>
+          <View style={[styles.inputPill, { backgroundColor: theme.fieldBg }]}>
             <TextInput
               style={[styles.textInput, { color: theme.ink }]}
               value={inputText}
@@ -2202,7 +2394,7 @@ export function ChatRoomScreen({
                     ? 'Add a caption…'
                     : 'Message'
               }
-              placeholderTextColor={theme.muted}
+              placeholderTextColor={theme.placeholder || theme.muted}
               multiline
             />
           </View>
@@ -2221,9 +2413,9 @@ export function ChatRoomScreen({
               disabled={voiceActionBusy || isUploading}
             >
               {voiceActionBusy ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
+                <ActivityIndicator size="small" color={theme.isDark ? theme.onAccent : '#FFFFFF'} />
               ) : (
-                <Mic size={20} color="#FFFFFF" />
+                <Mic size={20} color={theme.isDark ? theme.onAccent : '#FFFFFF'} />
               )}
             </ScalePressable>
           ) : (
@@ -2231,15 +2423,17 @@ export function ChatRoomScreen({
               style={[
                 styles.sendButton,
                 { backgroundColor: theme.emerald },
-                !canSend && { backgroundColor: theme.muted },
+                !canSend && { opacity: 0.45 },
               ]}
+              accessibilityRole="button"
+              accessibilityLabel="Send"
               onPress={handleSend}
               disabled={!canSend}
             >
               {sending || isUploading ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
+                <ActivityIndicator size="small" color={theme.isDark ? theme.onAccent : '#FFFFFF'} />
               ) : (
-                <Text style={styles.sendButtonIcon}>➤</Text>
+                <SendHorizontal size={20} color={theme.isDark ? theme.onAccent : '#FFFFFF'} strokeWidth={2.2} />
               )}
             </ScalePressable>
           )}
@@ -2323,6 +2517,19 @@ export function ChatRoomScreen({
   );
 }
 
+function avatarTone(name: string, theme: ThemeColors) {
+  const tones = [
+    { bg: theme.infoBg, fg: theme.info },
+    { bg: theme.mint, fg: theme.mintText },
+    { bg: theme.violetBg, fg: theme.violet },
+    { bg: theme.warnBg, fg: theme.warning },
+    { bg: theme.dangerBg, fg: theme.danger },
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) hash = (hash * 31 + name.charCodeAt(i)) | 0;
+  return tones[Math.abs(hash) % tones.length];
+}
+
 function AttachmentOption({
   label,
   icon: IconComponent,
@@ -2336,7 +2543,7 @@ function AttachmentOption({
 }) {
   return (
     <ScalePressable style={styles.attachMenuItem} onPress={onPress}>
-      <View style={[styles.attachMenuIconWrap, { backgroundColor: theme.inputBg }]}>
+      <View style={[styles.attachMenuIconWrap, { backgroundColor: theme.mint }]}>
         <IconComponent size={22} color={theme.emerald} strokeWidth={2} />
       </View>
       <Text style={[styles.attachMenuLabel, { color: theme.ink }]}>{label}</Text>
@@ -2357,9 +2564,70 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+    paddingHorizontal: 8,
+    paddingTop: 8,
+    paddingBottom: 6,
+  },
+  contextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    paddingTop: 2,
     borderBottomWidth: 1,
+  },
+  contextChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    height: 26,
+    paddingHorizontal: 10,
+    borderRadius: radii.pill,
+    maxWidth: '50%',
+  },
+  contextChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    flexShrink: 1,
+  },
+  templateTagRow: {
+    flexDirection: 'row',
+    marginBottom: 6,
+  },
+  templateTagRowMedia: {
+    paddingHorizontal: 10,
+    paddingTop: 8,
+  },
+  templateTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radii.xs,
+  },
+  templateTagText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  templateButtons: {
+    marginTop: 6,
+  },
+  templateButtonsInset: {
+    marginHorizontal: -12,
+    marginBottom: -6,
+  },
+  templateButtonRow: {
+    borderTopWidth: 1,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+  },
+  templateButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
   },
   attachMenuItem: {
     alignItems: 'center',
@@ -2377,9 +2645,9 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: radii.md,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 2,
@@ -2401,8 +2669,8 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   avatarText: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '700',
     textAlign: 'center',
     textAlignVertical: 'center',
     includeFontPadding: false,
@@ -2423,11 +2691,14 @@ const styles = StyleSheet.create({
   headerRightActions: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+    marginLeft: 8,
   },
   headerIconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: radii.md,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2631,12 +2902,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: 8,
     paddingBottom: 6,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 1.5,
-    elevation: 1,
+    borderRadius: radii.lg,
     overflow: 'hidden',
   },
   messageBubbleMedia: {
@@ -2664,7 +2930,6 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     paddingHorizontal: 16,
     borderRadius: 20,
-    backgroundColor: 'rgba(0, 168, 132, 0.08)',
     gap: 8,
   },
   cleanChooseBtnText: {
@@ -2676,7 +2941,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     padding: 10,
     borderRadius: 8,
-    backgroundColor: 'rgba(0,0,0,0.04)',
   },
   cleanReplyTitle: {
     fontSize: 14,
@@ -2711,7 +2975,7 @@ const styles = StyleSheet.create({
   },
   messageText: {
     fontSize: 15,
-    lineHeight: 20,
+    lineHeight: 21,
   },
   messageFooter: {
     flexDirection: 'row',
@@ -2736,15 +3000,11 @@ const styles = StyleSheet.create({
   },
   datePill: {
     paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 8,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
+    height: 26,
+    justifyContent: 'center',
+    borderRadius: 13,
   },
-  datePillText: { fontSize: 12, fontWeight: '700' },
+  datePillText: { fontSize: 12, fontWeight: '600' },
   messageStatusTicks: {
     fontSize: 12,
     marginLeft: 3,
@@ -2797,9 +3057,9 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    alignItems: 'flex-end',
   },
   recordingContainer: {
     borderTopWidth: 1,
@@ -2834,12 +3094,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#EF4444',
   },
   attachButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: radii.md,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 4,
+    marginRight: 8,
   },
   attachButtonIcon: {
     fontSize: 24,
@@ -2907,7 +3167,7 @@ const styles = StyleSheet.create({
   },
   inputPill: {
     flex: 1,
-    borderRadius: 24,
+    borderRadius: 22,
     paddingHorizontal: 16,
     paddingVertical: Platform.OS === 'ios' ? 8 : 4,
     minHeight: 44,
@@ -2936,8 +3196,7 @@ const styles = StyleSheet.create({
     paddingLeft: 8,
     paddingVertical: 4,
     marginBottom: 4,
-    borderRadius: 4,
-    backgroundColor: 'rgba(0,0,0,0.04)',
+    borderRadius: 6,
   },
   replyContextName: {
     fontSize: 12,
@@ -2960,7 +3219,6 @@ const styles = StyleSheet.create({
     paddingLeft: 10,
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: 'rgba(59,130,246,0.06)',
   },
   replyBannerTextWrap: {
     flex: 1,
@@ -2991,7 +3249,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#FEF3C7',
     alignItems: 'center',
     justifyContent: 'center',
   },
