@@ -387,7 +387,7 @@ export function FlowBuilderScreen({
       <View
         style={[
           s.header,
-          { backgroundColor: theme.header, borderBottomColor: theme.border },
+          { backgroundColor: theme.canvas, borderBottomColor: theme.border },
         ]}
       >
         <Pressable onPress={onBack} style={s.icon}>

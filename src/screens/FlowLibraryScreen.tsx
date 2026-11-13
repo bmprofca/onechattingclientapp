@@ -93,7 +93,7 @@ export function FlowLibraryScreen({projectId, session, onBack, onOpenFlow}: Prop
 
   return (
     <View style={[styles.safe, {backgroundColor: theme.canvas}]}>
-      <View style={[styles.header, {backgroundColor: theme.header, borderBottomColor: theme.border}]}>
+      <View style={[styles.header, {backgroundColor: theme.canvas, borderBottomColor: theme.border}]}>
         {selectMode ? (
           <>
             <Pressable onPress={exitSelectMode} style={styles.icon}><X color={theme.ink} size={22} /></Pressable>

@@ -95,7 +95,7 @@ export function ProfileScreen({
   return (
     <View style={[styles.safe, { backgroundColor: theme.canvas }]}>
       {onBack && (
-        <View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
+        <View style={[styles.header, { backgroundColor: theme.canvas, borderBottomColor: theme.border }]}>
           <Pressable onPress={onBack} style={[styles.backButton, { backgroundColor: theme.fieldBg }]} hitSlop={8} accessibilityRole="button" accessibilityLabel="Back">
             <ArrowLeft size={20} color={theme.ink} />
           </Pressable>

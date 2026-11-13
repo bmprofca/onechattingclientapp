@@ -197,7 +197,7 @@ function ScreenHeader({
   theme: ReturnType<typeof useTheme>;
 }) {
   return (
-    <View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
+    <View style={[styles.header, { backgroundColor: theme.canvas, borderBottomColor: theme.border }]}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Back"

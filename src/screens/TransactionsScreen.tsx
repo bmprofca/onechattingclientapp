@@ -185,7 +185,7 @@ export function TransactionsScreen({
       <View
         style={[
           styles.header,
-          { backgroundColor: theme.header, borderBottomColor: theme.border },
+          { backgroundColor: theme.canvas, borderBottomColor: theme.border },
         ]}
       >
         <ScalePressable onPress={onBack} style={styles.iconBtn}>

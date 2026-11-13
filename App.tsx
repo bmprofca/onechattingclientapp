@@ -169,7 +169,7 @@ function AppContent() {
   // limited "no project yet" experience (Home / Wallet / Projects tabs),
   // so the only other top-level case left is picking between several
   // existing projects when none is currently selected.
-  const statusBarColor = theme.header;
+  const systemSurfaceColor = theme.canvas;
 
   return (
     <KeyboardProvider>
@@ -177,12 +177,12 @@ function AppContent() {
       <AppToastProvider>
         <StatusBar
           translucent={false}
-          backgroundColor={statusBarColor}
+          backgroundColor={systemSurfaceColor}
           barStyle={theme.isDark ? 'light-content' : 'dark-content'}
         />
 
         <SafeAreaView
-          style={{ flex: 1, backgroundColor: statusBarColor }}
+          style={{ flex: 1, backgroundColor: systemSurfaceColor }}
           edges={['top', 'bottom', 'left', 'right']}
         >
           {session ? <ConnectionBanner /> : null}

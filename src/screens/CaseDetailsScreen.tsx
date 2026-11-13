@@ -112,7 +112,7 @@ export function CaseDetailsScreen({
       <View
         style={[
           styles.header,
-          { backgroundColor: theme.header, borderBottomColor: theme.border },
+          { backgroundColor: theme.canvas, borderBottomColor: theme.border },
         ]}
       >
         <View style={styles.headerLeft}>

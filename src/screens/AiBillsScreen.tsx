@@ -198,7 +198,7 @@ export function AiBillsScreen({
 
   return (
     <View style={[styles.container, { backgroundColor: theme.canvas }]}>
-      <View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
+      <View style={[styles.header, { backgroundColor: theme.canvas, borderBottomColor: theme.border }]}>
         <View style={styles.headerLeft}>
           <Pressable onPress={onBack} hitSlop={12} style={styles.iconBtn}>
             <ArrowLeft size={24} color={theme.ink} />

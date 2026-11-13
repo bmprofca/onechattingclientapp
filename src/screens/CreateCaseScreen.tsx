@@ -218,7 +218,7 @@ export function CreateCaseScreen({
 
   return (
     <KeyboardAvoidView style={[styles.container, { backgroundColor: theme.canvas }]}>
-      <View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
+      <View style={[styles.header, { backgroundColor: theme.canvas, borderBottomColor: theme.border }]}>
         <View style={styles.headerLeft}>
           <ScalePressable onPress={onBack} style={styles.backBtn} hitSlop={8}>
             <ArrowLeft size={22} color={theme.ink} strokeWidth={2.5} />

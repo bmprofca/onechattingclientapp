@@ -202,7 +202,7 @@ export function GroupsScreen({ projectId, session, onBack, onOpen }: GroupsProps
           <View
             style={[
               styles.header,
-              { backgroundColor: theme.header, borderBottomColor: theme.border },
+              { backgroundColor: theme.canvas, borderBottomColor: theme.border },
             ]}
           >
             <Pressable
@@ -319,7 +319,7 @@ export function GroupsScreen({ projectId, session, onBack, onOpen }: GroupsProps
       <View
         style={[
           styles.header,
-          { backgroundColor: theme.header, borderBottomColor: theme.border },
+          { backgroundColor: theme.canvas, borderBottomColor: theme.border },
         ]}
       >
         <Pressable onPress={onBack} style={styles.back} hitSlop={8}>

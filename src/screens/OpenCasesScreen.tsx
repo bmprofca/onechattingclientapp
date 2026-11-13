@@ -271,7 +271,7 @@ export function OpenCasesScreen({
       <View
         style={[
           styles.header,
-          { backgroundColor: theme.surface, borderBottomColor: theme.border },
+          { backgroundColor: theme.canvas, borderBottomColor: theme.border },
         ]}
       >
         {!isKeyboardVisible && (

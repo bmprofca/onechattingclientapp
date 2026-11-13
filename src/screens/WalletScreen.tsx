@@ -277,7 +277,7 @@ export function WalletScreen({
   const formattedBalance = Number(liveBalance !== undefined ? liveBalance : (balance ?? 0)).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 
   const renderHeader = (title: string, onPress?: () => void) => (
-    <View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
+    <View style={[styles.header, { backgroundColor: theme.canvas, borderBottomColor: theme.border }]}>
       {onPress ? (
         <ScalePressable onPress={onPress} style={[styles.backButton, { backgroundColor: theme.fieldBg }]} hitSlop={8} accessibilityRole="button" accessibilityLabel="Back">
           <ArrowLeft size={20} color={theme.ink} />

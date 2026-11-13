@@ -378,7 +378,7 @@ export function ScannedUsersScreen({
   return (
     <KeyboardAvoidView style={[styles.safe, { backgroundColor: theme.canvas }]}>
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
+      <View style={[styles.header, { backgroundColor: theme.canvas, borderBottomColor: theme.border }]}>
         <Pressable onPress={onBack} style={styles.backButton} hitSlop={8}>
           <ArrowLeft size={24} color={theme.ink} />
         </Pressable>

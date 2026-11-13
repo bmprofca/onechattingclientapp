@@ -1082,7 +1082,7 @@ export function ContactsScreen({
           <View
             style={[
               styles.header,
-              { backgroundColor: theme.header, borderBottomColor: theme.border },
+              { backgroundColor: theme.canvas, borderBottomColor: theme.border },
             ]}
           >
             <ScalePressable
@@ -1879,7 +1879,7 @@ export function ContactsScreen({
       <View
         style={[
           styles.header,
-          { backgroundColor: theme.header, borderBottomColor: theme.border },
+          { backgroundColor: theme.canvas, borderBottomColor: theme.border },
         ]}
       >
         <Pressable onPress={onBack} style={styles.backBtn} hitSlop={8}>
@@ -1958,7 +1958,7 @@ export function ContactsScreen({
         <View
           style={[
             styles.bulkBar,
-            { backgroundColor: theme.surface, borderBottomColor: theme.border },
+            { backgroundColor: theme.canvas, borderBottomColor: theme.border },
           ]}
         >
           <View>
@@ -2276,7 +2276,7 @@ export function ContactsScreen({
         onRequestClose={() => setDeviceContactsVisible(false)}
       >
         <View style={[styles.devicePicker, {backgroundColor: theme.canvas}]}>
-          <View style={[styles.header, {backgroundColor: theme.header, borderBottomColor: theme.border}]}>
+          <View style={[styles.header, {backgroundColor: theme.canvas, borderBottomColor: theme.border}]}>
             <Pressable onPress={() => setDeviceContactsVisible(false)} style={styles.backBtn} hitSlop={8}>
               <ArrowLeft size={22} color={theme.ink} />
             </Pressable>

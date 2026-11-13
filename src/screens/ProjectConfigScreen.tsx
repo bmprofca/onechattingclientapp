@@ -99,7 +99,7 @@ export function ProjectConfigScreen({ projectId, session, onBack, onOpenAgent, o
   };
 
   return <View style={[styles.safe, { backgroundColor: theme.canvas }]}>
-    <View style={[styles.header, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
+    <View style={[styles.header, { backgroundColor: theme.canvas, borderBottomColor: theme.border }]}>
       <Pressable onPress={onBack} style={styles.back}><ArrowLeft color={theme.ink} size={24} /></Pressable>
       <Text style={[styles.headerTitle, { color: theme.ink }]}>Project Configuration</Text>
       <View style={styles.back} />

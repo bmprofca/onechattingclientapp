@@ -130,7 +130,7 @@ export function NewChatScreen({ onBack, onStartChat }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <FadeInView direction="up" distance={12} duration={250} style={{ flex: 1 }}>
-        <View style={[styles.fullScreenHeader, { backgroundColor: theme.header, borderBottomColor: theme.border }]}>
+        <View style={[styles.fullScreenHeader, { backgroundColor: theme.canvas, borderBottomColor: theme.border }]}>
           <ScalePressable onPress={onBack} hitSlop={8} style={styles.backBtn}>
             <ArrowLeft size={22} color={theme.ink} strokeWidth={2.5} />
           </ScalePressable>

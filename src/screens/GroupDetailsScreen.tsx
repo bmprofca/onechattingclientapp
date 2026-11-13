@@ -283,7 +283,7 @@ export function GroupDetailsScreen({
       <View
         style={[
           styles.header,
-          {backgroundColor: theme.header, borderBottomColor: theme.border},
+          {backgroundColor: theme.canvas, borderBottomColor: theme.border},
         ]}
       >
         <Pressable
@@ -337,7 +337,7 @@ export function GroupDetailsScreen({
         <View
           style={[
             styles.bulkBar,
-            {backgroundColor: theme.surface, borderBottomColor: theme.border},
+            {backgroundColor: theme.canvas, borderBottomColor: theme.border},
           ]}
         >
           <Text style={[styles.bulkText, {color: theme.ink}]}>

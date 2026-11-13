@@ -1038,11 +1038,9 @@ export function WorkspaceScreen({
 
   const tabs = hasProject ? FULL_TABS : LIMITED_TABS;
 
-  // In limited mode, the Wallet and Projects tabs render their own screens
-  // with their own headers — showing our own header on top of them would
-  // just duplicate it, so we skip it for those pages.
-  const showOuterHeader =
-    hasProject || (page !== 'wallet' && page !== 'projects');
+  // Keep the workspace header on Home only. Other tab screens provide
+  // their own headers or need the space for their content.
+  const showOuterHeader = page === 'dashboard';
   const isKeyboardScreenVisible =
     isKeyboardVisible &&
     (page === 'inbox' || page === 'cases' || page === 'campaigns');
@@ -1053,7 +1051,7 @@ export function WorkspaceScreen({
         <View
           style={[
             styles.header,
-            { backgroundColor: theme.header, borderBottomColor: theme.border },
+            { backgroundColor: theme.canvas, borderBottomColor: theme.border },
           ]}
         >
           {hasProject ? (
