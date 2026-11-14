@@ -17,7 +17,6 @@ import {
   ArrowLeft,
   Search,
   Plus,
-  X,
   FileText,
   AlertCircle,
   Phone,
@@ -419,14 +418,12 @@ export function CreateCaseScreen({
         visible={contactSearchModalOpen}
         onClose={() => setContactSearchModalOpen(false)}
         maxHeight="80%"
+        sheetBackgroundColor={theme.surface}
       >
         <KeyboardAvoidView style={{ flex: 0 }}>
           <View style={[styles.sheet, { backgroundColor: theme.surface }]}>
             <View style={styles.sheetHeader}>
               <Text style={[styles.sheetTitle, { color: theme.ink }]}>Select Contact</Text>
-              <ScalePressable onPress={() => setContactSearchModalOpen(false)} hitSlop={8}>
-                <X size={20} color={theme.muted} />
-              </ScalePressable>
             </View>
 
             <View style={[styles.inputRow, { backgroundColor: theme.canvas, borderColor: theme.border, marginTop: 12 }]}>

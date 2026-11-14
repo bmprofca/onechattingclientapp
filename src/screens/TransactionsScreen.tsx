@@ -12,7 +12,6 @@ import {
   ArrowLeft,
   FileText,
   RefreshCw,
-  X,
 } from 'lucide-react-native';
 import { ApiSession } from '../api/client';
 import { getTransactionHistory } from '../api/payment';
@@ -458,6 +457,7 @@ function TransactionModal({
       visible={Boolean(transaction)}
       onClose={onClose}
       maxHeight="85%"
+      sheetBackgroundColor={theme.surface}
     >
       <View style={[styles.modal, { backgroundColor: theme.surface }]}>
         <View
@@ -466,9 +466,6 @@ function TransactionModal({
           <Text style={[styles.modalTitle, { color: theme.ink }]}>
             Transaction Details
           </Text>
-          <ScalePressable onPress={onClose} hitSlop={8}>
-            <X size={23} color={theme.ink} />
-          </ScalePressable>
         </View>
         <ScrollView contentContainerStyle={styles.modalContent}>
           <Detail

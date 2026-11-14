@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
-  Modal,
   PermissionsAndroid,
   Platform,
   Pressable,
@@ -113,7 +112,6 @@ export function NewChatScreen({ onBack, onStartChat }: Props) {
         c.number.toLowerCase().includes(q),
     );
   }, [deviceContactsList, deviceContactsSearch]);
-
   const handleDirectChat = () => {
     if (!newChatNumber.trim()) return;
     onStartChat(newChatNumber.trim(), newChatName.trim() || newChatNumber.trim());
@@ -223,6 +221,7 @@ export function NewChatScreen({ onBack, onStartChat }: Props) {
         visible={deviceContactsModalOpen}
         onClose={() => setDeviceContactsModalOpen(false)}
         maxHeight="85%"
+        sheetBackgroundColor={theme.surface}
       >
         <KeyboardAvoidView style={{ flex: 0 }}>
           <View style={[styles.deviceModalContainer, { backgroundColor: theme.surface }]}>
@@ -235,13 +234,6 @@ export function NewChatScreen({ onBack, onStartChat }: Props) {
                   {deviceContactsList.length} contacts found
                 </Text>
               </View>
-              <ScalePressable
-                onPress={() => setDeviceContactsModalOpen(false)}
-                hitSlop={8}
-                style={styles.deviceModalBackBtn}
-              >
-                <X size={20} color={theme.muted} />
-              </ScalePressable>
             </View>
 
             {/* Search bar */}
@@ -414,10 +406,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
-  },
-  deviceModalBackBtn: {
-    padding: 4,
-    marginRight: 10,
   },
   deviceModalTitle: {
     fontSize: 18,

@@ -3,7 +3,7 @@ import { ActivityIndicator, FlatList, Image, Pressable, ScrollView, StyleSheet, 
 import { KeyboardAvoidView } from '../components/KeyboardAvoidView';
 import Toast from '../ui/toast';
 import { SearchClearButton } from '../components/SearchClearButton';
-import { ArrowRight, Briefcase, ChevronDown, Globe, Lock, Mail, Phone, User, KeyRound, X } from 'lucide-react-native';
+import { ArrowRight, Briefcase, ChevronDown, Globe, Lock, Mail, Phone, User, KeyRound } from 'lucide-react-native';
 import { login, register, sendOtp } from '../api/auth';
 import { saveSession, Session } from '../services/session';
 import { useTheme } from '../theme/theme';
@@ -337,6 +337,7 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: Ses
         visible={countryPickerOpen}
         onClose={() => setCountryPickerOpen(false)}
         maxHeight="82%"
+        sheetBackgroundColor={theme.surface}
       >
         <KeyboardAvoidView style={{ flex: 0 }}>
           <View style={[styles.countryModal, { backgroundColor: theme.surface }]}>
@@ -345,9 +346,6 @@ export function AuthScreen({ onAuthenticated }: { onAuthenticated: (session: Ses
                 <Text style={[styles.modalTitle, { color: theme.ink }]}>Select country or region</Text>
                 <Text style={[styles.modalSubtitle, { color: theme.muted }]}>Choose the phone country code</Text>
               </View>
-              <ScalePressable accessibilityRole="button" accessibilityLabel="Close country selector" onPress={() => setCountryPickerOpen(false)} style={styles.closeButton}>
-                <X size={22} color={theme.ink} />
-              </ScalePressable>
             </View>
             <View style={[styles.searchRow, { backgroundColor: theme.fieldBg, borderColor: theme.fieldBorder }]}>
               <Globe size={17} color={theme.muted} />
@@ -419,7 +417,6 @@ const styles = StyleSheet.create({
   modalHeader: { minHeight: 76, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1 },
   modalTitle: { fontSize: 18, fontWeight: '800' },
   modalSubtitle: { fontSize: 13, marginTop: 3 },
-  closeButton: { padding: 10, marginRight: -10 },
   searchRow: { height: 48, borderWidth: 1, borderRadius: 14, margin: 16, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', gap: 9 },
   searchInput: { flex: 1, height: '100%', fontSize: 15 },
   countryOption: { minHeight: 54, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: StyleSheet.hairlineWidth },

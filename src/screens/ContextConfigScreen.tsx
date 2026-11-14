@@ -573,13 +573,17 @@ export function ContextConfigScreen({
       )}
 
       {/* Type Selection / Change Modal */}
-      <SlideUpModal visible={showTypeModal} onClose={closeTypeModal} maxHeight="65%">
+      <SlideUpModal
+        visible={showTypeModal}
+        onClose={closeTypeModal}
+        maxHeight="65%"
+        sheetBackgroundColor={theme.surface}
+      >
         <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
           <View style={styles.modalHeader}>
             <Text style={[styles.modalTitle, { color: theme.ink }]}>
               {changeTypeSectionId ? 'Change Section Type' : 'Choose Section Type'}
             </Text>
-            <ScalePressable onPress={closeTypeModal} hitSlop={8}><X size={24} color={theme.muted} /></ScalePressable>
           </View>
           {changeTypeSectionId && (
             <Text style={[styles.modalWarning, { color: theme.muted }]}>

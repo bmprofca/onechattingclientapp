@@ -997,14 +997,12 @@ export function CreateCampaignScreen({
         visible={templatePickerOpen}
         onClose={() => setTemplatePickerOpen(false)}
         maxHeight="90%"
+        sheetBackgroundColor={theme.surface}
       >
         <KeyboardAvoidView style={{ flex: 0 }}>
           <View style={[styles.modalInner, { backgroundColor: theme.surface }]}>
             <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
               <Text style={[styles.modalTitle, { color: theme.ink }]}>Select Approved Template</Text>
-              <Pressable onPress={() => setTemplatePickerOpen(false)} hitSlop={8}>
-                <X size={22} color={theme.muted} />
-              </Pressable>
             </View>
 
             <View style={[styles.searchBox, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
@@ -1072,14 +1070,12 @@ export function CreateCampaignScreen({
         visible={contactsModalOpen}
         onClose={() => setContactsModalOpen(false)}
         maxHeight="90%"
+        sheetBackgroundColor={theme.surface}
       >
         <KeyboardAvoidView style={{ flex: 0 }}>
           <View style={[styles.modalInner, { backgroundColor: theme.surface }]}>
             <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
               <Text style={[styles.modalTitle, { color: theme.ink }]}>Select Contacts</Text>
-              <Pressable onPress={() => setContactsModalOpen(false)} hitSlop={8}>
-                <X size={22} color={theme.muted} />
-              </Pressable>
             </View>
 
             <View style={[styles.searchBox, { backgroundColor: theme.canvas, borderColor: theme.border }]}>
@@ -1155,6 +1151,7 @@ export function CreateCampaignScreen({
         visible={deviceContactsModalOpen}
         onClose={() => setDeviceContactsModalOpen(false)}
         maxHeight="92%"
+        sheetBackgroundColor={theme.surface}
       >
         <KeyboardAvoidView style={{ flex: 0 }}>
           <View style={[styles.modalInner, { backgroundColor: theme.surface }]}>
@@ -1178,9 +1175,6 @@ export function CreateCampaignScreen({
                     </Text>
                   </ScalePressable>
                 )}
-                <Pressable onPress={() => setDeviceContactsModalOpen(false)} hitSlop={8}>
-                  <X size={22} color={theme.muted} />
-                </Pressable>
               </View>
             </View>
 

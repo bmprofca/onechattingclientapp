@@ -369,6 +369,7 @@ export function TemplateModal({
       visible={visible}
       onClose={onClose}
       maxHeight="88%"
+      sheetBackgroundColor={theme.surface}
       contentStyle={{
         flex: 1,
         backgroundColor: theme.surface,

@@ -19,6 +19,7 @@ interface SlideUpModalProps {
   onClose: () => void;
   children: React.ReactNode;
   contentStyle?: StyleProp<ViewStyle>;
+  sheetBackgroundColor?: string;
   containerStyle?: StyleProp<ViewStyle>;
   backdropColor?: string;
   maxHeight?: number | `${number}%`;
@@ -105,6 +106,7 @@ export function SlideUpModal({
   onClose,
   children,
   contentStyle,
+  sheetBackgroundColor,
   containerStyle,
   backdropColor = 'rgba(0, 0, 0, 0.55)',
   maxHeight = '85%',
@@ -209,6 +211,7 @@ export function SlideUpModal({
             styles.sheet,
             {
               maxHeight,
+              backgroundColor: sheetBackgroundColor,
               transform: [{ translateY: Animated.add(translateY, dragY) }],
             },
             contentStyle,
