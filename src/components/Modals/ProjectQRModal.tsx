@@ -9,7 +9,6 @@ import {
   View,
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
-import Clipboard from '@react-native-clipboard/clipboard';
 import ReactNativeBlobUtil from 'react-native-blob-util';
 import NativeShare from 'react-native-share';
 import { Social } from 'react-native-share';
@@ -17,15 +16,11 @@ import Svg, { Path } from 'react-native-svg';
 import {
   X,
   Share2,
-  Copy,
-  Check,
-  ExternalLink,
   QrCode as QrIcon,
   Layers,
   Info,
 } from 'lucide-react-native';
 import Toast from '../../ui/toast';
-import { openLink } from '../../utils/openLink';
 import { Bone } from '../Skeleton';
 import { ApiSession } from '../../api/client';
 import { getProjectQRCodes, QRCodeItem } from '../../api/qrcode';
@@ -64,7 +59,6 @@ export function ProjectQRModal({
   const [loading, setLoading] = useState(true);
   const [qrList, setQrList] = useState<QRCodeItem[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [copied, setCopied] = useState(false);
   const qrSvgRef = useRef<{ toDataURL: (callback: (base64: string) => void) => void } | null>(null);
 
   useEffect(() => {
@@ -166,33 +160,6 @@ export function ProjectQRModal({
         text2: err instanceof Error ? err.message : String(err),
       });
     }
-  };
-
-  const handleCopyLink = async () => {
-    try {
-      await Clipboard.setString(publicQrUrl);
-      setCopied(true);
-      Toast.show({
-        type: 'success',
-        text1: 'QR link copied',
-      });
-      setTimeout(() => setCopied(false), 2500);
-    } catch (err) {
-      Toast.show({
-        type: 'error',
-        text1: 'Could not copy QR link',
-        text2: err instanceof Error ? err.message : String(err),
-      });
-    }
-  };
-
-  const handleOpenLink = () => {
-    openLink(publicQrUrl).catch(() => {
-      Toast.show({
-        type: 'error',
-        text1: 'Could not open link',
-      });
-    });
   };
 
   return (
@@ -372,40 +339,6 @@ export function ProjectQRModal({
                 >
                   <Share2 size={16} color="#FFF" />
                   <Text style={styles.actionBtnText}>Share</Text>
-                </Pressable>
-
-                {/* Copy Link */}
-                <Pressable
-                  onPress={handleCopyLink}
-                  style={({ pressed }) => [
-                    styles.actionBtn,
-                    styles.secondaryActionBtn,
-                    { backgroundColor: theme.canvas, borderColor: theme.border },
-                    pressed && { backgroundColor: theme.cardHover },
-                  ]}
-                >
-                  {copied ? (
-                    <Check size={16} color={theme.emerald} />
-                  ) : (
-                    <Copy size={16} color={theme.ink} />
-                  )}
-                  <Text style={[styles.secondaryActionBtnText, { color: copied ? theme.emerald : theme.ink }]}>
-                    {copied ? 'Copied' : 'Copy link'}
-                  </Text>
-                </Pressable>
-
-                {/* Open Link */}
-                <Pressable
-                  onPress={handleOpenLink}
-                  style={({ pressed }) => [
-                    styles.actionBtn,
-                    styles.secondaryActionBtn,
-                    { backgroundColor: theme.canvas, borderColor: theme.border },
-                    pressed && { backgroundColor: theme.cardHover },
-                  ]}
-                >
-                  <ExternalLink size={16} color={theme.ink} />
-                  <Text style={[styles.secondaryActionBtnText, { color: theme.ink }]}>Open</Text>
                 </Pressable>
               </View>
             </ScrollView>
@@ -590,13 +523,6 @@ const styles = StyleSheet.create({
   },
   actionBtnText: {
     color: '#FFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  secondaryActionBtn: {
-    borderWidth: 1,
-  },
-  secondaryActionBtnText: {
     fontSize: 13,
     fontWeight: '700',
   },
