@@ -11,7 +11,7 @@ import {
   Pressable,
 } from 'react-native';
 import { KeyboardAvoidView } from './KeyboardAvoidView';
-import { X, Search, FileText, ArrowLeft, Upload } from 'lucide-react-native';
+import { X, Search, FileText, Upload } from 'lucide-react-native';
 import {
   pick,
   types as DocumentPickerTypes,
@@ -381,17 +381,9 @@ export function TemplateModal({
       >
         <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
           <View style={[styles.header, { borderBottomColor: theme.border }]}>
-            {selectedTemplate ? (
-              <ScalePressable onPress={() => setSelectedTemplate(null)} hitSlop={8} style={{ marginRight: 12 }}>
-                <ArrowLeft size={24} color={theme.ink} />
-              </ScalePressable>
-            ) : null}
             <Text style={[styles.title, { color: theme.ink, flex: 1 }]}>
               {selectedTemplate ? 'Edit Template' : 'Select Template'}
             </Text>
-            <ScalePressable onPress={onClose} hitSlop={8}>
-              <X size={24} color={theme.muted} />
-            </ScalePressable>
           </View>
 
           {!selectedTemplate ? (

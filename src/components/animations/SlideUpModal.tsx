@@ -37,8 +37,10 @@ export function SheetDragHandle({ onDismiss, onDrag }: SheetDragHandleProps) {
   onDragRef.current = onDrag;
 
   const responder = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: (_, gesture) =>
       gesture.dy > 5 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+    onPanResponderTerminationRequest: () => false,
     onPanResponderMove: (_, gesture) =>
       onDragRef.current?.(Math.max(gesture.dy, 0)),
     onPanResponderRelease: (_, gesture) => {
@@ -85,7 +87,7 @@ export function DismissibleSheet({
     } else {
       Animated.spring(dragY, {
         toValue: 0,
-        useNativeDriver: false,
+        useNativeDriver: true,
       }).start();
     }
   };
@@ -118,7 +120,7 @@ export function SlideUpModal({
     } else {
       Animated.spring(dragY, {
         toValue: 0,
-        useNativeDriver: false,
+        useNativeDriver: true,
       }).start();
     }
   };
@@ -132,15 +134,15 @@ export function SlideUpModal({
           toValue: 1,
           duration: 320,
           easing: Easing.out(Easing.cubic),
-          useNativeDriver: false,
+          useNativeDriver: true,
         }),
       ]).start();
     } else if (modalVisible) {
       Animated.timing(animValue, {
         toValue: 0,
-        duration: 240,
+        duration: 160,
         easing: Easing.in(Easing.cubic),
-        useNativeDriver: false,
+        useNativeDriver: true,
       }).start(() => {
         setModalVisible(false);
       });
@@ -148,12 +150,20 @@ export function SlideUpModal({
   }, [visible, modalVisible, animValue, dragY]);
 
   const handleClose = () => {
-    Animated.timing(animValue, {
-      toValue: 0,
-      duration: 240,
-      easing: Easing.in(Easing.cubic),
-      useNativeDriver: false,
-    }).start(() => {
+    Animated.parallel([
+      Animated.timing(animValue, {
+        toValue: 0,
+        duration: 150,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(dragY, {
+        toValue: SCREEN_HEIGHT,
+        duration: 150,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
       setModalVisible(false);
       onClose();
     });
