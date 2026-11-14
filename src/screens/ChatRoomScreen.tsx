@@ -14,6 +14,7 @@ import { ContactTimelineModal } from '../components/ContactTimelineModal';
 import {
   ActivityIndicator,
   Dimensions,
+  Easing,
   FlatList,
   Image,
   Keyboard,
@@ -293,6 +294,8 @@ export function ChatRoomScreen({
   const [lastId, setLastId] = useState<number | undefined>();
   const [hasMore, setHasMore] = useState(true);
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const [attachMenuMounted, setAttachMenuMounted] = useState(false);
+  const attachMenuAnim = useRef(new Animated.Value(0)).current;
   const [templateMenuOpen, setTemplateMenuOpen] = useState(false);
   const [catalogsModalOpen, setCatalogsModalOpen] = useState(false);
   const [uploadingKind, setUploadingKind] = useState<AttachmentKind | null>(null);
@@ -444,6 +447,23 @@ export function ChatRoomScreen({
 
   // Keyboard height animation listener for flawless keypad avoidance on all Android & iOS devices
   const keyboardHeightAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (attachMenuOpen) setAttachMenuMounted(true);
+
+    const animation = Animated.timing(attachMenuAnim, {
+      toValue: attachMenuOpen ? 1 : 0,
+      duration: attachMenuOpen ? 140 : 110,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
+
+    animation.start(({ finished }) => {
+      if (finished && !attachMenuOpen) setAttachMenuMounted(false);
+    });
+
+    return () => animation.stop();
+  }, [attachMenuAnim, attachMenuOpen]);
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -2200,53 +2220,72 @@ export function ChatRoomScreen({
       </View>
 
       {/* Attachment menu */}
-      {attachMenuOpen && (
-        <FadeInView direction="up" distance={12} duration={200}>
+      {attachMenuMounted && (
+        <Animated.View
+          pointerEvents={attachMenuOpen ? 'auto' : 'none'}
+          style={{
+            opacity: attachMenuAnim,
+            transform: [
+              {
+                translateY: attachMenuAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [8, 0],
+                }),
+              },
+            ],
+          }}
+        >
           <View style={[styles.attachMenu, { backgroundColor: theme.header, borderColor: theme.border }]}>
-            <AttachmentOption
-              label="Photo"
-              icon={ImageIcon}
-              onPress={() => handlePickAttachment('photo')}
-              theme={theme}
-            />
-            <AttachmentOption
-              label="Video"
-              icon={Video}
-              onPress={() => handlePickAttachment('video')}
-              theme={theme}
-            />
-            <AttachmentOption
-              label="Document"
-              icon={FileText}
-              onPress={() => handlePickAttachment('document')}
-              theme={theme}
-            />
-            <AttachmentOption
-              label="Audio"
-              icon={Music}
-              onPress={() => handlePickAttachment('audio')}
-              theme={theme}
-            />
-            <AttachmentOption
-              label="Template"
-              icon={LayoutTemplate}
-              onPress={() => {
-                setAttachMenuOpen(false);
-                setTemplateMenuOpen(true);
-              }}
-              theme={theme}
-            />
-            <AttachmentOption
-              label="Catalogs"
-              icon={ShoppingBag}
-              onPress={() => {
-                setAttachMenuOpen(false);
-                setCatalogsModalOpen(true);
-              }}
-              theme={theme}
-            />
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.attachMenuContent}
+            >
+              <AttachmentOption
+                label="Photo"
+                icon={ImageIcon}
+                onPress={() => handlePickAttachment('photo')}
+                theme={theme}
+              />
+              <AttachmentOption
+                label="Video"
+                icon={Video}
+                onPress={() => handlePickAttachment('video')}
+                theme={theme}
+              />
+              <AttachmentOption
+                label="Document"
+                icon={FileText}
+                onPress={() => handlePickAttachment('document')}
+                theme={theme}
+              />
+              <AttachmentOption
+                label="Audio"
+                icon={Music}
+                onPress={() => handlePickAttachment('audio')}
+                theme={theme}
+              />
+              <AttachmentOption
+                label="Template"
+                icon={LayoutTemplate}
+                onPress={() => {
+                  setAttachMenuOpen(false);
+                  setTemplateMenuOpen(true);
+                }}
+                theme={theme}
+              />
+              <AttachmentOption
+                label="Catalogs"
+                icon={ShoppingBag}
+                onPress={() => {
+                  setAttachMenuOpen(false);
+                  setCatalogsModalOpen(true);
+                }}
+                theme={theme}
+              />
+            </ScrollView>
           </View>
-        </FadeInView>
+        </Animated.View>
       )}
 
       {/* NEW: Pending attachment preview, shown above the input bar until sent or cancelled */}
@@ -2693,6 +2732,12 @@ const styles = StyleSheet.create({
   attachMenuItem: {
     alignItems: 'center',
     width: 72,
+    flexShrink: 0,
+  },
+  attachMenuContent: {
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 2,
   },
   attachMenuIconWrap: {
     width: 48,
@@ -3167,12 +3212,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   attachMenu: {
-    position: 'absolute',
-    bottom: 2,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
+    overflow: 'hidden',
     paddingVertical: 14,
     borderTopWidth: 1,
     borderRadius: 20,
